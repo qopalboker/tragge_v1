@@ -1,4 +1,4 @@
-package scheduler
+package scheduler`n`n// CI path filter: keep Go job selected when paired with FE.
 
 import (
 	"testing"
