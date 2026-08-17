@@ -15,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   joined: [contestId: string];
   joinClick: [contest: Contest];
+  refresh: [contestId: string];
 }>();
 
 const router = useRouter();
@@ -38,25 +39,36 @@ const entryFee = computed(() => {
   return `$${(props.contest.entry_fee_cents / 100).toFixed(2)}`;
 });
 
-const formattedStartTime = computed(() => {
-  const date = new Date(props.contest.starts_at);
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-});
+/** Product display timezone: Asia/Tehran (not browser local). */
+const TEHRAN_TZ = 'Asia/Tehran';
 
-const formattedEndTime = computed(() => {
-  const date = new Date(props.contest.ends_at);
-  return date.toLocaleString([], {
+function formatTehran(iso: string, opts: Intl.DateTimeFormatOptions): string {
+  try {
+    return new Date(iso).toLocaleString('en-GB', { timeZone: TEHRAN_TZ, ...opts });
+  } catch {
+    return new Date(iso).toLocaleString([], opts);
+  }
+}
+
+const formattedStartTime = computed(() =>
+  formatTehran(props.contest.starts_at, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
-});
+    hour12: false,
+  }),
+);
+
+const formattedEndTime = computed(() =>
+  formatTehran(props.contest.ends_at, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }),
+);
 
 const duration = computed(() => {
   const start = new Date(props.contest.starts_at);
@@ -127,14 +139,17 @@ const participantPercentage = computed(() => {
 });
 
 // Authoritative prize pool only — never invent economics client-side.
-const estimatedPrizePool = computed(() => props.contest.estimated_prize_pool_cents ?? 0);
+const estimatedPrizePool = computed(
+  () =>
+    props.contest.estimated_prize_pool_cents ??
+    (props.contest as { prize_pool_cents?: number }).prize_pool_cents ??
+    0,
+);
 
 const formattedPrizePool = computed(() => {
-  if (estimatedPrizePool.value === 0 && props.contest.entry_fee_cents === 0) {
-    return t('contests.practice');
-  }
-  if (estimatedPrizePool.value === 0) {
-    return '—';
+  // Free and pre-quorum paid: product copy is "No prize".
+  if (estimatedPrizePool.value <= 0) {
+    return t('contests.noPrize') || 'No prize';
   }
   const amount = estimatedPrizePool.value / 100;
   if (amount >= 1000) {
@@ -143,10 +158,16 @@ const formattedPrizePool = computed(() => {
   return `$${amount.toFixed(0)}`;
 });
 
-// Prize winners percentage
-const prizeWinnersPercentage = computed(() =>
-  props.contest.prize_winners_percentage ?? 30
+const firstPlacePrize = computed(
+  () => (props.contest as { first_place_prize_cents?: number }).first_place_prize_cents ?? 0,
 );
+
+const formattedFirstPrize = computed(() => {
+  if (firstPlacePrize.value <= 0) {
+    return t('contests.noPrize') || 'No prize';
+  }
+  return `$${(firstPlacePrize.value / 100).toFixed(0)}`;
+});
 
 const symbolsList = computed(() => {
   return props.contest.symbols
@@ -249,6 +270,7 @@ defineExpose({ handleJoin });
         :ends-at="contest.ends_at"
         :status="contest.status"
         :compact="compact"
+        @status-change="emit('refresh', contest.id)"
       />
     </div>
 
@@ -257,26 +279,8 @@ defineExpose({ handleJoin });
       {{ contest.description }}
     </p>
 
-    <!-- Main Info Row -->
+    <!-- Main Info Row: participants LEFT, entry fee where duration box was (no timeframe box). -->
     <div class="info-row">
-      <div class="info-item">
-        <span class="info-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 6v6l4 2" />
-          </svg>
-        </span>
-        <span class="info-text">{{ duration }}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M7 15h10M7 11h4" />
-          </svg>
-        </span>
-        <span class="info-text">{{ entryFee }}</span>
-      </div>
       <div class="info-item">
         <span class="info-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -287,18 +291,32 @@ defineExpose({ handleJoin });
         </span>
         <span class="info-text">{{ participantDisplay }} {{ t('contests.joined') }}</span>
       </div>
+      <div class="info-item">
+        <span class="info-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M7 15h10M7 11h4" />
+          </svg>
+        </span>
+        <span class="info-text">{{ t('contests.entryFee') || 'Entry fee' }}: {{ entryFee }}</span>
+      </div>
     </div>
 
-    <!-- Prize Pool and Participants -->
+    <!-- Prize Pool / First prize — authoritative only -->
     <div class="prize-section">
       <div class="prize-info">
         <span class="prize-label">{{ t('contests.prizePool') }}</span>
         <span class="prize-value">{{ formattedPrizePool }}</span>
       </div>
       <div class="prize-info">
-        <span class="prize-label">{{ t('contests.topWin') }}</span>
-        <span class="prize-value">{{ t('contests.topPercent', { percent: prizeWinnersPercentage }) }}</span>
+        <span class="prize-label">{{ t('contests.firstPrize') || '1st prize' }}</span>
+        <span class="prize-value">{{ formattedFirstPrize }}</span>
       </div>
+    </div>
+
+    <div class="schedule-row">
+      <span class="schedule-item">{{ t('contest.starts') }}: {{ formattedStartTime }}</span>
+      <span class="schedule-item">{{ t('contest.ends') }}: {{ formattedEndTime }}</span>
     </div>
 
     <!-- Participant Progress Bar -->
@@ -354,7 +372,7 @@ defineExpose({ handleJoin });
       </div>
     </div>
 
-    <!-- Actions -->
+    <!-- Actions: Join CTA must NOT embed price (price is in info row). -->
     <div class="card-actions">
       <button class="btn btn-secondary btn-sm" @click="toggleDetails">
         {{ showDetails ? t('common.hide') : t('contests.details') }}
@@ -368,7 +386,18 @@ defineExpose({ handleJoin });
         <span v-if="isJoining" class="btn-loading">
           <span class="spinner"></span>
         </span>
-        <span v-else>{{ t('contests.joinNow') }}</span>
+        <span v-else>{{ t('contests.join') || t('contests.joinNow') || 'Join' }}</span>
+      </button>
+      <span v-else-if="contest.status === 'cancelled'" class="joined-badge">
+        {{ t('contests.cancelled') || 'Contest Cancelled' }}
+      </span>
+      <button
+        v-else-if="contest.status === 'running' && isJoined"
+        class="btn btn-primary join-btn"
+        type="button"
+        @click="router.push(`/trade/${contest.id}`)"
+      >
+        {{ t('contests.enterTrading') || 'Enter Trading' }}
       </button>
       <template v-else-if="isJoined">
         <span class="joined-badge">
@@ -377,14 +406,13 @@ defineExpose({ handleJoin });
           </svg>
           {{ t('contests.joined') }}
         </span>
-        <a
-          v-if="contest.status === 'running'"
-          :href="`/trade/${contest.id}`"
-          class="btn btn-primary enter-trading-btn"
-        >
-          {{ t('contests.enterTrading') }}
-        </a>
       </template>
+      <span
+        v-else-if="contest.status === 'registration_closed' || contest.status === 'scheduled'"
+        class="joined-badge"
+      >
+        {{ t('countdown.startingNow') || 'Starting...' }}
+      </span>
     </div>
 
     <!-- Insufficient Balance Modal -->
@@ -500,6 +528,19 @@ defineExpose({ handleJoin });
 .countdown-section {
   padding: var(--spacing-sm) 0;
   border-bottom: 1px solid var(--color-border-light, var(--color-border));
+}
+
+.schedule-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.schedule-item {
+  font-variant-numeric: tabular-nums;
 }
 
 .info-row {

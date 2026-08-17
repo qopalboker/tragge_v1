@@ -201,12 +201,17 @@ function goBack(): void {
   router.back();
 }
 
-// Watch for route changes
-watch(contestId, () => {
-  if (contestId.value) {
-    fetchContestDetails();
-    fetchParticipants();
-  }
+// Watch for route changes — clear stale contest immediately so SPA nav A→B never
+// keeps Contest A content while B loads (refresh-only bug).
+watch(contestId, (id, prev) => {
+  if (!id || id === prev) return;
+  contest.value = null;
+  participants.value = [];
+  error.value = null;
+  showJoinModal.value = false;
+  loading.value = true;
+  void fetchContestDetails();
+  void fetchParticipants();
 });
 
 // Watch for contest status changes to redirect when completed

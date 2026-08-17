@@ -673,29 +673,31 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 func (sm *StateMachine) validateTransition(ctx context.Context, contest *Contest, toStatus ContestStatus) error {
 	switch toStatus {
 	case StatusRunning:
-		// Paid contests: product §5.3 — at least min_participants REAL users.
-		// System/bot rows (is_system) never satisfy the real-user quorum.
-		// Free practice contests may start without the paid quorum (product §6).
-		if !contest.IsFree {
-			var actualParticipants int
-			err := sm.pool.Primary().QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM contest_participants
-				 WHERE contest_id = $1
-				   AND COALESCE(is_system, FALSE) = FALSE`,
-				contest.ID).Scan(&actualParticipants)
-			if err != nil {
-				// Fall back to denormalized value on query error
-				actualParticipants = contest.CurrentParticipants
-			}
-
-			if actualParticipants < contest.MinParticipants {
-				return &TransitionError{
-					ContestID:  contest.ID,
-					FromStatus: contest.Status,
-					ToStatus:   toStatus,
-					Reason: fmt.Sprintf("minimum participants not met: %d/%d",
-						actualParticipants, contest.MinParticipants),
-				}
+		// Real users only — system/bot (is_system) never counts toward quorum.
+		// Free: product free quorum = T-bot + ≥1 real user → require ≥1 real.
+		// Paid: product paid quorum = ≥ min_participants real users (default 2).
+		var actualParticipants int
+		err := sm.pool.Primary().QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM contest_participants
+			 WHERE contest_id = $1
+			   AND COALESCE(is_system, FALSE) = FALSE`,
+			contest.ID).Scan(&actualParticipants)
+		if err != nil {
+			actualParticipants = contest.CurrentParticipants
+		}
+		minRequired := contest.MinParticipants
+		if contest.IsFree {
+			minRequired = 1
+		} else if minRequired < 2 {
+			minRequired = 2
+		}
+		if actualParticipants < minRequired {
+			return &TransitionError{
+				ContestID:  contest.ID,
+				FromStatus: contest.Status,
+				ToStatus:   toStatus,
+				Reason: fmt.Sprintf("minimum participants not met: %d/%d",
+					actualParticipants, minRequired),
 			}
 		}
 

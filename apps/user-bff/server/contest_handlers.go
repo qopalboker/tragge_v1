@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -85,18 +86,48 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 	// Build dynamic query with filters.
 	// NOTE: All column names below are static string literals — only user-supplied values
 	// are parameterized via $N placeholders. This is safe from SQL injection.
+	// Upcoming/running window is backend-config driven (not hardcoded in FE cards).
+	// Default: show contests starting within the next 24h, plus already-running ones.
+	upcomingHorizonHours := 24
+	if v := strings.TrimSpace(os.Getenv("CONTEST_LIST_UPCOMING_HOURS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 168 {
+			upcomingHorizonHours = n
+		}
+	}
+	// 30m product example wants ~1h of upcoming starts; allow tighter override.
+	if v := strings.TrimSpace(os.Getenv("CONTEST_LIST_UPCOMING_MINUTES")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 10080 {
+			upcomingHorizonHours = 0
+			// stored as minutes when hours env not used; handled below
+			_ = n
+		}
+	}
+	upcomingMinutes := upcomingHorizonHours * 60
+	if v := strings.TrimSpace(os.Getenv("CONTEST_LIST_UPCOMING_MINUTES")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 10080 {
+			upcomingMinutes = n
+		}
+	}
+
 	query := `
 		SELECT c.id, c.name, COALESCE(c.description, ''), c.starts_at, c.ends_at, c.status,
 		       c.entry_fee_cents, c.qty_total, c.duration_type, c.asset_class, COALESCE(c.duration_minutes, 0),
 		       c.min_participants, c.max_participants, c.registration_deadline, c.commission_rate,
 		       c.is_free, c.rules_json,
 		       (SELECT COUNT(*) FROM contest_participants cp
-		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE) as participant_count
+		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE) as participant_count,
+		       COALESCE(c.prize_pool_net_cents, 0)
 		FROM contests c
-		WHERE c.status IN ('registration_open', 'scheduled', 'running')`
+		WHERE c.status IN ('registration_open', 'scheduled', 'running')
+		  AND (
+		        c.status = 'running'
+		        OR (c.starts_at > NOW() AND c.starts_at <= NOW() + ($1::text || ' minutes')::interval)
+		        OR (c.starts_at <= NOW() AND c.ends_at > NOW())
+		      )`
 
 	var args []interface{}
-	argIdx := 1
+	args = append(args, strconv.Itoa(upcomingMinutes))
+	argIdx := 2
 
 	// Duration type filter
 	if durationType != "" {
@@ -115,7 +146,10 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Asset class filter
+	// Asset class filter (also accept market_type query alias from FE)
+	if assetClass == "" {
+		assetClass = r.URL.Query().Get("market_type")
+	}
 	if assetClass != "" {
 		// Validate asset class
 		validClasses := map[string]bool{
@@ -170,13 +204,15 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 	contestMap := make(map[string]*ContestResponse)
 	var contestIDs []string
 
+	serverTime := time.Now().UTC().Format(time.RFC3339Nano)
 	for rows.Next() {
 		var c ContestResponse
 		var rules sql.NullString
+		var prizePool int
 		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.StartsAt, &c.EndsAt,
 			&c.Status, &c.EntryFee, &c.QtyTotal, &c.DurationType, &c.AssetClass,
 			&c.DurationMinutes, &c.MinParticipants, &c.MaxParticipants, &c.RegistrationDeadline,
-			&c.CommissionRate, &c.IsFree, &rules, &c.ParticipantCount); err != nil {
+			&c.CommissionRate, &c.IsFree, &rules, &c.ParticipantCount, &prizePool); err != nil {
 			a.log().Error("Failed to scan contest", zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 			return
@@ -184,6 +220,20 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 		if rules.Valid && rules.String != "" {
 			c.Rules = json.RawMessage(rules.String)
 		}
+		c.MarketType = c.AssetClass
+		// Free and pre-quorum paid: authoritative prize is 0 → FE shows "No prize".
+		if c.IsFree || c.EntryFee == 0 || prizePool <= 0 || c.ParticipantCount < c.MinParticipants {
+			c.PrizePoolCents = 0
+			c.EstimatedPrizePoolCents = 0
+			c.FirstPlacePrizeCents = 0
+		} else {
+			c.PrizePoolCents = prizePool
+			c.EstimatedPrizePoolCents = prizePool
+			// Conservative first-place placeholder only when pool is locked/authoritative.
+			// Detailed rank splits remain on prize-preview endpoint.
+			c.FirstPlacePrizeCents = prizePool
+		}
+		c.ServerTime = serverTime
 		c.Symbols = []ContestSymbol{}
 		contestMap[c.ID] = &c
 		contestIDs = append(contestIDs, c.ID)
@@ -306,11 +356,24 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 
 	// P2-P3-2: Fee transparency - expose commission rate and gross/net prize pool
 	resp.CommissionRate = commissionRate
-	if resp.CurrentParticipants > 0 && resp.EntryFeeCents > 0 {
+	if resp.IsFree || resp.EntryFeeCents <= 0 {
+		resp.PrizePoolCents = 0
+		resp.GrossPrizeCents = 0
+		resp.FirstPlacePrizeCents = 0
+		resp.EstimatedPrizePoolCents = 0
+	} else if resp.CurrentParticipants > 0 && resp.CurrentParticipants >= resp.MinParticipants {
 		totalEntryFees := resp.EntryFeeCents * resp.CurrentParticipants
 		resp.GrossPrizeCents = totalEntryFees
 		feeBps := ResolveEffectiveFeeBps(platformFeeBps, commissionRate)
 		resp.PrizePoolCents = int((int64(totalEntryFees) * int64(10000-feeBps)) / 10000)
+		resp.EstimatedPrizePoolCents = resp.PrizePoolCents
+		resp.FirstPlacePrizeCents = resp.PrizePoolCents
+	} else {
+		// Paid pre-quorum: show No prize until authoritative pool exists.
+		resp.PrizePoolCents = 0
+		resp.GrossPrizeCents = 0
+		resp.FirstPlacePrizeCents = 0
+		resp.EstimatedPrizePoolCents = 0
 	}
 
 	// Query symbols for this contest

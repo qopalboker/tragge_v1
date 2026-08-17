@@ -22,11 +22,20 @@
 | P0-3 | Paid start quorum counted system bots as real users | Domain | **FIXED 2026-08-17** | `is_system=false` count in SM + auto-start + list/details APIs |
 | P0-4 | CountdownTimer emitted FE-invented `running` status | User UI | **FIXED 2026-08-17** | Timestamp presentation only; parent re-fetches backend |
 
+| P0-5 | 30m tournaments not generated every 10 minutes | Scheduler | **FIXED 2026-08-17** | `EVERY_10_MIN` + horizon materialization + 0106 auto_create |
+| P0-6 | Free contests auto-started with 0 real users (T-bot alone) | Domain/Scheduler | **FIXED 2026-08-17** | Free start requires ≥1 real user; else cancel |
+| P0-7 | Contest Info stale after SPA navigate A→B | User UI | **FIXED 2026-08-17** | Clear state on contestId watch |
+
 **Open P0 count: 0**
 
 ---
 
 ## P1 — core journey (must be zero for PASS)
+
+| P1-TS-1 | Contest card timeframe beside participants; Join UX | User UI | **FIXED 2026-08-17** | Participants left; entry fee; Join without $; No prize |
+| P1-TS-2 | List API missing prize + upcoming window | User BFF | **FIXED 2026-08-17** | prize fields + CONTEST_LIST_UPCOMING_* window |
+| P1-TS-3 | Trade page no redirect after contest end | Trade UI | **FIXED 2026-08-17** | Revalidate → `/user/contests/:id` |
+| P1-TS-4 | `tournament_schedules` cron not consumed by calendar | Scheduler | **OPEN → P2** | Templates use `recurrence_rule`; document gap; no invented cadence |
 
 | ID | Title | Layer | Status | Resolution |
 |---|---|---|---|---|

@@ -1841,25 +1841,31 @@ type ContestSymbol struct {
 
 // ContestResponse represents a contest for listing.
 type ContestResponse struct {
-	ID                   string          `json:"id"`
-	Name                 string          `json:"name"`
-	Description          string          `json:"description,omitempty"`
-	StartsAt             time.Time       `json:"starts_at"`
-	EndsAt               time.Time       `json:"ends_at"`
-	Status               string          `json:"status"`
-	EntryFee             int             `json:"entry_fee_cents"`
-	QtyTotal             int64           `json:"qty_total"`
-	DurationType         string          `json:"duration_type"`
-	AssetClass           string          `json:"asset_class"`
-	DurationMinutes      int             `json:"duration_minutes"`
-	MinParticipants      int             `json:"min_participants"`
-	MaxParticipants      *int            `json:"max_participants,omitempty"`
-	RegistrationDeadline *time.Time      `json:"registration_deadline,omitempty"`
-	CommissionRate       float64         `json:"commission_rate"`
-	IsFree               bool            `json:"is_free"`
-	ParticipantCount     int             `json:"participant_count"`
-	Rules                json.RawMessage `json:"rules,omitempty"`
-	Symbols              []ContestSymbol `json:"symbols"`
+	ID                   string     `json:"id"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description,omitempty"`
+	StartsAt             time.Time  `json:"starts_at"`
+	EndsAt               time.Time  `json:"ends_at"`
+	Status               string     `json:"status"`
+	EntryFee             int        `json:"entry_fee_cents"`
+	QtyTotal             int64      `json:"qty_total"`
+	DurationType         string     `json:"duration_type"`
+	AssetClass           string     `json:"asset_class"`
+	MarketType           string     `json:"market_type,omitempty"` // alias of asset_class for FE filters
+	DurationMinutes      int        `json:"duration_minutes"`
+	MinParticipants      int        `json:"min_participants"`
+	MaxParticipants      *int       `json:"max_participants,omitempty"`
+	RegistrationDeadline *time.Time `json:"registration_deadline,omitempty"`
+	CommissionRate       float64    `json:"commission_rate"`
+	IsFree               bool       `json:"is_free"`
+	ParticipantCount     int        `json:"participant_count"`
+	// Authoritative prize economics — never invent client-side. 0 => UI "No prize".
+	PrizePoolCents          int             `json:"prize_pool_cents"`
+	EstimatedPrizePoolCents int             `json:"estimated_prize_pool_cents"`
+	FirstPlacePrizeCents    int             `json:"first_place_prize_cents"`
+	Rules                   json.RawMessage `json:"rules,omitempty"`
+	Symbols                 []ContestSymbol `json:"symbols"`
+	ServerTime              string          `json:"server_time,omitempty"`
 }
 
 // ContestDetailsResponse represents detailed contest information.
@@ -1891,6 +1897,11 @@ type ContestDetailsResponse struct {
 	// P2-P3-2: Fee transparency
 	CommissionRate  float64 `json:"commission_rate"` // Platform commission percentage (e.g. 20.0 = 20%)
 	GrossPrizeCents int     `json:"gross_prize_pool_cents"`
+	// first_place_prize_cents is 0 until authoritative prize economics exist.
+	FirstPlacePrizeCents int `json:"first_place_prize_cents"`
+	// Alias for FE store
+	EstimatedPrizePoolCents int `json:"estimated_prize_pool_cents,omitempty"`
+	DurationMinutes         int `json:"duration_minutes,omitempty"`
 
 	// P2-P3-3: Server time for countdown synchronization
 	ServerTime string `json:"server_time"` // ISO8601 timestamp for client clock-drift correction

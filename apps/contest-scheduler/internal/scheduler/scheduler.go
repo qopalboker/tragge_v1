@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/Parsaeffatravesh/tragge/packages/db"
-	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/domain/statemachine"
+	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -611,19 +611,34 @@ func (s *Scheduler) processCandidateWithRetry(ctx context.Context, candidate sta
 func (s *Scheduler) executeTransition(ctx context.Context, candidate statemachine.AutoTransitionCandidate) error {
 	startTime := time.Now()
 
-	// Handle special case: auto-start requires minimum participants check.
-	// Free contests always start regardless of participant count.
-	if candidate.SuggestedStatus == statemachine.StatusRunning && !candidate.IsFree {
-		if candidate.CurrentParticipants < candidate.MinParticipants {
-			s.logger.Warn("Contest cannot start due to insufficient participants",
+	// Auto-start quorum (real users only; is_system / T-bot never counted):
+	//   free → at least 1 real user (T-bot + 1 real satisfies product free quorum)
+	//   paid → min_participants real users (product default 2)
+	if candidate.SuggestedStatus == statemachine.StatusRunning {
+		minRequired := candidate.MinParticipants
+		if candidate.IsFree {
+			minRequired = 1
+			if candidate.MinParticipants > 1 {
+				// Free templates may still declare min_participants=1 after migration.
+				minRequired = 1
+			}
+		}
+		if minRequired < 1 {
+			minRequired = 1
+		}
+		if !candidate.IsFree && minRequired < 2 {
+			minRequired = 2
+		}
+		if candidate.CurrentParticipants < minRequired {
+			s.logger.Warn("Contest cannot start due to insufficient real participants",
 				zap.String("contest_id", candidate.ContestID),
-				zap.Int("current", candidate.CurrentParticipants),
-				zap.Int("min", candidate.MinParticipants))
+				zap.Bool("is_free", candidate.IsFree),
+				zap.Int("current_real", candidate.CurrentParticipants),
+				zap.Int("min_required", minRequired))
 
-			// Auto-cancel the contest
 			_, err := s.stateMachine.Cancel(ctx, candidate.ContestID, nil,
 				fmt.Sprintf("Auto-cancelled: minimum participants not met (%d/%d)",
-					candidate.CurrentParticipants, candidate.MinParticipants))
+					candidate.CurrentParticipants, minRequired))
 
 			if err == nil {
 				transitionsTotal.WithLabelValues(

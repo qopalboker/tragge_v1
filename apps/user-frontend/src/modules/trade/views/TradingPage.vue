@@ -89,6 +89,42 @@ const remainingSeconds = computed(() => {
   return Math.max(0, Math.floor((endMs - adjustedNow) / 1000));
 });
 
+// When backend reaches settled/completed (or post-end), leave trading for contest info.
+// Never invent status — revalidate first when timer hits zero.
+let endRedirectInFlight = false;
+async function revalidateAndMaybeLeaveTrade(): Promise<void> {
+  if (!contestId.value || endRedirectInFlight) return;
+  endRedirectInFlight = true;
+  try {
+    const details = await getContestDetails(contestId.value);
+    contestInfo.value = details;
+    const st = (details.status || '').toLowerCase();
+    if (st === 'completed' || st === 'settling' || st === 'cancelled') {
+      await router.replace(`/user/contests/${contestId.value}`);
+    }
+  } catch {
+    // Keep trading view; next timer tick may retry.
+  } finally {
+    endRedirectInFlight = false;
+  }
+}
+
+watch(remainingSeconds, (secs) => {
+  if (secs === 0 && contestInfo.value) {
+    void revalidateAndMaybeLeaveTrade();
+  }
+});
+
+watch(
+  () => contestInfo.value?.status,
+  (st) => {
+    const s = (st || '').toLowerCase();
+    if (s === 'completed' || s === 'settling' || s === 'cancelled') {
+      void router.replace(`/user/contests/${contestId.value}`);
+    }
+  },
+);
+
 // Duration minutes computed from start/end times
 const durationMinutes = computed(() => {
   if (!contestInfo.value) return 0;

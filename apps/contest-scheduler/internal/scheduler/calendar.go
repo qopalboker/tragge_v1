@@ -374,9 +374,10 @@ type EntryTier struct {
 	HasPrizeOverride        bool
 }
 
-// processCalendarEntry creates contest(s) from the template and updates next_occurrence_at.
-// If the template has active tiers, one contest is created per tier.
-// Otherwise, falls back to legacy single-contest creation.
+// processCalendarEntry creates contest(s) from the template for all due slots within
+// the product lookahead horizon, then advances next_occurrence_at past the horizon.
+// If the template has active tiers, one contest is created per tier per slot.
+// Otherwise, falls back to legacy single-contest creation per slot.
 func (cp *CalendarProcessor) processCalendarEntry(ctx context.Context, entry CalendarEntry) error {
 	cp.logger.Info("Processing calendar entry",
 		zap.String("template_id", entry.ID),
@@ -384,10 +385,7 @@ func (cp *CalendarProcessor) processCalendarEntry(ctx context.Context, entry Cal
 		zap.String("recurrence_rule", entry.RecurrenceRule),
 		zap.Time("next_occurrence_at", entry.NextOccurrenceAt))
 
-	startsAt := entry.NextOccurrenceAt
-	endsAt := startsAt.Add(time.Duration(entry.DurationMinutes) * time.Minute)
-
-	// Fetch active tiers for this template
+	// Fetch active tiers for this template once.
 	tiers, err := cp.fetchActiveTiers(ctx, entry.ID)
 	if err != nil {
 		cp.logger.Error("Failed to fetch tiers, falling back to legacy",
@@ -395,56 +393,97 @@ func (cp *CalendarProcessor) processCalendarEntry(ctx context.Context, entry Cal
 		tiers = nil
 	}
 
-	if len(tiers) == 0 {
-		// LEGACY: No tiers — create single contest as before
-		return cp.processLegacyEntry(ctx, entry, startsAt, endsAt)
+	horizon := slotHorizon(entry.DurationMinutes)
+	deadline := time.Now().UTC().Add(horizon)
+	cursor := entry.NextOccurrenceAt.UTC()
+	// Cap iterations so a misconfigured rule cannot spin forever.
+	const maxSlots = 48
+	var totalCreated int
+
+	for i := 0; i < maxSlots; i++ {
+		if cursor.After(deadline) {
+			break
+		}
+		startsAt := cursor
+		endsAt := startsAt.Add(time.Duration(entry.DurationMinutes) * time.Minute)
+
+		if len(tiers) == 0 {
+			if err := cp.processLegacyEntry(ctx, entry, startsAt, endsAt); err != nil {
+				cp.logger.Error("Failed to create legacy calendar slot",
+					zap.String("template_id", entry.ID),
+					zap.Time("starts_at", startsAt),
+					zap.Error(err))
+				calendarProcessingErrorsTotal.Inc()
+			} else {
+				totalCreated++
+			}
+		} else {
+			for _, tier := range tiers {
+				contestID, createErr := cp.createContestFromTier(ctx, entry, tier, startsAt, endsAt)
+				if createErr != nil {
+					cp.logger.Error("Failed to create contest for tier",
+						zap.String("tier_id", tier.ID),
+						zap.Int64("entry_fee", tier.EntryFee),
+						zap.Error(createErr))
+					calendarProcessingErrorsTotal.Inc()
+					continue
+				}
+				if contestID != "" {
+					totalCreated++
+					calendarContestsCreatedTotal.Inc()
+
+					templateType := "standard"
+					if entry.Type.Valid && entry.Type.String != "" {
+						templateType = entry.Type.String
+					}
+					marketType := entry.AssetClass
+					if marketType == "" {
+						marketType = "unknown"
+					}
+					traggeSchedulerTournamentsCreated.WithLabelValues(templateType, marketType).Inc()
+
+					cp.mu.Lock()
+					cp.contestsCreated++
+					cp.mu.Unlock()
+				}
+			}
+		}
+
+		next, nerr := calculateNextOccurrence(entry.RecurrenceRule, cursor)
+		if nerr != nil {
+			return fmt.Errorf("failed to calculate next occurrence: %w", nerr)
+		}
+		if !next.After(cursor) {
+			// Safety: force progress if rule misbehaves.
+			next = cursor.Add(10 * time.Minute)
+		}
+		cursor = next
 	}
 
-	// MULTI-TIER: create one contest per active tier
-	var createdCount int
-	for _, tier := range tiers {
-		contestID, createErr := cp.createContestFromTier(ctx, entry, tier, startsAt, endsAt)
-		if createErr != nil {
-			cp.logger.Error("Failed to create contest for tier",
-				zap.String("tier_id", tier.ID),
-				zap.Int64("entry_fee", tier.EntryFee),
-				zap.Error(createErr))
-			calendarProcessingErrorsTotal.Inc()
-			continue // Don't block other tiers
-		}
-		if contestID != "" {
-			createdCount++
-			calendarContestsCreatedTotal.Inc()
-
-			templateType := "standard"
-			if entry.Type.Valid && entry.Type.String != "" {
-				templateType = entry.Type.String
-			}
-			marketType := entry.AssetClass
-			if marketType == "" {
-				marketType = "unknown"
-			}
-			traggeSchedulerTournamentsCreated.WithLabelValues(templateType, marketType).Inc()
-
-			cp.mu.Lock()
-			cp.contestsCreated++
-			cp.mu.Unlock()
-		}
-	}
-
-	cp.logger.Info("Multi-tier creation complete",
-		zap.String("template_id", entry.ID),
-		zap.Int("tiers", len(tiers)),
-		zap.Int("created", createdCount))
-
-	// Update next_occurrence_at based on recurrence pattern
-	if err := cp.updateNextOccurrence(ctx, entry); err != nil {
+	// Persist advanced cursor so restarts do not re-materialize the same horizon.
+	entry.NextOccurrenceAt = cursor
+	if err := cp.updateNextOccurrenceAbsolute(ctx, entry.ID, cursor); err != nil {
 		cp.logger.Error("Failed to update next_occurrence_at",
 			zap.String("template_id", entry.ID),
 			zap.Error(err))
 	}
 
+	cp.logger.Info("Calendar entry materialization complete",
+		zap.String("template_id", entry.ID),
+		zap.Int("slots_created_or_skipped", totalCreated),
+		zap.Time("next_occurrence_at", cursor))
+
 	return nil
+}
+
+// updateNextOccurrenceAbsolute sets next_occurrence_at to an explicit value.
+func (cp *CalendarProcessor) updateNextOccurrenceAbsolute(ctx context.Context, templateID string, next time.Time) error {
+	_, err := cp.pool.Primary().ExecContext(ctx, `
+		UPDATE tournament_templates
+		SET next_occurrence_at = $1, last_generated_at = NOW()
+		WHERE id = $2
+	`, next, templateID)
+	return err
 }
 
 // processLegacyEntry handles the original single-contest creation path.
@@ -467,7 +506,8 @@ func (cp *CalendarProcessor) processLegacyEntry(ctx context.Context, entry Calen
 		cp.logger.Warn("Contest already exists for this calendar entry time slot",
 			zap.String("template_id", entry.ID),
 			zap.Time("starts_at", startsAt))
-		return cp.updateNextOccurrence(ctx, entry)
+		// Caller advances next_occurrence across the horizon; do not mutate here.
+		return nil
 	}
 
 	contestID, err := cp.createContestFromTemplate(ctx, entry, startsAt, endsAt)
@@ -498,12 +538,7 @@ func (cp *CalendarProcessor) processLegacyEntry(ctx context.Context, entry Calen
 		zap.Time("starts_at", startsAt),
 		zap.Time("ends_at", endsAt))
 
-	if err := cp.updateNextOccurrence(ctx, entry); err != nil {
-		cp.logger.Error("Failed to update next_occurrence_at",
-			zap.String("template_id", entry.ID),
-			zap.Error(err))
-	}
-
+	// next_occurrence_at is advanced by processCalendarEntry after the horizon loop.
 	return nil
 }
 
@@ -986,6 +1021,7 @@ func (cp *CalendarProcessor) updateNextOccurrence(ctx context.Context, entry Cal
 
 // calculateNextOccurrence calculates the next occurrence based on recurrence rule.
 // Supported formats:
+// - "EVERY_10_MIN" / "EVERY_10_MINUTES" - 10-minute slot grid (30m tournaments)
 // - "HOURLY" - every hour
 // - "DAILY@HH:MM" - daily at specific time
 // - "WEEKLY@DAY1,DAY2@HH:MM" - weekly on specific days at specific time
@@ -995,6 +1031,16 @@ func calculateNextOccurrence(rule string, from time.Time) (time.Time, error) {
 	parts := strings.Split(rule, "@")
 
 	switch parts[0] {
+	case "EVERY_10_MIN", "EVERY_10_MINUTES", "INTERVAL_10M", "*/10":
+		// Snap to the next exclusive 10-minute boundary after `from`.
+		fromUTC := from.UTC()
+		truncated := fromUTC.Truncate(10 * time.Minute)
+		next := truncated.Add(10 * time.Minute)
+		if !next.After(fromUTC) {
+			next = next.Add(10 * time.Minute)
+		}
+		return next, nil
+
 	case "HOURLY":
 		return from.Add(1 * time.Hour), nil
 
@@ -1165,11 +1211,29 @@ func getDurationTypeFromMinutes(minutes int) string {
 	case minutes <= 60:
 		return "hourly"
 	case minutes <= 240:
-		return "4hour"
+		// DB / contracts enum is four_hour (not "4hour").
+		return "four_hour"
 	case minutes <= 1440:
 		return "daily"
 	default:
 		return "weekly"
+	}
+}
+
+// slotHorizon returns how far ahead calendar materialization should create contests.
+// 30m product window ≈ next hour of starts; longer durations keep a modest forward buffer.
+func slotHorizon(durationMinutes int) time.Duration {
+	switch {
+	case durationMinutes <= 30:
+		return 70 * time.Minute
+	case durationMinutes <= 60:
+		return 3 * time.Hour
+	case durationMinutes <= 240:
+		return 12 * time.Hour
+	case durationMinutes <= 1440:
+		return 48 * time.Hour
+	default:
+		return 14 * 24 * time.Hour
 	}
 }
 
