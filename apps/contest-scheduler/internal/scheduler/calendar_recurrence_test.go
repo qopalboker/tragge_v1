@@ -42,3 +42,5 @@ func TestSlotHorizon_30m(t *testing.T) {
 		t.Fatalf("30m horizon too small: %v", h)
 	}
 }
+
+
