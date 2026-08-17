@@ -109,3 +109,8 @@ playwright-report/
 # Local build artifacts / session files
 var/
 
+
+# Temporary tunnel env (local Mini App testing)
+infra/docker/.env.tunnel
+infra/docker/.env.tunnel.*
+
