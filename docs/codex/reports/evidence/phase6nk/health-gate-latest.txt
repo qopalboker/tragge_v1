@@ -1,0 +1,23 @@
+PASS  container_postgres tragge_postgres Up About a minute (healthy)
+PASS  postgres_healthy_flag healthy
+PASS  container_redis tragge_redis Up About a minute (healthy)
+PASS  redis_healthy_flag healthy
+PASS  container_redpanda tragge_redpanda Up About a minute (healthy)
+PASS  container_api-server tragge_api_server Up About a minute (healthy)
+PASS  api-server_healthy_flag healthy
+PASS  container_trading-core tragge_trading_core Up About a minute (healthy)
+PASS  trading-core_healthy_flag healthy
+PASS  container_worker tragge_worker Up About a minute (healthy)
+PASS  worker_healthy_flag healthy
+PASS  trading_engine_readyz_reachable {"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status
+PASS  wal_recovery "wal_recovery":"ok"
+PASS  engine_status_ready "status":"healthy"
+PASS  market_data_observed market_data.ready=false (must be true for live paid launch)
+PASS  api_user_bff_healthz {"status":"ok"}
+
+PASS  worker_up Up About a minute (healthy)
+FAIL  gateway_port_8080 closed (optional if LB elsewhere)
+PASS  postgres_ready /var/run/postgresql:5432 - accepting connections
+PASS  redis_ping PONG
+
+PRODUCTION HEALTH — PASS

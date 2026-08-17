@@ -794,6 +794,18 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		r.With(app.auth.Middleware.RequirePermission("symbols.manage")).Put("/{symbol}", app.handleUpdateSymbol)
 	})
 
+	// Admin security policy (global MFA enable/disable) — Super Admin only for writes.
+	r.Route("/api/admin/security", func(r chi.Router) {
+		r.Use(app.auth.Middleware.RequireAuth)
+		r.Use(app.auth.Middleware.RequireAdminAccess)
+		r.With(app.auth.Middleware.RequirePermission("settings.manage")).Get("/mfa", app.handleGetAdminMFAPolicy)
+		r.With(
+			app.auth.Middleware.RequireSuperAdmin,
+			app.auth.Middleware.RequirePermission("settings.manage"),
+			app.requireAdminMFAPolicySensitive(),
+		).Put("/mfa", app.handleSetAdminMFAPolicy)
+	})
+
 	// Email template management routes - permission-protected
 	r.Route("/api/admin/email-templates", func(r chi.Router) {
 		r.Use(app.auth.Middleware.RequireAuth)

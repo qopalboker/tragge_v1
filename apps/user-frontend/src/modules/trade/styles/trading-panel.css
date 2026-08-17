@@ -1,0 +1,712 @@
+/**
+ * Trading panel layout (desktop + shared chrome).
+ *
+ * Components use .tp-* classes; tokens live in frontend-shared main.css (--tp-*).
+ * This file restores the missing structural layout so the top nav cannot overlay
+ * the watchlist quick-trade Buy/Sell controls.
+ */
+
+/* ---- Root / shell ------------------------------------------------------- */
+.tp-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--tp-bg);
+  color: var(--tp-tw);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.tp-root.tp-dark {
+  /* mirror .dark trading tokens when page uses tp-dark */
+  --tp-bg: #0f172a;
+  --tp-bg-nav: #1e293b;
+  --tp-bg-sb: #0f172a;
+  --tp-bg-card: #1e293b;
+  --tp-bg-hov: #334155;
+  --tp-bg-inp: #1e293b;
+  --tp-bd: #334155;
+  --tp-tw: #f1f5f9;
+  --tp-t1: #94a3b8;
+  --tp-t2: #64748b;
+}
+
+.tp-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.tp-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Top navbar: single horizontal bar, never covers .tp-main ----------- */
+.tp-nav {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  max-height: 52px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  background: var(--tp-bg-nav);
+  border-bottom: 1px solid var(--tp-bd);
+  overflow: hidden;
+  /* Keep nav in document flow so it does not paint over the trade body */
+  pointer-events: auto;
+}
+
+.tp-nav > * {
+  flex-shrink: 0;
+}
+
+.tp-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tp-nav-logo svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.tp-nav-logo-text {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--tp-tw);
+  white-space: nowrap;
+}
+
+.tp-nav-tourn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--tp-t1);
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.tp-nav-tourn:hover {
+  background: var(--tp-bg-hov);
+  border-color: var(--tp-bd);
+}
+
+.tp-nav-tourn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tp-nav-mode {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--tp-bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tp-bg-card);
+}
+
+.tp-nav-mode-inner {
+  text-align: center;
+  line-height: 1.05;
+}
+
+.tp-nav-mode-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tp-tw);
+}
+
+.tp-nav-mode-unit {
+  display: block;
+  font-size: 9px;
+  color: var(--tp-t2);
+  text-transform: uppercase;
+}
+
+.tp-nav-contest {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+}
+
+.tp-nav-cid {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tp-tw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tp-nav-cdates {
+  font-size: 10px;
+  color: var(--tp-t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tp-nav-free-badge {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--tp-gd, rgba(16, 185, 129, 0.15));
+  color: var(--tp-g);
+  vertical-align: middle;
+}
+
+.tp-nav-center-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline: auto;
+}
+
+.tp-nctab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tp-t1);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tp-nctab svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tp-nctab.active,
+.tp-nctab:hover {
+  background: var(--tp-bg-hov);
+  color: var(--tp-tw);
+}
+
+/* Right cluster stays INSIDE the 52px bar — never absolute over the page */
+.tp-nright {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-inline-start: auto;
+  max-width: 42%;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.tp-nav-timer {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-tw);
+  white-space: nowrap;
+}
+
+.tp-nav-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tp-t1);
+  font-size: 11px;
+}
+
+.tp-nav-stat svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tp-nav-stat-val {
+  color: var(--tp-tw);
+  font-weight: 600;
+}
+
+.tp-nibtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--tp-bd);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tp-t1);
+  cursor: pointer;
+}
+
+.tp-nibtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tp-nibtn:hover {
+  background: var(--tp-bg-hov);
+  color: var(--tp-tw);
+}
+
+/* ---- Watchlist sidebar -------------------------------------------------- */
+.tp-sb {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--tp-bg-sb);
+  border-inline-end: 1px solid var(--tp-bd);
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.tp-sb-resize {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.tp-sb-resize-icon,
+.tp-sb-resize-grip {
+  display: none;
+}
+
+.tp-stabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px 0;
+  border-bottom: 1px solid var(--tp-bd);
+  flex: 0 0 auto;
+}
+
+.tp-stab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--tp-t1);
+  font-size: 11px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tp-stab svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tp-stab.active {
+  color: var(--tp-tw);
+  border-bottom-color: var(--tp-bl);
+}
+
+.tp-ssearch {
+  margin-inline-start: auto;
+  border: none;
+  background: transparent;
+  color: var(--tp-t1);
+  cursor: pointer;
+  padding: 6px;
+}
+
+.tp-wlh {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--tp-t2);
+  border-bottom: 1px solid var(--tp-bd);
+  flex: 0 0 auto;
+}
+
+.tp-wll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tp-wli {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--tp-bd);
+}
+
+.tp-wli:hover,
+.tp-wli.selected {
+  background: var(--tp-bg-hov);
+}
+
+.tp-wli-l {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tp-wli-s {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-tw);
+}
+
+.tp-wli-sub {
+  font-size: 10px;
+  color: var(--tp-t2);
+}
+
+.tp-wli-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tp-g);
+  margin-inline-end: 4px;
+}
+
+.tp-wli-p {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-tw);
+  text-align: end;
+}
+
+.tp-wli-c {
+  font-size: 11px;
+  text-align: end;
+}
+
+.tp-wli-c.up {
+  color: var(--tp-g);
+}
+
+.tp-wli-c.down {
+  color: var(--tp-r);
+}
+
+/* ---- Quick trade panel (Buy/Sell) — must sit above list, never under nav - */
+.tp-qtp {
+  position: relative;
+  z-index: 5;
+  margin: 0;
+  padding: 10px 12px 12px;
+  background: var(--tp-bg-card);
+  border-bottom: 1px solid var(--tp-bd);
+  pointer-events: auto;
+}
+
+.tp-qtrow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.tp-qtsb,
+.tp-qtbb {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  pointer-events: auto;
+  /* Ensure clickable above any accidental sibling paint */
+  isolation: isolate;
+}
+
+.tp-qtsb {
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.tp-qtbb {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  color: #fff;
+}
+
+.tp-qtsb:hover,
+.tp-qtbb:hover {
+  filter: brightness(1.05);
+}
+
+.tp-qtsb:disabled,
+.tp-qtbb:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tp-qt-l {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tp-qt-p {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+}
+
+.tp-qtlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 88px;
+}
+
+.tp-qtlot-i {
+  width: 72px;
+  text-align: center;
+  padding: 6px 4px;
+  border: 1px solid var(--tp-bd);
+  border-radius: 8px;
+  background: var(--tp-bg-inp);
+  color: var(--tp-tw);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tp-qtlot-u {
+  font-size: 10px;
+  color: var(--tp-t2);
+  white-space: nowrap;
+}
+
+.tp-qtlot-b {
+  display: flex;
+  gap: 4px;
+}
+
+.tp-qtpm {
+  width: 28px;
+  height: 24px;
+  border: 1px solid var(--tp-bd);
+  border-radius: 6px;
+  background: var(--tp-bg-hov);
+  color: var(--tp-tw);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tp-qtfooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.tp-qtadv {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--tp-t1);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tp-qtfi {
+  display: flex;
+  gap: 4px;
+}
+
+.tp-qtfib {
+  border: none;
+  background: transparent;
+  color: var(--tp-t2);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tp-qtfib.starred {
+  color: var(--tp-or, #f59e0b);
+}
+
+/* ---- Bottom positions panel --------------------------------------------- */
+.tp-bpanel {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--tp-bd);
+  background: var(--tp-bg-card);
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  max-height: 40vh;
+  overflow: hidden;
+}
+
+.tp-bptabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--tp-bd);
+  flex: 0 0 auto;
+}
+
+.tp-bpt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--tp-t1);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.tp-bpt.active {
+  background: var(--tp-bg-hov);
+  color: var(--tp-tw);
+}
+
+.tp-bpt-count {
+  color: var(--tp-t2);
+  font-size: 11px;
+}
+
+.tp-bptr {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.tp-bpib {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--tp-bd);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tp-t1);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tp-bpib svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tp-bpcontent {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+}
+
+.tp-bp-table {
+  width: 100%;
+  font-size: 12px;
+}
+
+.tp-bp-thead,
+.tp-bp-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr 0.6fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.tp-bp-thead {
+  color: var(--tp-t2);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--tp-bd);
+}
+
+.tp-bp-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tp-bd);
+  color: var(--tp-tw);
+}
+
+.tp-bp-empty,
+.tp-bp-es,
+.tp-bp-et {
+  color: var(--tp-t2);
+  text-align: center;
+  padding: 24px 8px;
+  font-size: 13px;
+}
+
+/* ---- Narrow desktop: collapse verbose nav labels ------------------------ */
+@media (max-width: 1100px) {
+  .tp-nav-logo-text,
+  .tp-nav-tourn span,
+  .tp-nav-cdates,
+  .tp-nctab span {
+    display: none;
+  }
+
+  .tp-nright {
+    max-width: 55%;
+  }
+}
+
+/* Desktop trading chrome only — mobile uses separate components */
+@media (max-width: 767px) {
+  .tp-nav {
+    display: none;
+  }
+}

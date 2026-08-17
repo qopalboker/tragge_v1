@@ -1,0 +1,43 @@
+PASS  [AUTH] user login page
+PASS  [AUTH] admin login page
+PASS  [AUTH] user router auth guard
+PASS  [AUTH] user BFF login
+PASS  [WALLET] user wallet page
+PASS  [WALLET] admin charge API
+PASS  [WALLET] CreditIdempotent
+PASS  [WALLET] prize credit
+PASS  [ADMIN] contest form
+PASS  [ADMIN] user detail
+PASS  [ADMIN] wallet charge permission
+PASS  [CONTEST] user contests page
+PASS  [CONTEST] contest details
+PASS  [JOIN] join route
+PASS  [TRADING] trading page
+PASS  [TRADING] trade orders API
+PASS  [FINALIZATION] settlement migrations
+PASS  [SETTLEMENT] prize credit path
+PASS  [RESULT] contest results page
+PASS  [SUPPORT] tickets API client
+PASS  [SUPPORT] dashboard support card
+PASS  [SUPPORT] support below challenges
+PASS  [CHALLENGES] challenge rail
+PASS  [CHALLENGES] uses total_contests
+PASS  [CHALLENGES] horizontal scroll
+PASS  [CONTEST] dashboard parses array contest response
+PASS  [SECURITY] no Math.random ranks on free practice
+PASS  [SECURITY] admin routes not in user app
+PASS  [RESPONSIVE] safe-area bottom nav
+PASS  [RTL] dashboard dir=rtl
+PASS  [RTL] design tokens
+PASS  [BROWSER E2E] frontend-gate — exit=0
+PASS  [FINANCIAL RECONCILIATION] mvp-gate — exit=0
+PASS  [FINANCIAL RECONCILIATION] compose postgres available — tragge_postgres
+PASS  [WALLET] admin credit→join→settle E2E — exit=0
+FAIL  [SETTLEMENT] phase1.1 financial lifecycle — exit=1
+PASS  [TRADING] trading→settlement E2E — exit=0
+PASS  [TRADING] restart WAL recovery — exit=0
+PASS  [BROWSER E2E] user e2e suite present
+PASS  [BROWSER E2E] admin e2e suite present
+PASS  [BROWSER E2E] mobile home acceptance spec
+
+MVP STABILIZATION — BLOCKED

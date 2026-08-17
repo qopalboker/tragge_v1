@@ -14,6 +14,7 @@ require (
 	github.com/Parsaeffatravesh/tragge/packages/notification v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/observability v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/redis v0.0.0
+	github.com/Parsaeffatravesh/tragge/packages/scoring v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/secrets v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/storage v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/ticket v0.0.0

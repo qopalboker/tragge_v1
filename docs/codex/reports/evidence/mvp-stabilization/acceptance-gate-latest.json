@@ -1,0 +1,254 @@
+{
+  "ts": "2026-08-17T01:28:06.127Z",
+  "decision": "MVP STABILIZATION — BLOCKED",
+  "failed": 1,
+  "results": [
+    {
+      "cat": "AUTH",
+      "name": "user login page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "admin login page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "user router auth guard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "user BFF login",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "user wallet page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "admin charge API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "CreditIdempotent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "prize credit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "contest form",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "user detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "wallet charge permission",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "user contests page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "contest details",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "JOIN",
+      "name": "join route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trading page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trade orders API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "FINALIZATION",
+      "name": "settlement migrations",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SETTLEMENT",
+      "name": "prize credit path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESULT",
+      "name": "contest results page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "tickets API client",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "dashboard support card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "support below challenges",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CHALLENGES",
+      "name": "challenge rail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CHALLENGES",
+      "name": "uses total_contests",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CHALLENGES",
+      "name": "horizontal scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "dashboard parses array contest response",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SECURITY",
+      "name": "no Math.random ranks on free practice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SECURITY",
+      "name": "admin routes not in user app",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESPONSIVE",
+      "name": "safe-area bottom nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "dashboard dir=rtl",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "design tokens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "frontend-gate",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "FINANCIAL RECONCILIATION",
+      "name": "mvp-gate",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "FINANCIAL RECONCILIATION",
+      "name": "compose postgres available",
+      "ok": true,
+      "detail": "tragge_postgres"
+    },
+    {
+      "cat": "WALLET",
+      "name": "admin credit→join→settle E2E",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "SETTLEMENT",
+      "name": "phase1.1 financial lifecycle",
+      "ok": false,
+      "detail": "exit=1"
+    },
+    {
+      "cat": "TRADING",
+      "name": "trading→settlement E2E",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "TRADING",
+      "name": "restart WAL recovery",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "user e2e suite present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "admin e2e suite present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "mobile home acceptance spec",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "production_go": false
+}

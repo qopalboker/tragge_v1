@@ -1,0 +1,20 @@
+PHASE62_PRODUCTION_READINESS_INVENTORY 2026-08-16T18:24:45.1639580+03:30
+git=478c9331e59c600942b927ce1f1e4a47c5565bed
+docker=29.7.2
+compose=Docker Compose version v5.3.1
+is_docker_desktop=True
+env_TRAGGE_PROD_HOST=unset
+env_TRAGGE_VM_HOST=unset
+env_TRAGGE_SSH_HOST=unset
+env_PHASE61_LIVE_VM=unset
+env_S3_BUCKET=unset
+env_BACKUP_S3_BUCKET=unset
+env_AWS_ACCESS_KEY_ID=unset
+env_AWS_PROFILE=unset
+env_NOWPAYMENTS_API_KEY=unset
+env_PAYMENT_PROVIDER=unset
+env_MASSIVE_API_KEY=unset
+env_TWELVEDATA_API_KEYS=unset
+secret_nowpayments=True
+wal_local_path_exists=True
+note=LOCAL INFRA QUALIFIED; cloud/prod VM and provider credentials not present in this session

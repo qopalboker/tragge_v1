@@ -13,6 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// deterministicFillID derives a stable fill_id from order_id so that a retry after
+// DB commit (Crash C) cannot create a second fill row for the same logical event.
+func deterministicFillID(orderID string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("tragge-fill:"+orderID)).String()
+}
+
 func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest) error {
 	// P1-4: Track order processing duration
 	orderStart := time.Now()
@@ -47,10 +53,44 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 		}
 	}
 
+	// 0.5 Fail-closed recovery gate — never trade from uncertain WAL/state.
+	if !e.CanAcceptTrading() {
+		return e.rejectOrder(ctx, order, fmt.Sprintf("engine not ready for trading: %s", e.WALUnhealthyReason()))
+	}
+
+	// 0.55 Contest finalization boundary: settling/completed must reject new trading.
+	if e.contestTradingEnabled != nil && !e.contestTradingEnabled(order.ContestID) {
+		return e.rejectOrder(ctx, order, "contest trading disabled (finalization boundary)")
+	}
+
+	// 0.6 Structural order validation (qty, prices, TP/SL) before any side effects.
+	if err := validateOrderRequest(order); err != nil {
+		return e.rejectOrder(ctx, order, err.Error())
+	}
+
 	// 1. Shard validation - reject orders for contests not assigned to this shard
 	if e.shardingEnabled && e.shardedState != nil {
 		if err := e.shardedState.RejectIfNotAssigned(order.ContestID); err != nil {
 			return e.rejectOrder(ctx, order, fmt.Sprintf("wrong shard: %v", err))
+		}
+	}
+
+	// 1.5 Order idempotency: order_id is the durable logical identity (PK).
+	// client_order_id from BFF is mapped 1:1 onto order_id — retries share the same id.
+	// Duplicate submit/retry after success must not create a second order/fill.
+	if existing, err := GetOrderByID(ctx, e.db, order.OrderID); err == nil && existing != nil {
+		if existing.UserID != order.UserID || existing.ContestID != order.ContestID {
+			return e.rejectOrder(ctx, order, "order_id conflict with different user/contest")
+		}
+		switch existing.Status {
+		case "filled", "accepted", "open", "pending", "partially_filled":
+			e.logger.Info("Duplicate order request — returning existing state (idempotent)",
+				zap.String("order_id", order.OrderID),
+				zap.String("status", existing.Status))
+			recordOrderMetric("idempotent")
+			return e.acknowledgeOrder(ctx, order, contracts.OrderStatusAccepted, nil)
+		case "rejected", "cancelled", "canceled":
+			return e.rejectOrder(ctx, order, fmt.Sprintf("order already %s", existing.Status))
 		}
 	}
 
@@ -62,15 +102,29 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 	if contest == nil {
 		return e.rejectOrder(ctx, order, "contest not found")
 	}
-	if contest.Status != "running" {
+	// Finalization statuses must never accept new trades (Race A/B/C).
+	switch contest.Status {
+	case "running":
+		// ok
+	case "settling", "completed", "cancelled", "canceled", "paused":
+		return e.rejectOrder(ctx, order, fmt.Sprintf("contest is not running (status: %s)", contest.Status))
+	default:
 		return e.rejectOrder(ctx, order, fmt.Sprintf("contest is not running (status: %s)", contest.Status))
 	}
 	now := time.Now()
 	if contest.StartsAt.Valid && now.Before(contest.StartsAt.Time) {
 		return e.rejectOrder(ctx, order, fmt.Sprintf("contest has not started yet (starts at: %s)", contest.StartsAt.Time))
 	}
-	if contest.EndsAt.Valid && now.After(contest.EndsAt.Time) {
+	// Race A: order at exact contest cutoff — ends_at is exclusive (After rejects).
+	if contest.EndsAt.Valid && !now.Before(contest.EndsAt.Time) {
 		return e.rejectOrder(ctx, order, fmt.Sprintf("contest has ended (ended at: %s)", contest.EndsAt.Time))
+	}
+
+	// Market-data readiness: process may be alive but unsafe for trading without ticks.
+	if e.requireMarketDataReady.Load() {
+		if ok, reason := e.MarketDataReady(); !ok {
+			return e.rejectOrder(ctx, order, fmt.Sprintf("market data not ready: %s", reason))
+		}
 	}
 
 	// 2.5. Market hours validation - check if market is open for this asset class
@@ -123,22 +177,39 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 	contestState := e.state.GetOrCreateContest(order.ContestID)
 	userState := contestState.GetOrCreateUser(order.UserID, participant.QtyTotal, participant.QtyAvailable, participant.TotalScore)
 
-	// 5. Calculate required quantity (for buying power check)
-	requiredQty := order.Qty
+	// 5. Calculate free buying-power QTY required (reduce/close reuses position reservation)
+	openPos, _ := GetOpenPosition(ctx, e.db, order.ContestID, order.UserID, order.Symbol)
+	freeRequired := freeQtyRequiredForOrder(order.Qty, openPos, order.Side)
 
-	// 6. Validate QTY limits (min/max per trade)
-	if err := e.validateQtyLimits(requiredQty, userState.QtyTotal); err != nil {
+	// 6. Validate QTY limits (min/max per trade) against ordered size
+	if err := e.validateQtyLimits(order.Qty, userState.QtyTotal); err != nil {
 		return e.rejectOrder(ctx, order, err.Error())
 	}
 
-	// 7. Validate qty <= qty_available
-	if userState.GetQtyAvailable() < requiredQty {
-		return e.rejectOrder(ctx, order, fmt.Sprintf("insufficient quantity available: have %d, need %d", userState.GetQtyAvailable(), requiredQty))
+	// 7. Validate free QTY (not full order size when closing/reducing)
+	if userState.GetQtyAvailable() < freeRequired {
+		return e.rejectOrder(ctx, order, fmt.Sprintf("insufficient quantity available: have %d, need %d", userState.GetQtyAvailable(), freeRequired))
 	}
 
-	// 8. Insert order into database
+	// 8. Insert order into database (PK race under concurrent same order_id → idempotent)
 	if err := InsertOrder(ctx, e.db, order.OrderID, order.ContestID, order.UserID, order.Symbol,
 		order.Side, order.Type, order.Qty, order.LimitPrice, order.StopPrice, order.TakeProfit, order.StopLoss); err != nil {
+		if isUniqueViolation(err) {
+			if existing, gerr := GetOrderByID(ctx, e.db, order.OrderID); gerr == nil && existing != nil {
+				if existing.UserID == order.UserID && existing.ContestID == order.ContestID {
+					e.logger.Info("Concurrent insert race — treating as idempotent",
+						zap.String("order_id", order.OrderID),
+						zap.String("status", existing.Status))
+					recordOrderMetric("idempotent")
+					// If already filled, do not re-execute; if pending, continue may double-fill —
+					// only short-circuit when already terminal/progressed.
+					switch existing.Status {
+					case "filled", "accepted", "open", "pending", "partially_filled":
+						return e.acknowledgeOrder(ctx, order, contracts.OrderStatusAccepted, nil)
+					}
+				}
+			}
+		}
 		return e.rejectOrder(ctx, order, fmt.Sprintf("failed to insert order: %v", err))
 	}
 
@@ -279,6 +350,26 @@ func (e *Engine) isClosingExistingPosition(ctx context.Context, order *contracts
 	return !IsSameSide(position.Side, order.Side)
 }
 
+// freeQtyRequiredForOrder returns how much unreserved buying-power QTY must be available
+// for this order. Product model: open positions already reserve qty_used, so pure
+// reduce/close does not need free QTY; only net-new exposure (open/add/flip overflow) does.
+func freeQtyRequiredForOrder(orderQty int64, openPos *DBPosition, orderSide contracts.OrderSide) int64 {
+	if orderQty <= 0 {
+		return orderQty
+	}
+	if openPos == nil || openPos.QtyOpen <= 0 {
+		return orderQty
+	}
+	if IsSameSide(openPos.Side, orderSide) {
+		return orderQty // increase
+	}
+	// Opposite side: close/reduce first; only overflow needs free QTY.
+	if orderQty <= openPos.QtyOpen {
+		return 0
+	}
+	return orderQty - openPos.QtyOpen
+}
+
 // executeMarketOrder executes a market order immediately at current price.
 func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderRequest, userState *UserState, contest *DBContest) error {
 	// 1. Get current market price with age - prefer price book (bid/ask), fallback to Redis
@@ -313,6 +404,21 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 		maxPriceAge = time.Duration(*contest.Rules.MaxPriceAgeMarketSeconds) * time.Second
 	}
 
+	// Fail closed on clock anomalies (future-dated ticks) and stale prices.
+	// Exactly-at-threshold (age == max) remains allowed; only age > max is stale.
+	if isPriceTimestampAnomalous(priceAge.Seconds()) {
+		e.logger.Warn("Order rejected due to anomalous price timestamp",
+			zap.String("order_id", order.OrderID),
+			zap.String("symbol", order.Symbol),
+			zap.Float64("price_age_seconds", priceAge.Seconds()))
+		if err := UpdateOrderStatus(ctx, e.db, order.OrderID, "rejected", 0); err != nil {
+			e.logger.Error("Failed to update order status", zap.String("order_id", order.OrderID), zap.Error(err))
+		}
+		if e.metrics != nil {
+			e.metrics.OrdersRejectedStalePrice.WithLabelValues(order.ContestID, string(order.Type)).Inc()
+		}
+		return e.rejectOrder(ctx, order, "price timestamp anomaly (future-dated tick)")
+	}
 	if maxPriceAge > 0 && priceAge > maxPriceAge {
 		// Log the rejection at WARN level with structured fields
 		e.logger.Warn("Order rejected due to stale price",
@@ -360,29 +466,49 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 	}
 	defer unlockPosition()
 
-	// 4. Reserve quantity (now serialized by position lock for same-symbol orders)
-	if !userState.ReserveQty(order.Qty) {
-		if err := UpdateOrderStatus(ctx, e.db, order.OrderID, "rejected", 0); err != nil {
-			e.logger.Error("Failed to update order status",
-				zap.String("order_id", order.OrderID),
-				zap.Error(err))
+	// 4. Reserve free buying-power only (reduce/close reuses position qty_used).
+	// Recompute under lock so concurrent fills cannot over-reserve.
+	openPosUnderLock, _ := GetOpenPosition(ctx, e.db, order.ContestID, order.UserID, order.Symbol)
+	freeRequired := freeQtyRequiredForOrder(order.Qty, openPosUnderLock, order.Side)
+	if freeRequired > 0 {
+		if !userState.ReserveQty(freeRequired) {
+			if err := UpdateOrderStatus(ctx, e.db, order.OrderID, "rejected", 0); err != nil {
+				e.logger.Error("Failed to update order status",
+					zap.String("order_id", order.OrderID),
+					zap.Error(err))
+			}
+			return e.rejectOrder(ctx, order, "insufficient quantity available")
 		}
-		return e.rejectOrder(ctx, order, "insufficient quantity available")
 	}
+	// preReserved=true only when the full order qty was reserved as new exposure
+	// (new/add). For pure reduce/close/flip, release accounting uses preReserved=false
+	// so qty_used is returned without double-counting a non-reserved close portion.
+	fullQtyReserved := freeRequired == order.Qty && order.Qty > 0
 
 	// 5. P2-1: Re-check contest status from DB before committing fill
 	// This prevents fills after contest ends (cache may be stale)
 	freshContest, err := GetContest(ctx, e.db, order.ContestID)
 	if err != nil || freshContest == nil || freshContest.Status != "running" {
-		userState.ReleaseQty(order.Qty)
+		if freeRequired > 0 {
+			userState.ReleaseQty(freeRequired)
+		}
 		if err := UpdateOrderStatus(ctx, e.db, order.OrderID, "rejected", 0); err != nil {
 			e.logger.Error("Failed to update order status", zap.String("order_id", order.OrderID), zap.Error(err))
 		}
 		return e.rejectOrder(ctx, order, "contest is no longer running")
 	}
 
-	// 5b. Execute the fill
-	fillID := uuid.New().String()
+	// 5b. Execute the fill — deterministic fill identity for full market fills (idempotent retries).
+	if !isValidMarketPrice(price) {
+		if freeRequired > 0 {
+			userState.ReleaseQty(freeRequired)
+		}
+		if err := UpdateOrderStatus(ctx, e.db, order.OrderID, "rejected", 0); err != nil {
+			e.logger.Error("Failed to update order status", zap.String("order_id", order.OrderID), zap.Error(err))
+		}
+		return e.rejectOrder(ctx, order, fmt.Sprintf("invalid market price: %v", price))
+	}
+	fillID := deterministicFillID(order.OrderID)
 	fillPrice := price
 	fillQty := order.Qty
 	fillTs := time.Now().UnixMilli()
@@ -390,7 +516,7 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 	// 6. Atomic transaction: fill + order status + position + participant
 	var posResult *PositionTxResult
 	err = WithTransaction(ctx, e.db, func(tx *sql.Tx) error {
-		// 6a. Insert fill
+		// 6a. Insert fill (ON CONFLICT on fill_id prevents duplicate logical fills)
 		if err := InsertFillTx(ctx, tx, fillID, order.OrderID, order.ContestID, order.UserID, order.Symbol,
 			order.Side, fillQty, fillPrice); err != nil {
 			return fmt.Errorf("insert fill: %w", err)
@@ -403,7 +529,7 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 
 		// 6c. Update position (reads + writes within transaction)
 		var posErr error
-		posResult, posErr = e.updatePositionTx(ctx, tx, order, userState, fillPrice, fillQty, true)
+		posResult, posErr = e.updatePositionTx(ctx, tx, order, userState, fillPrice, fillQty, fullQtyReserved)
 		if posErr != nil {
 			return fmt.Errorf("update position: %w", posErr)
 		}
@@ -427,8 +553,10 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 	})
 
 	if err != nil {
-		// Transaction failed -- rollback quantity reservation
-		userState.ReleaseQty(fillQty)
+		// Transaction failed -- rollback free-QTY reservation only
+		if freeRequired > 0 {
+			userState.ReleaseQty(freeRequired)
+		}
 		return fmt.Errorf("market order transaction: %w", err)
 	}
 

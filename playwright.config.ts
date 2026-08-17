@@ -36,7 +36,8 @@ export default defineConfig({
       ]
     : [
         ['list'],
-        ['html', { open: 'on-failure', outputFolder: 'playwright-report' }],
+        // never open HTML server — hangs automation (Ctrl+C wait)
+        ['html', { open: 'never', outputFolder: 'playwright-report' }],
       ],
 
   timeout: 30000,
@@ -81,6 +82,7 @@ export default defineConfig({
         'leaderboard.spec.ts',
         'profile.spec.ts',
         'tournament-flows.spec.ts',
+        'mvp-mobile-home.spec.ts',
       ],
       dependencies: ['setup-user'],
       use: {
@@ -115,6 +117,88 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         baseURL: ADMIN_BASE_URL,
         storageState: './apps/admin-frontend/e2e/.auth/admin.json',
+        launchOptions: chromiumLaunchOptions,
+      },
+    },
+
+    // RC Browser Acceptance — real backends only when E2E_INTEGRATION=1
+    {
+      name: 'setup-rc-user',
+      testDir: './apps/user-frontend/e2e',
+      testMatch: 'rc-auth.setup.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: USER_BASE_URL,
+        launchOptions: chromiumLaunchOptions,
+      },
+    },
+    {
+      name: 'rc-user-integration',
+      testDir: './apps/user-frontend/e2e',
+      testMatch: ['rc-browser-user.spec.ts'],
+      dependencies: ['setup-rc-user'],
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: USER_BASE_URL,
+        storageState: './apps/user-frontend/e2e/.auth/rc-user.json',
+        launchOptions: chromiumLaunchOptions,
+      },
+    },
+    {
+      name: 'trading-buy-minimal',
+      testDir: './apps/user-frontend/e2e',
+      testMatch: ['trading-buy-minimal.spec.ts'],
+      dependencies: ['setup-rc-user'],
+      retries: 0,
+      timeout: 90_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: USER_BASE_URL,
+        storageState: './apps/user-frontend/e2e/.auth/rc-user.json',
+        launchOptions: chromiumLaunchOptions,
+        actionTimeout: 8_000,
+        navigationTimeout: 30_000,
+      },
+    },
+    {
+      name: 'trading-double-click',
+      testDir: './apps/user-frontend/e2e',
+      testMatch: ['trading-double-click.spec.ts'],
+      dependencies: ['setup-rc-user'],
+      retries: 0,
+      timeout: 90_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: USER_BASE_URL,
+        storageState: './apps/user-frontend/e2e/.auth/rc-user.json',
+        launchOptions: chromiumLaunchOptions,
+        actionTimeout: 8_000,
+        navigationTimeout: 30_000,
+      },
+    },
+    {
+      name: 'trading-correctness',
+      testDir: './apps/user-frontend/e2e',
+      testMatch: ['trading-correctness.spec.ts'],
+      dependencies: ['setup-rc-user'],
+      retries: 0,
+      timeout: 90_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: USER_BASE_URL,
+        storageState: './apps/user-frontend/e2e/.auth/rc-user.json',
+        launchOptions: chromiumLaunchOptions,
+        actionTimeout: 8_000,
+        navigationTimeout: 30_000,
+      },
+    },
+    {
+      name: 'rc-admin-integration',
+      testDir: './apps/admin-frontend/e2e',
+      testMatch: ['rc-browser-admin.spec.ts'],
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: ADMIN_BASE_URL,
         launchOptions: chromiumLaunchOptions,
       },
     },

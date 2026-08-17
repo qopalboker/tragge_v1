@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/component: worker
     app.kubernetes.io/part-of: tragge-platform
 spec:
+  # Single replica: settlement uses PG advisory locks; scheduler needs single-owner calendar.
+  # Do not scale worker horizontally without per-job lease redesign.
   replicas: 1
   selector:
     matchLabels:
@@ -18,7 +20,11 @@ spec:
         app.kubernetes.io/name: worker
         app.kubernetes.io/component: worker
         app.kubernetes.io/part-of: tragge-platform
+      annotations:
+        tragge.io/settlement-authority: "true"
+        tragge.io/scale: "manual-single"
     spec:
+      terminationGracePeriodSeconds: 60
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
@@ -56,23 +62,31 @@ spec:
                 - ALL
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
               memory: "256Mi"
-              cpu: "250m"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Liveness: process alive (leaderboard port always up in merged worker)
           livenessProbe:
             httpGet:
               path: /healthz
               port: leaderboard
-            initialDelaySeconds: 10
-            periodSeconds: 15
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 5
+          # Readiness: settlement path preferred for financial work admission
           readinessProbe:
             httpGet:
               path: /readyz
-              port: leaderboard
-            initialDelaySeconds: 5
+              port: settlement
+            initialDelaySeconds: 10
             periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
 ---
 apiVersion: v1
 kind: Service

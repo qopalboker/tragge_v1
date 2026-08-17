@@ -88,7 +88,8 @@ func TestContestStatus_AllowsRegistration(t *testing.T) {
 		want   bool
 	}{
 		{StatusDraft, false},
-		{StatusScheduled, true},
+		// Pre-start join requires registration_open (product §5.6); late join is status=running + cutoff.
+		{StatusScheduled, false},
 		{StatusRegistrationOpen, true},
 		{StatusRegistrationClosed, false},
 		{StatusRunning, false},

@@ -73,6 +73,26 @@ type OrderAckWithUser struct {
 	UserID string `json:"user_id"`
 }
 
+// produceKafka publishes a record when a Kafka client is configured; no-ops otherwise.
+// Tests and degraded modes may run the engine without a broker.
+func (e *Engine) produceKafka(ctx context.Context, record *kgo.Record) {
+	if e == nil || e.kafka == nil || record == nil {
+		return
+	}
+	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
+		if err != nil {
+			if e.logger != nil {
+				e.logger.Error("Failed to publish Kafka record",
+					zap.String("topic", record.Topic),
+					zap.Error(err))
+			}
+			if e.metrics != nil && e.metrics.KafkaProduceFailures != nil {
+				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
+			}
+		}
+	})
+}
+
 // emitOrderAck publishes an OrderAck event to Kafka.
 func (e *Engine) emitOrderAck(ctx context.Context, orderID string, status contracts.OrderStatus, reason *string) {
 	ack := &contracts.OrderAck{
@@ -95,16 +115,7 @@ func (e *Engine) emitOrderAck(ctx context.Context, orderID string, status contra
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish OrderAck",
-				zap.String("order_id", orderID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitOrderAckWithUser publishes an OrderAck with user_id for WebSocket routing.
@@ -133,16 +144,7 @@ func (e *Engine) emitOrderAckWithUser(ctx context.Context, order *contracts.Orde
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish OrderAckWithUser",
-				zap.String("order_id", order.OrderID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // OrderRejectEvent represents a detailed order rejection event.
@@ -190,16 +192,7 @@ func (e *Engine) emitOrderRejectEvent(ctx context.Context, order *contracts.Orde
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish OrderRejectEvent",
-				zap.String("order_id", order.OrderID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitFillEvent publishes a FillEvent to Kafka.
@@ -231,17 +224,7 @@ func (e *Engine) emitFillEvent(ctx context.Context, fillID string, order *contra
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish FillEvent",
-				zap.String("fill_id", fillID),
-				zap.String("order_id", order.OrderID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitPositionUpdate publishes a PositionUpdate to Kafka.
@@ -311,17 +294,7 @@ func (e *Engine) emitPositionUpdate(ctx context.Context, contestID, userID strin
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish PositionUpdate",
-				zap.String("contest_id", contestID),
-				zap.String("user_id", userID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitPnLDelta publishes a PnLDelta to Kafka with realized and unrealized scores.
@@ -385,17 +358,7 @@ func (e *Engine) emitPnLDelta(ctx context.Context, contestID, userID string, use
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish PnLDelta",
-				zap.String("contest_id", contestID),
-				zap.String("user_id", userID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitPositionClosedEvent publishes a PositionClosedEvent to Kafka.
@@ -430,16 +393,7 @@ func (e *Engine) emitPositionClosedEvent(ctx context.Context, positionID, userID
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish PositionClosedEvent",
-				zap.String("position_id", positionID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitOrderCancelledEvent publishes an OrderCancelledEvent to Kafka.
@@ -470,16 +424,7 @@ func (e *Engine) emitOrderCancelledEvent(ctx context.Context, orderID, userID, c
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish OrderCancelledEvent",
-				zap.String("order_id", orderID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }
 
 // emitTPSLModifiedEvent publishes a TP/SL modified event to Kafka.
@@ -510,14 +455,5 @@ func (e *Engine) emitTPSLModifiedEvent(ctx context.Context, req *contracts.Modif
 		Value: data,
 	}
 
-	e.kafka.Produce(ctx, record, func(r *kgo.Record, err error) {
-		if err != nil {
-			e.logger.Error("Failed to publish TPSLModifiedEvent",
-				zap.String("position_id", req.PositionID),
-				zap.Error(err))
-			if e.metrics != nil {
-				e.metrics.KafkaProduceFailures.WithLabelValues(record.Topic).Inc()
-			}
-		}
-	})
+	e.produceKafka(ctx, record)
 }

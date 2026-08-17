@@ -34,6 +34,7 @@ export const adminRoutes: RouteRecordRaw[] = [
       { path: 'tickets/:id', name: 'admin-ticket-detail', component: () => import('./views/TicketDetailPage.vue') },
       { path: 'audit', name: 'admin-audit', component: () => import('./views/AuditPage.vue') },
       { path: 'market-data', name: 'admin-market', component: () => import('./views/MarketDataPage.vue') },
+      { path: 'security', name: 'admin-security', component: () => import('./views/SecuritySettingsPage.vue') },
     ],
   },
 ]

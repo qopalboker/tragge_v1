@@ -1,0 +1,108 @@
+{
+  "ts": "2026-08-16T14:52:32.909Z",
+  "decision": "PRODUCTION HEALTH — PASS",
+  "checks": [
+    {
+      "name": "container_postgres",
+      "ok": true,
+      "detail": "tragge_postgres Up About a minute (healthy)"
+    },
+    {
+      "name": "postgres_healthy_flag",
+      "ok": true,
+      "detail": "healthy"
+    },
+    {
+      "name": "container_redis",
+      "ok": true,
+      "detail": "tragge_redis Up About a minute (healthy)"
+    },
+    {
+      "name": "redis_healthy_flag",
+      "ok": true,
+      "detail": "healthy"
+    },
+    {
+      "name": "container_redpanda",
+      "ok": true,
+      "detail": "tragge_redpanda Up About a minute (healthy)"
+    },
+    {
+      "name": "container_api-server",
+      "ok": true,
+      "detail": "tragge_api_server Up About a minute (healthy)"
+    },
+    {
+      "name": "api-server_healthy_flag",
+      "ok": true,
+      "detail": "healthy"
+    },
+    {
+      "name": "container_trading-core",
+      "ok": true,
+      "detail": "tragge_trading_core Up About a minute (healthy)"
+    },
+    {
+      "name": "trading-core_healthy_flag",
+      "ok": true,
+      "detail": "healthy"
+    },
+    {
+      "name": "container_worker",
+      "ok": true,
+      "detail": "tragge_worker Up About a minute (healthy)"
+    },
+    {
+      "name": "worker_healthy_flag",
+      "ok": true,
+      "detail": "healthy"
+    },
+    {
+      "name": "trading_engine_readyz_reachable",
+      "ok": true,
+      "detail": "{\"circuits\":\"healthy\",\"database\":\"healthy\",\"kafka\":{\"consumer_group\":\"trading-engine\",\"orders_topic\":\"orders.v1\",\"status"
+    },
+    {
+      "name": "wal_recovery",
+      "ok": true,
+      "detail": "\"wal_recovery\":\"ok\""
+    },
+    {
+      "name": "engine_status_ready",
+      "ok": true,
+      "detail": "\"status\":\"healthy\""
+    },
+    {
+      "name": "market_data_observed",
+      "ok": true,
+      "detail": "market_data.ready=false (must be true for live paid launch)"
+    },
+    {
+      "name": "api_user_bff_healthz",
+      "ok": true,
+      "detail": "{\"status\":\"ok\"}\n"
+    },
+    {
+      "name": "worker_up",
+      "ok": true,
+      "detail": "Up About a minute (healthy)"
+    },
+    {
+      "name": "gateway_port_8080",
+      "ok": false,
+      "detail": "closed (optional if LB elsewhere)"
+    },
+    {
+      "name": "postgres_ready",
+      "ok": true,
+      "detail": "/var/run/postgresql:5432 - accepting connections"
+    },
+    {
+      "name": "redis_ping",
+      "ok": true,
+      "detail": "PONG"
+    }
+  ],
+  "core_fail": false,
+  "note": "market_data.ready=false is allowed for health-gate but BLOCKS launch-gate until real provider feeds"
+}

@@ -1,0 +1,113 @@
+{
+  "ts": "2026-08-16T14:54:52.378Z",
+  "decision": "PRODUCTION — NO-GO (10 blocked gates)",
+  "blocked": 10,
+  "rows": [
+    {
+      "name": "Engineering release gates (Phase 3)",
+      "status": "PASS",
+      "evidence": "scripts/phase3/release-gates.mjs exit 0"
+    },
+    {
+      "name": "Local staging fully qualified (baseline)",
+      "status": "PASS",
+      "evidence": "PHASE-4.1-LITE report PASS"
+    },
+    {
+      "name": "Production compose path exists",
+      "status": "PASS",
+      "evidence": "infra/docker/docker-compose.production.yml"
+    },
+    {
+      "name": "Production preflight tools",
+      "status": "PASS",
+      "evidence": "phase6nk/preflight-latest.txt preflight_tools_ok=true"
+    },
+    {
+      "name": "Persistent WAL (host/block bind — not ephemeral)",
+      "status": "PASS",
+      "evidence": "WAL_HOST_PERSIST_PASS or Phase 4.1-Lite WAL recreate proof"
+    },
+    {
+      "name": "Trading readiness after recovery",
+      "status": "PASS",
+      "evidence": "health-gate or compose-gate with wal_recovery ok [from phase4.1lite/phase5lite]"
+    },
+    {
+      "name": "Container restart recovery (trading-core)",
+      "status": "PASS",
+      "evidence": "CONTAINER_RESTART_PASS or Phase 4.1-Lite trading recreate [from phase4.1lite]"
+    },
+    {
+      "name": "Worker restart + settlement idempotency",
+      "status": "PASS",
+      "evidence": "WORKER_RESTART_PASS or Phase 4.1-Lite worker drill [from phase4.1lite]"
+    },
+    {
+      "name": "Dependency restart drills (redis/broker/postgres)",
+      "status": "PASS",
+      "evidence": "DEP_RESTART_PASS or Phase 4.1-Lite dep restarts [from phase4.1lite]"
+    },
+    {
+      "name": "Local/prod-path backup restore",
+      "status": "PASS",
+      "evidence": "BACKUP_RESTORE_PASS or Phase 4.1-Lite backup [from phase4.1lite]"
+    },
+    {
+      "name": "Object storage backup E2E (production pipeline)",
+      "status": "BLOCKED",
+      "evidence": "S3_BACKUP_RESTORE_PASS or OBJECT_STORAGE_BACKUP_PASS"
+    },
+    {
+      "name": "VM reboot / host Docker restart durability",
+      "status": "BLOCKED",
+      "evidence": "VM_REBOOT_PASS | HOST_DOCKER_RESTART_PASS | VM_REPLACEMENT_PASS"
+    },
+    {
+      "name": "VM replacement + volume reattach (hard gate)",
+      "status": "BLOCKED",
+      "evidence": "VM_REPLACEMENT_PASS"
+    },
+    {
+      "name": "Rollback procedure tested",
+      "status": "BLOCKED",
+      "evidence": "ROLLBACK_DRILL_PASS"
+    },
+    {
+      "name": "Emergency pause tested",
+      "status": "PASS",
+      "evidence": "EMERGENCY_PAUSE_PASS"
+    },
+    {
+      "name": "Payment provider (non-mock)",
+      "status": "BLOCKED",
+      "evidence": "PAYMENT_PROVIDER_PASS"
+    },
+    {
+      "name": "Market-data production provider",
+      "status": "BLOCKED",
+      "evidence": "MARKET_DATA_PROVIDER_PASS"
+    },
+    {
+      "name": "Admin MFA production-like",
+      "status": "BLOCKED",
+      "evidence": "MFA_STAGING_PASS or MFA_PROD_PASS"
+    },
+    {
+      "name": "Monitoring + alerts exercised",
+      "status": "BLOCKED",
+      "evidence": "MONITORING_PASS + ALERTS_PASS"
+    },
+    {
+      "name": "Controlled production contest + reconcile",
+      "status": "BLOCKED",
+      "evidence": "CONTROLLED_CONTEST_PASS + RECONCILE_CLEAN"
+    },
+    {
+      "name": "External / legal sign-offs",
+      "status": "BLOCKED",
+      "evidence": "EXTERNAL_SIGNOFF_CONFIRMED"
+    }
+  ],
+  "kubernetes_required": false
+}

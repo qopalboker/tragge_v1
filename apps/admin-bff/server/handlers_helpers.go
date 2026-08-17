@@ -2055,32 +2055,40 @@ func (a *App) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Super Admin password verification establishes only the first factor. No
-	// access/refresh token or server session exists until the Admin-only MFA
-	// enrollment or verification challenge succeeds. The password step must not
-	// clear MFA failure counters; only completed MFA may clear them.
+	// Super Admin MFA is policy-gated (MVP default: OFF). When the global
+	// admin_mfa_enabled setting is true, password alone is insufficient —
+	// no access token until MFA enrollment/verification succeeds.
+	// When disabled, Super Admin uses the same password session path as
+	// Support Admin (MFA capability remains available to re-enable later).
 	if securityState.hasRole(auth.RoleSuperAdmin) {
-		if a.mfaChallenges == nil {
+		mfaPolicyOn, policyErr := a.isAdminMFAEnabled(ctx)
+		if policyErr != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
 			return
 		}
-		var enrolled bool
-		if err := a.pool.Primary().QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM admin_mfa_credentials WHERE user_id=$1)`, userID).Scan(&enrolled); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
+		if mfaPolicyOn {
+			if a.mfaChallenges == nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
+				return
+			}
+			var enrolled bool
+			if err := a.pool.Primary().QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM admin_mfa_credentials WHERE user_id=$1)`, userID).Scan(&enrolled); err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
+				return
+			}
+			stage := "verify"
+			if !enrolled {
+				stage = "enroll"
+			}
+			challenge, expiresAt, err := a.issueAdminMFAChallenge(ctx, r, userID, req.Email, securityState, stage, "")
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
+				return
+			}
+			a.logAuditEvent(ctx, userID, "admin.mfa.challenge.issued", "auth", userID, map[string]string{"stage": stage})
+			writeJSON(w, http.StatusAccepted, adminMFALoginResponse{MFARequired: true, EnrollmentRequired: !enrolled, Challenge: challenge, ExpiresAt: expiresAt})
 			return
 		}
-		stage := "verify"
-		if !enrolled {
-			stage = "enroll"
-		}
-		challenge, expiresAt, err := a.issueAdminMFAChallenge(ctx, r, userID, req.Email, securityState, stage, "")
-		if err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": adminMsg.InternalError})
-			return
-		}
-		a.logAuditEvent(ctx, userID, "admin.mfa.challenge.issued", "auth", userID, map[string]string{"stage": stage})
-		writeJSON(w, http.StatusAccepted, adminMFALoginResponse{MFARequired: true, EnrollmentRequired: !enrolled, Challenge: challenge, ExpiresAt: expiresAt})
-		return
 	}
 
 	// Support Admin uses the isolated Admin password session but never acquires

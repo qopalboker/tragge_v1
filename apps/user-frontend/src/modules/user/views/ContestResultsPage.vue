@@ -98,16 +98,11 @@ const isFinished = computed(() => {
 
 const estimatedPrizePool = computed(() => {
   if (!contest.value) return 0;
-  // Use prize pool from leaderboard response (calculated by backend with platform fee)
+  // Authoritative backend fields only — never invent prize pool client-side.
   if (leaderboardPrizePoolCents.value > 0) {
     return leaderboardPrizePoolCents.value;
   }
-  if (contest.value.estimated_prize_pool_cents) {
-    return contest.value.estimated_prize_pool_cents;
-  }
-  // Fallback: estimate based on current participants and entry fee
-  const participantCount = contest.value.participant_count ?? 0;
-  return Math.round(participantCount * contest.value.entry_fee_cents * 0.83);
+  return contest.value.estimated_prize_pool_cents ?? 0;
 });
 
 const formattedPrizePool = computed(() => {

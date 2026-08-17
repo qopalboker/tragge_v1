@@ -126,26 +126,21 @@ const participantPercentage = computed(() => {
   return Math.min(100, (participantCount.value / maxParticipants.value) * 100);
 });
 
-// Estimated prize pool
-const estimatedPrizePool = computed(() => {
-  // If provided directly from API
-  if (props.contest.estimated_prize_pool_cents) {
-    return props.contest.estimated_prize_pool_cents;
-  }
-  // Estimate based on current participants and entry fee
-  // Assuming 83% of entry fees go to prize pool (17% platform fee)
-  return Math.round(participantCount.value * props.contest.entry_fee_cents * 0.83);
-});
+// Authoritative prize pool only — never invent economics client-side.
+const estimatedPrizePool = computed(() => props.contest.estimated_prize_pool_cents ?? 0);
 
 const formattedPrizePool = computed(() => {
   if (estimatedPrizePool.value === 0 && props.contest.entry_fee_cents === 0) {
     return t('contests.practice');
   }
+  if (estimatedPrizePool.value === 0) {
+    return '—';
+  }
   const amount = estimatedPrizePool.value / 100;
   if (amount >= 1000) {
-    return `~$${(amount / 1000).toFixed(1)}K`;
+    return `$${(amount / 1000).toFixed(1)}K`;
   }
-  return `~$${amount.toFixed(0)}`;
+  return `$${amount.toFixed(0)}`;
 });
 
 // Prize winners percentage

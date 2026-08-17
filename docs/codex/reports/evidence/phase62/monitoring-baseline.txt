@@ -1,0 +1,8 @@
+MONITORING_BASELINE
+prometheus_rules=true
+operator_signals=docker_ps,health-gate,trading-core /readyz,wal_recovery
+classification=LOCAL-MONITORING-BASELINE
+NOT production monitoring PASS unless alerts fired
+health_gate_exit=0
+health_gate=PRODUCTION HEALTH — PASS
+MONITORING_LOCAL_BASELINE_PASS

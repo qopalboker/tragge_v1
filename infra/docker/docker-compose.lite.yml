@@ -52,8 +52,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
-          cpus: "0.5"
+          memory: 768M
+          cpus: "1.0"
     command:
       - redpanda
       - start
@@ -66,9 +66,18 @@ services:
       - --advertise-rpc-addr redpanda:33145
       - --mode dev-container
       - --smp 1
-      - --memory 256M
+      - --memory 512M
       - --reserve-memory 0M
       - --default-log-level=warn
+
+  # Single-node lite: reduce topic partitions (create-topics.sh honors these).
+  kafka-init:
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      REPLICATION_FACTOR: "1"
+      TOPIC_PARTITIONS_HIGH: "1"
+      TOPIC_PARTITIONS_MED: "1"
+      TOPIC_PARTITIONS_LOW: "1"
 
   # ---------------------------------------------------------------------------
   # Consolidated app services - reduced resources & connection pools

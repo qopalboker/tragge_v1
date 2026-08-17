@@ -27,9 +27,12 @@ export interface Contest {
   // Additional fields for contest discovery
   participant_count?: number;
   max_participants?: number;
+  min_participants?: number;
   estimated_prize_pool_cents?: number;
   prize_winners_percentage?: number;
   is_free?: boolean;
+  /** ISO server clock from details endpoint for countdown sync */
+  server_time?: string;
 }
 
 export interface ContestFilters {
@@ -236,9 +239,32 @@ export const useContestsStore = defineStore('contests', () => {
 });
 
 function getErrorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const axiosError = err as { response?: { data?: { error?: string; message?: string } } };
-    return axiosError.response?.data?.error || axiosError.response?.data?.message || 'An error occurred';
+  // Prefer BFF Persian `error` / `message`, then shared status mapping.
+  try {
+    // Lazy import path avoided: inline mirror of shared handler essentials
+    // so store stays tree-shake friendly without circular deps.
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosError = err as {
+        response?: { status?: number; data?: { error?: string; message?: string } };
+        code?: string;
+      };
+      const data = axiosError.response?.data;
+      if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+      if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+      if (axiosError.code === 'ERR_NETWORK') return 'خطا در ارتباط با سرور';
+      if (axiosError.code === 'ECONNABORTED') return 'زمان درخواست به پایان رسید';
+      const status = axiosError.response?.status;
+      if (status === 401) return 'نشست منقضی شده است';
+      if (status === 402 || status === 400) return 'درخواست نامعتبر است';
+      if (status === 403) return 'دسترسی مجاز نیست';
+      if (status === 404) return 'یافت نشد';
+      if (status === 409) return 'تعارض در درخواست';
+      if (status === 429) return 'تعداد درخواست‌ها زیاد است';
+      if (status && status >= 500) return 'خطای سرور. لطفاً دوباره تلاش کنید';
+    }
+    if (err instanceof Error && err.message) return err.message;
+  } catch {
+    /* fall through */
   }
-  return 'An error occurred';
+  return 'خطایی رخ داد. لطفاً دوباره تلاش کنید';
 }

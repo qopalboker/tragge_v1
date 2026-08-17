@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
 	"github.com/shopspring/decimal"
@@ -131,6 +132,45 @@ func UpdateParticipantQtyAndScoreTx(ctx context.Context, tx TxExecutor, contestI
 		WHERE contest_id = $1 AND user_id = $2
 	`, contestID, userID, qtyAvailable, totalScore.String())
 	return err
+}
+
+// DBOrder is a minimal order row used for idempotency checks.
+type DBOrder struct {
+	OrderID   string
+	ContestID string
+	UserID    string
+	Symbol    string
+	Status    string
+	Qty       int64
+	QtyFilled int64
+}
+
+// isUniqueViolation detects PostgreSQL unique constraint failures (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "23505") ||
+		strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "unique constraint")
+}
+
+// GetOrderByID returns an order by primary key, or nil if not found.
+func GetOrderByID(ctx context.Context, db *sql.DB, orderID string) (*DBOrder, error) {
+	row := db.QueryRowContext(ctx, `
+		SELECT order_id, contest_id, user_id, symbol, status::text, qty, qty_filled
+		FROM orders
+		WHERE order_id = $1
+	`, orderID)
+	var o DBOrder
+	if err := row.Scan(&o.OrderID, &o.ContestID, &o.UserID, &o.Symbol, &o.Status, &o.Qty, &o.QtyFilled); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &o, nil
 }
 
 // InsertOrder inserts a new order into the database.

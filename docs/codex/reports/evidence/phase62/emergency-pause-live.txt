@@ -1,0 +1,13 @@
+EMERGENCY_PAUSE_LOCAL_DRILL 2026-08-16T14:52:24.493Z
+method=last_resort_compose_stop_trading_core
+note=admin API pause preferred when credentials available; this is authorized operator fencing path
+pre_ready_exit=0
+stop_exit=0
+trading_unreachable_while_stopped=true
+start_exit=0
+post_ready=true
+post_readyz={"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status":"healthy"},"market_data":{"ready":fals
+trading_core_count=1
+EMERGENCY_PAUSE_PASS
+method_class=last_resort_stop_trading_core
+PASS

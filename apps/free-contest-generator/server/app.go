@@ -437,33 +437,52 @@ func (g *FreeContestGenerator) generateFreeContest(assetClass string) error {
 	// Insert the contest
 	contestID := uuid.New().String()
 	description := fmt.Sprintf("Free practice tournament for %s trading. No entry fee, no prizes - perfect for learning!", cases.Title(language.English).String(assetClass))
+	// Durable uniqueness key: one free contest per asset/duration/hour bucket.
+	schedKey := fmt.Sprintf("free:%s:%s:%s", assetClass, string(template.DurationType), startsAt.UTC().Format("2006-01-02T15"))
 
-	_, err = tx.ExecContext(ctx,
-		`INSERT INTO contests (
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contests (
 			id, name, description, starts_at, ends_at, status, entry_fee_cents, platform_fee_bps, qty_total,
 			duration_type, asset_class, duration_minutes, min_participants, max_participants,
-			registration_deadline, auto_start, commission_rate, is_free, auto_generated
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+			registration_deadline, auto_start, commission_rate, is_free, auto_generated,
+			schedule_idempotency_key, late_join_enabled
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
 		contestID,
 		contestName,
 		description,
 		startsAt,
 		endsAt,
-		"scheduled", // Start as scheduled, will open for registration immediately
-		0,           // Free - no entry fee
-		0,           // No platform fee
+		"scheduled",
+		0,
+		0,
 		template.QtyAllocation,
 		string(template.DurationType),
 		assetClass,
 		template.DurationMinutes,
-		template.MinParticipants,     // Use template min participants
-		template.MaxParticipants,     // Use template max
-		startsAt.Add(-1*time.Second), // Registration deadline = 1 second before start
-		true,                         // Auto-start when min participants met
-		0.0,                          // No commission
-		true,                         // Is free
-		true,                         // Auto-generated
+		template.MinParticipants,
+		nil,
+		startsAt.Add(-1*time.Second),
+		true,
+		0.0,
+		true,
+		true,
+		schedKey,
+		false,
 	)
+	// Fallback without migration 0103 columns.
+	if err != nil && (strings.Contains(err.Error(), "schedule_idempotency_key") || strings.Contains(err.Error(), "late_join_enabled")) {
+		_, err = tx.ExecContext(ctx, `
+		INSERT INTO contests (
+			id, name, description, starts_at, ends_at, status, entry_fee_cents, platform_fee_bps, qty_total,
+			duration_type, asset_class, duration_minutes, min_participants, max_participants,
+			registration_deadline, auto_start, commission_rate, is_free, auto_generated
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+			contestID, contestName, description, startsAt, endsAt, "scheduled",
+			0, 0, template.QtyAllocation, string(template.DurationType), assetClass,
+			template.DurationMinutes, template.MinParticipants, nil,
+			startsAt.Add(-1*time.Second), true, 0.0, true, true,
+		)
+	}
 	if err != nil {
 		// Handle unique constraint violation (PostgreSQL error code 23505) gracefully.
 		// This can happen if another generator instance inserted the same contest

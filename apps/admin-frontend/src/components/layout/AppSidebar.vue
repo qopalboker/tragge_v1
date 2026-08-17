@@ -171,6 +171,13 @@ const allNavEntries: NavEntry[] = [
     permission: 'market.view',
   },
   {
+    path: '/admin/security',
+    name: 'security',
+    label: t('nav.security') || 'Security',
+    icon: IconShards,
+    permission: 'settings.manage',
+  },
+  {
     path: '/admin/shards',
     name: 'shards',
     label: t('nav.shards'),

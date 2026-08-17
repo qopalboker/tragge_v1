@@ -1,0 +1,4 @@
+HOST_DOCKER_RESTART_PASS
+PASS
+classification=LOCAL-VM
+

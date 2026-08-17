@@ -1,0 +1,15 @@
+﻿{
+    "production_go":  false,
+    "git_head":  "478c9331e59c600942b927ce1f1e4a47c5565bed",
+    "ts":  "2026-08-16T19:05:24.3092819Z",
+    "p1_core_open":  0,
+    "claim":  "MVP RELEASE CANDIDATE",
+    "decision":  "MVP STABILIZATION — PASS",
+    "gates":  {
+                  "frontend":  0,
+                  "mvp":  0,
+                  "acceptance":  0
+              },
+    "p0_open":  0,
+    "migration_head":  "0103_contest_economics_lock"
+}

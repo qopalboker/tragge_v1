@@ -1,0 +1,13 @@
+PHASE5_PROVISION_CHECKLIST 2026-08-16T03:20:19.609Z
+tool_kubectl=PRESENT
+tool_docker=PRESENT
+tool_helm=MISSING
+tool_aws=MISSING
+tool_psql=MISSING
+tool_kind=MISSING
+tool_minikube=MISSING
+tool_k3d=MISSING
+k8s_cluster=UNREACHABLE
+cloud_or_kubeconfig_hint=false
+phase5_provision_ready=false
+NOTE=PHASE 5 BLOCKED until kubectl + reachable cluster + StorageClass are available

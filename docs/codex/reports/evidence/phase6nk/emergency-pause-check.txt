@@ -1,0 +1,9 @@
+EMERGENCY_PAUSE_CHECK
+=====================
+incident_runbook=true
+runbook_has_emergency_pause_section=true
+policy_PAUSE_SYMBOL=true
+live_operator_evidence=false
+Operator procedure (Compose/VM): use admin API/UI to stop joins and pause symbols; or stop trading-core as last resort (preserves WAL on bind mount). On success write evidence file emergency-pause-live.txt containing a single status line.
+result=BLOCKED
+need_live_admin_operator_test=true

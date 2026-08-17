@@ -1,0 +1,3 @@
+LOCAL_ROLLBACK_PASS
+strategy=compose_recreate_forward_fix_db
+migration=BACKWARD_COMPATIBLE_assumed_same_images

@@ -65,10 +65,12 @@ type App struct {
 	contestTradingMu sync.RWMutex
 
 	// State
-	ready  atomic.Bool
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	ready            atomic.Bool
+	walRecoveryOK    atomic.Bool // true only after successful WAL load + replay
+	recoveryError    atomic.Value // string reason when recovery fails
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
 
 	// Shared resource flags - when true, these resources are shared and should not be closed by this service
 	sharedDB    bool
@@ -100,6 +102,9 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	config.MustBeSet("KAFKA_BROKERS")
 
 	cfg := loadConfig()
+	if err := cfg.Validate(); err != nil {
+		panic("invalid trading-engine configuration: " + err.Error())
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -119,6 +124,16 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	defer obs.Shutdown(context.Background())
 
 	log := obs.Logger.Logger
+	if cfg.WALPersistPath != "" {
+		log.Info("WAL durability enabled",
+			zap.String("path", cfg.WALPersistPath),
+			zap.Bool("require_persist", cfg.WALRequirePersist),
+			zap.Bool("sync_on_write", cfg.WALSyncOnWrite))
+	} else {
+		log.Warn("WAL running in-memory only (not durable across process restart)",
+			zap.String("environment", cfg.Environment),
+			zap.Bool("require_persist", cfg.WALRequirePersist))
+	}
 
 	// Initialize circuit breakers
 	circuits := NewCircuitBreakers(log)
@@ -461,15 +476,27 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		warmUpCancel()
 
 		// Create sharded engine
-		app.engine = NewShardedEngine(app.db, app.redis, app.kafka, cfg, app.shardedState, log)
+		var engErr error
+		app.engine, engErr = NewShardedEngine(app.db, app.redis, app.kafka, cfg, app.shardedState, log)
+		if engErr != nil {
+			log.Fatal("Failed to create sharded trading engine (WAL init fail-closed)", zap.Error(engErr))
+		}
 	} else {
 		// Create regular engine
-		app.engine = NewEngine(app.db, app.redis, app.kafka, cfg, log)
+		var engErr error
+		app.engine, engErr = NewEngine(app.db, app.redis, app.kafka, cfg, log)
+		if engErr != nil {
+			log.Fatal("Failed to create trading engine (WAL init fail-closed)", zap.Error(engErr))
+		}
 	}
 
 	// Initialize engine metrics
 	engineMetrics := NewEngineMetrics(obs.Metrics.Registry(), "trading_engine")
 	app.engine.SetMetrics(engineMetrics)
+	// Wire contest trading gate (finalization boundary) into the engine hot path.
+	app.engine.SetContestTradingGate(app.IsContestTradingEnabled)
+	// Market data must be present for trading in production; dev may relax via env.
+	app.engine.SetRequireMarketDataReady(config.GetEnvBool("REQUIRE_MARKET_DATA_READY", cfg.Environment == "production" || cfg.Environment == "staging" || cfg.Environment == "prod"))
 	log.Info("Engine metrics initialized")
 
 	// Log cache configuration
@@ -535,17 +562,34 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	)
 	log.Info("State consistency checker initialized")
 
-	// Replay pending WAL entries on startup
-	replayCtx, replayCancel := context.WithTimeout(ctx, 10*time.Second)
+	// Replay pending WAL entries on startup — fail-closed on error (P1-ENG-02).
+	// Never mark ready / accept trading traffic after unrecovered WAL state.
+	replayCtx, replayCancel := context.WithTimeout(ctx, 30*time.Second)
 	if err := app.engine.ReplayWAL(replayCtx); err != nil {
-		log.Warn("Failed to replay pending WAL entries", zap.Error(err))
+		log.Error("CRITICAL: WAL replay failed — engine will remain NOT READY",
+			zap.Error(err))
+		app.walRecoveryOK.Store(false)
+		app.recoveryError.Store(err.Error())
+		if engineMetrics != nil && engineMetrics.WALReplayFailure != nil {
+			engineMetrics.WALReplayFailure.Inc()
+		}
+		// Do not start trading consumers; still expose health endpoints.
+	} else {
+		app.walRecoveryOK.Store(true)
+		app.recoveryError.Store("")
+		if engineMetrics != nil && engineMetrics.WALReplaySuccess != nil {
+			engineMetrics.WALReplaySuccess.Inc()
+		}
+		log.Info("WAL recovery complete")
 	}
 	replayCancel()
 
-	// Compact WAL file after replay to remove committed/rolled-back entries
-	if wal := app.engine.GetWAL(); wal != nil {
-		if err := wal.Compact(); err != nil {
-			log.Warn("Failed to compact WAL file", zap.Error(err))
+	// Compact WAL file after successful replay only
+	if app.walRecoveryOK.Load() {
+		if wal := app.engine.GetWAL(); wal != nil {
+			if err := wal.Compact(); err != nil {
+				log.Warn("Failed to compact WAL file", zap.Error(err))
+			}
 		}
 	}
 
@@ -553,6 +597,11 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	reloadCtx, reloadCancel := context.WithTimeout(ctx, 15*time.Second)
 	if err := app.engine.pendingBook.ReloadFromDB(reloadCtx, app.db, log); err != nil {
 		log.Error("Failed to reload pending order book from database", zap.Error(err))
+		// Pending book reload failure is serious for pending-order correctness.
+		if app.walRecoveryOK.Load() {
+			app.walRecoveryOK.Store(false)
+			app.recoveryError.Store(fmt.Sprintf("pending order reload failed: %v", err))
+		}
 	}
 	reloadCancel()
 
@@ -572,26 +621,48 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		log.Info("Price freshness monitor initialized and started")
 	}
 
-	// Start Kafka consumers
-	app.wg.Add(5)
-	go app.consumeOrders()
-	go app.consumeTicks()
-	go app.consumeClosePositions()
-	go app.consumeCancelOrders()
-	go app.consumeModifyTPSL()
+	// Start Kafka consumers only when recovery succeeded (fail-closed trading path).
+	if app.walRecoveryOK.Load() && app.engine.CanAcceptTrading() {
+		app.wg.Add(5)
+		go app.consumeOrders()
+		go app.consumeTicks()
+		go app.consumeClosePositions()
+		go app.consumeCancelOrders()
+		go app.consumeModifyTPSL()
 
-	// Start contest operations consumers (bulk close positions, cancel orders, state events)
-	app.wg.Add(3)
-	go app.consumeContestClosePositions()
-	go app.consumeContestCancelOrders()
-	go app.consumeContestStateEvents()
+		// Start contest operations consumers (bulk close positions, cancel orders, state events)
+		app.wg.Add(3)
+		go app.consumeContestClosePositions()
+		go app.consumeContestCancelOrders()
+		go app.consumeContestStateEvents()
 
-	// Start periodic unrealized score broadcast
-	app.wg.Add(1)
-	go app.broadcastUnrealizedScores()
+		// Start periodic unrealized score broadcast
+		app.wg.Add(1)
+		go app.broadcastUnrealizedScores()
 
-	// Mark as ready
-	app.ready.Store(true)
+		// Mark as ready only after recovery + consumers started
+		app.ready.Store(true)
+		if engineMetrics != nil && engineMetrics.EngineReady != nil {
+			engineMetrics.EngineReady.Set(1)
+		}
+		log.Info("Trading engine READY — accepting trading traffic")
+	} else {
+		app.ready.Store(false)
+		if engineMetrics != nil && engineMetrics.EngineReady != nil {
+			engineMetrics.EngineReady.Set(0)
+		}
+		reason := "WAL recovery not OK"
+		if v := app.recoveryError.Load(); v != nil {
+			if s, ok := v.(string); ok && s != "" {
+				reason = s
+			}
+		}
+		if !app.engine.CanAcceptTrading() {
+			reason = app.engine.WALUnhealthyReason()
+		}
+		log.Error("Trading engine NOT READY — trading consumers not started",
+			zap.String("reason", reason))
+	}
 
 	// Send startup notification
 	app.sendStartupNotification()
@@ -944,13 +1015,57 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 	httpStatus := http.StatusOK
 
-	// Check if we're ready (initialization complete)
+	// Check if we're ready (initialization complete + recovery OK)
 	if !a.ready.Load() {
 		response["status"] = "unavailable"
-		response["message"] = "service not initialized"
+		response["message"] = "service not initialized or not recovered"
+		if v := a.recoveryError.Load(); v != nil {
+			if s, ok := v.(string); ok && s != "" {
+				response["recovery_error"] = s
+			}
+		}
+		response["wal_recovery"] = a.walRecoveryOK.Load()
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	// WAL recovery must succeed before trading readiness (P1-ENG-02).
+	if !a.walRecoveryOK.Load() || (a.engine != nil && !a.engine.CanAcceptTrading()) {
+		response["status"] = "unavailable"
+		response["wal_recovery"] = false
+		response["message"] = "WAL recovery incomplete or engine unhealthy"
+		if a.engine != nil {
+			if reason := a.engine.WALUnhealthyReason(); reason != "" {
+				response["wal_reason"] = reason
+			}
+		}
+		if v := a.recoveryError.Load(); v != nil {
+			if s, ok := v.(string); ok && s != "" {
+				response["recovery_error"] = s
+			}
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	response["wal_recovery"] = "ok"
+
+	// Market-data readiness: alive process may still be unsafe for trading.
+	if a.engine != nil {
+		mdOK, mdReason := a.engine.MarketDataReady()
+		response["market_data"] = map[string]interface{}{
+			"ready":  mdOK,
+			"reason": mdReason,
+		}
+		// When MD readiness is required, fail readiness if no valid feed.
+		if a.engine.RequiresMarketDataReady() && !mdOK {
+			response["status"] = "unavailable"
+			response["message"] = "market feed unavailable: " + mdReason
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	// Check circuit breaker health

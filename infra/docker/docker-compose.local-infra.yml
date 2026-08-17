@@ -1,0 +1,81 @@
+# =============================================================================
+# LOCAL INFRASTRUCTURE QUALIFICATION OVERLAY (Phase 6.1-LOCAL-INFRA)
+# =============================================================================
+# Classification: LOCAL-VM-HOST-PATH + LOCAL-OBJECT-STORAGE
+# NOT cloud production evidence.
+#
+# Usage (from infra/docker):
+#   set TRAGGE_WAL_HOST_PATH=W:/tragge-wal
+#   docker compose -f docker-compose.yml -f docker-compose.lite.yml \
+#     -f docker-compose.override.yml -f docker-compose.local-infra.yml \
+#     --profile app up -d
+#
+# MinIO credentials are LOCAL LAB ONLY (not production secrets).
+# =============================================================================
+
+services:
+  trading-core:
+    environment:
+      WAL_PERSIST_PATH: ${WAL_PERSIST_PATH:-/var/lib/tragge/wal/engine.jsonl}
+      WAL_REQUIRE_PERSIST: "true"
+      WAL_SYNC_ON_WRITE: "true"
+      # Keep ENVIRONMENT=development so local Postgres (no TLS) is not force-upgraded.
+      # APP_ENV records local-infra classification for operators.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      APP_ENV: ${APP_ENV:-local-infra}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+    volumes:
+      - type: bind
+        source: ${TRAGGE_WAL_HOST_PATH:-W:/tragge-wal}
+        target: /var/lib/tragge/wal
+        bind:
+          create_host_path: true
+
+  # Local S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: tragge_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-traggelocal}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-traggelocalpass}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - type: bind
+        source: ${TRAGGE_MINIO_HOST_PATH:-D:/tragge-local-infra/minio}
+        target: /data
+        bind:
+          create_host_path: true
+    networks:
+      - platform_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # One-shot bucket bootstrap
+  minio-init:
+    image: minio/mc:latest
+    container_name: tragge_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER:-traggelocal}" "$${MINIO_ROOT_PASSWORD:-traggelocalpass}";
+        mc mb -p local/tragge-local-backups || true;
+        mc anonymous set none local/tragge-local-backups || true;
+        mc ls local/tragge-local-backups;
+        echo MINIO_BUCKET_READY;
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-traggelocal}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-traggelocalpass}
+    networks:
+      - platform_net
+    restart: "no"

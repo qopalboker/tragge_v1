@@ -33,6 +33,7 @@ import MobileLeaderboardPage from '@/components/trading/mobile/MobileLeaderboard
 import MobileDetailsPage from '@/components/trading/mobile/MobileDetailsPage.vue';
 
 import type { WatchlistItem } from '@/modules/trade/components/trading/WatchlistSidebar.vue';
+import '../styles/trading-panel.css';
 
 const route = useRoute();
 const router = useRouter();
@@ -226,6 +227,7 @@ const {
   connect,
   disconnect,
   placeOrder,
+  isSubmittingOrder,
   // Rate limit and order queue state — available for UI integration:
   // rateLimit, orderQueue, orderQueuePendingCount, isOrderQueueFull,
   // showOrderQueueConfirmation, confirmQueuedOrders, cancelQueuedOrders
@@ -436,12 +438,25 @@ function handleSymbolSelect(symbol: string): void {
   selectedSymbol.value = symbol;
 }
 
+/** Synchronous UI lock — set before any await so double-click cannot mint two client_order_ids. */
+const tradeClickLock = ref(false);
+
 async function handleTrade(side: 'buy' | 'sell', symbol: string, qty: number): Promise<void> {
   if (!symbol || qty <= 0) {
     showToast(t('toast.error'), 'error');
     tradingLogger.warn('Invalid trade parameters', { side, symbol, qty });
     return;
   }
+  // UI guard: ignore double-click / Enter while a submission is in flight.
+  // Backend still dedupes via client_order_id if a second call races through.
+  if (tradeClickLock.value || isSubmittingOrder.value) {
+    tradingLogger.warn('Ignoring trade while submission in progress', { side, symbol, qty });
+    return;
+  }
+  tradeClickLock.value = true;
+
+  // One UUID per logical user intent; placeOrder reuses on timeout retry.
+  const clientOrderId = crypto.randomUUID();
 
   try {
     const result = await placeOrder({
@@ -449,18 +464,24 @@ async function handleTrade(side: 'buy' | 'sell', symbol: string, qty: number): P
       side: side.toUpperCase() as OrderSide,
       orderType: 'MARKET' as OrderType,
       qty,
+      clientOrderId,
     });
     // Check if order was queued (offline) vs sent
     if (result && 'status' in result && result.status === 'queued') {
       showToast(t('toast.orderQueued'), 'info');
-      tradingLogger.info('Order queued while offline', { side, symbol, qty });
+      tradingLogger.info('Order queued while offline', { side, symbol, qty, clientOrderId });
     }
     // Success toast for sent orders is handled by onOrderAccepted callback
   } catch (error) {
+    if (error instanceof Error && error.message === 'Order submission already in progress') {
+      return;
+    }
     if (error instanceof Error && error.message === 'WebSocket not connected') {
       showToast(t('connection.disconnectedMessage'), 'error');
     }
     // OrderReject errors are handled by the onOrderRejected callback
+  } finally {
+    tradeClickLock.value = false;
   }
 }
 
@@ -629,7 +650,7 @@ onMounted(async () => {
     // Fetch initial leaderboard (polling starts only when WS is disconnected)
     await fetchLeaderboardData();
   } catch (err) {
-    loadError.value = err instanceof Error ? err.message : 'Failed to load contest data';
+    loadError.value = getErrorMessage(err, t('trading.loadError') || t('common.error') || 'خطا در بارگذاری مسابقه');
     tradingLogger.error('Failed to load contest data', { error: loadError.value });
   } finally {
     isLoading.value = false;
@@ -691,6 +712,7 @@ provide('wsStatus', wsStatus);
             :quantity="quantity"
             :max-qty="maxQty"
             :favorites="favorites"
+            :submitting="isSubmittingOrder || tradeClickLock"
             @select-symbol="handleSymbolSelect"
             @trade="handleTrade"
             @update-quantity="handleUpdateQuantity"

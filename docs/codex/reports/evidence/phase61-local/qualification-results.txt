@@ -1,0 +1,21 @@
+PASS  [LOCAL-VM] host_forensics — wal=D:/tragge-local-infra/wal
+PASS  [LOCAL-CONTAINER] compose_up — exit=0
+PASS  [LOCAL-CONTAINER] trading_ready_wal — {"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status":"healthy"},"market_data":{"ready":fals
+PASS  [LOCAL-VM] wal_on_host_bind_not_ephemeral — D:\tragge-local-infra\wal\local-infra.proof
+PASS  [LOCAL-CONTAINER] container_recreate_wal — proof=true ready=true ms=24423
+PASS  [LOCAL-CONTAINER] phase11_financial — 
+PASS  [LOCAL-CONTAINER] phase2_trading — 
+PASS  [LOCAL-CONTAINER] docker_compose_restart_recovery — ms=29074 wal_host=true
+FAIL  [LOCAL-VM] docker_engine_restart — skipped (set DOCKER_ENGINE_RESTART=1 to run full engine restart)
+PASS  [LOCAL-OBJECT-STORAGE] pg_dump_created — bytes=704668
+PASS  [LOCAL-OBJECT-STORAGE] minio_upload — Added `local` successfully.
+Bucket created successfully `local/tragge-local-backups`.
+`/dump/local-infra-1786890219728.dump` -> `local/tragge-local-backups/loca
+PASS  [LOCAL-OBJECT-STORAGE] minio_download_integrity — size_match=true
+PASS  [LOCAL-OBJECT-STORAGE] clean_restore — tables=89 pg_restore_exit=0
+PASS  [LOCAL-CONTAINER] durable_contest_reconcile — contest-reconcile
+PASS  [LOCAL-OBJECT-STORAGE] restore_schema_financial_tables — 251 175 103 
+PASS  [LOCAL-VM] vhd_detach_reattach — restored=true attach_exit=0 detach_exit=0
+PASS  [LOCAL-CONTAINER] rollback_a_b_a — compose recreate api-server A→B→A
+PASS  [LOCAL-CONTAINER] single_active_trading_core — count=1
+PASS  [LOCAL-VM] wsl_vm_available — Ubuntu WSL2 present; set WSL_REBOOT_DRILL=1 for full reboot

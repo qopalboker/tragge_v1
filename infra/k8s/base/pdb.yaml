@@ -55,17 +55,11 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# TRADING-CORE PDB
+# TRADING-CORE PDB (StatefulSet, replicas=1, durable WAL)
 # -----------------------------------------------------------------------------
-# Handles WebSocket connections + trading engine + market data
-# Users have active trading sessions that would be disrupted by eviction
-# HPA min: 2, so minAvailable: 1 ensures at least 1 pod survives eviction
-#
-# SESSION AFFINITY CONSIDERATIONS:
-# - WebSocket connections use cookie-based affinity (TRAGGE_WS_AFFINITY)
-# - Connection registry in Redis tracks user→pod mappings
-# - Graceful shutdown sends close messages allowing clients to reconnect
-# - New connections will be routed to available pods via Ingress affinity
+# Single-active owner: voluntary disruption causes brief trading downtime.
+# maxUnavailable: 1 allows node drains; PVC reattaches on reschedule.
+# Do NOT use minAvailable: 1 with replicas=1 (blocks all voluntary drains).
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -76,14 +70,10 @@ metadata:
     app.kubernetes.io/component: pdb
     app.kubernetes.io/part-of: tragge-platform
 spec:
-  # Ensure at least 1 pod remains available during voluntary disruptions
-  # Prevents all pods from being evicted simultaneously during node upgrades
-  minAvailable: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: trading-core
-  # Allow eviction only if remaining pods can handle the traffic
-  # (Kubernetes 1.27+ feature)
   unhealthyPodEvictionPolicy: IfHealthyBudget
 
 # -----------------------------------------------------------------------------

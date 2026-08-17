@@ -53,6 +53,11 @@ type ContestInfo struct {
 	StartTime         time.Time
 	EndTime           time.Time
 	Status            string
+	// Economics lock (migration 0103). When EconomicsLocked is true, settlement
+	// MUST use LockedEntryFeeCents and LockedPlatformFeeBps exclusively.
+	EconomicsLocked       bool
+	LockedEntryFeeCents   int64
+	LockedPlatformFeeBps  int
 }
 
 // Participant represents a contest participant with their final scores.
@@ -92,26 +97,44 @@ type Settlement struct {
 }
 
 // getContestInfo retrieves contest details from the database.
+// When economics are locked (first join / policy lock), locked_* fields override
+// mutable contest columns so settlement ignores later global/default fee changes.
 func (a *App) getContestInfo(ctx context.Context, contestID string) (*ContestInfo, error) {
 	var info ContestInfo
 	var platformFeeBps sql.NullInt32
 	var name sql.NullString
 	var startTime, endTime sql.NullTime
-
 	var prizePoolNetCents, commissionAmount sql.NullInt64
+	var lockedAt sql.NullTime
+	var lockedEntry sql.NullInt64
+	var lockedBps sql.NullInt32
 
 	err := a.db.QueryRowContext(ctx,
 		`SELECT id, name, entry_fee_cents, COALESCE(platform_fee_bps, 0),
 		        COALESCE(prize_pool_net_cents, 0), COALESCE(commission_amount, 0),
-		        starts_at, ends_at, status
+		        starts_at, ends_at, status,
+		        economics_locked_at, locked_entry_fee_cents, locked_platform_fee_bps
 		 FROM contests WHERE id = $1`,
 		contestID,
 	).Scan(&info.ID, &name, &info.EntryFeeCents, &platformFeeBps,
 		&prizePoolNetCents, &commissionAmount,
-		&startTime, &endTime, &info.Status)
+		&startTime, &endTime, &info.Status,
+		&lockedAt, &lockedEntry, &lockedBps)
 
 	if err != nil {
-		return nil, err
+		// Pre-0103 fallback without lock columns.
+		err = a.db.QueryRowContext(ctx,
+			`SELECT id, name, entry_fee_cents, COALESCE(platform_fee_bps, 0),
+			        COALESCE(prize_pool_net_cents, 0), COALESCE(commission_amount, 0),
+			        starts_at, ends_at, status
+			 FROM contests WHERE id = $1`,
+			contestID,
+		).Scan(&info.ID, &name, &info.EntryFeeCents, &platformFeeBps,
+			&prizePoolNetCents, &commissionAmount,
+			&startTime, &endTime, &info.Status)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if name.Valid {
@@ -138,6 +161,19 @@ func (a *App) getContestInfo(ctx context.Context, contestID string) (*ContestInf
 	}
 	if endTime.Valid {
 		info.EndTime = endTime.Time
+	}
+
+	// Authoritative locked economics when present.
+	if lockedAt.Valid {
+		info.EconomicsLocked = true
+		if lockedEntry.Valid && lockedEntry.Int64 > 0 {
+			info.LockedEntryFeeCents = lockedEntry.Int64
+			info.EntryFeeCents = lockedEntry.Int64
+		}
+		if lockedBps.Valid && lockedBps.Int32 > 0 {
+			info.LockedPlatformFeeBps = int(lockedBps.Int32)
+			info.PlatformFeeBps = int(lockedBps.Int32)
+		}
 	}
 
 	return &info, nil

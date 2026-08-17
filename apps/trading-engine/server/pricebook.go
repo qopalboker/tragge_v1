@@ -26,7 +26,7 @@ type Quote struct {
 	Bid       float64
 	Ask       float64
 	Last      float64
-	Timestamp int64 // Unix milliseconds
+	Timestamp int64 // Unix milliseconds (UTC)
 }
 
 // HasBidAsk returns true if both bid and ask are available.
@@ -34,11 +34,25 @@ func (q *Quote) HasBidAsk() bool {
 	return q.Bid > 0 && q.Ask > 0
 }
 
+// PriceBookUpdateStats summarizes tick acceptance for observability.
+type PriceBookUpdateStats struct {
+	Accepted int
+	Rejected int
+	Reasons  map[string]int
+}
+
 // PriceBook maintains in-memory bid/ask prices per symbol.
 type PriceBook struct {
 	quotes    map[string]*Quote // symbol -> quote
 	mu        sync.RWMutex
 	spreadBps int // spread in basis points for synthetic bid/ask
+
+	// firstValidAt is set when the first accepted tick lands (market-data readiness).
+	firstValidAt time.Time
+	// lastAcceptedAt is wall time of last accepted update.
+	lastAcceptedAt time.Time
+	// rejectedTotal counts rejected ticks (invalid ts / prices / regression).
+	rejectedTotal int64
 }
 
 // NewPriceBook creates a new price book.
@@ -50,15 +64,53 @@ func NewPriceBook() *PriceBook {
 }
 
 // UpdateFromTick updates the price book from a tick snapshot.
-func (pb *PriceBook) UpdateFromTick(tick *contracts.TickSnapshot) {
+// Invalid timestamps/prices are rejected and do not become authoritative market state.
+// Older timestamps never overwrite newer stored quotes (no backward time movement).
+func (pb *PriceBook) UpdateFromTick(tick *contracts.TickSnapshot) PriceBookUpdateStats {
+	stats := PriceBookUpdateStats{Reasons: make(map[string]int)}
+	if tick == nil {
+		stats.Rejected++
+		stats.Reasons["nil_tick"] = 1
+		return stats
+	}
+
+	now := time.Now()
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
 	for _, st := range tick.Symbols {
-		quote := pb.getOrCreateQuoteLocked(st.Symbol)
+		if st.Symbol == "" {
+			stats.Rejected++
+			stats.Reasons["missing_symbol"]++
+			continue
+		}
+		if err := validateSymbolPrices(st); err != nil {
+			stats.Rejected++
+			stats.Reasons["invalid_price"]++
+			pb.rejectedTotal++
+			continue
+		}
 
-		// Update timestamp (normalize to milliseconds)
-		quote.Timestamp = normalizeToMillis(tick.Ts)
+		ts := resolveTickTimestamp(tick.Ts, st.Timestamp)
+		vr := validateTickTimestamp(ts, now)
+		if !vr.Accepted {
+			stats.Rejected++
+			stats.Reasons[vr.Reason]++
+			pb.rejectedTotal++
+			continue
+		}
+
+		existing, exists := pb.quotes[st.Symbol]
+		if exists && existing.Timestamp > 0 && vr.TsMillis < existing.Timestamp {
+			// Stale source / out-of-order delivery: do not regress market time.
+			stats.Rejected++
+			stats.Reasons["backward_timestamp"]++
+			pb.rejectedTotal++
+			continue
+		}
+
+		quote := pb.getOrCreateQuoteLocked(st.Symbol)
+		quote.Timestamp = vr.TsMillis
 
 		// Update last price if available
 		if st.Last > 0 {
@@ -89,7 +141,62 @@ func (pb *PriceBook) UpdateFromTick(tick *contracts.TickSnapshot) {
 				quote.Ask = quote.Last * (1 + halfSpreadPct)
 			}
 		}
+
+		stats.Accepted++
+		if pb.firstValidAt.IsZero() {
+			pb.firstValidAt = now
+		}
+		pb.lastAcceptedAt = now
 	}
+	return stats
+}
+
+// HasValidMarketData reports whether at least one accepted tick has been applied.
+func (pb *PriceBook) HasValidMarketData() bool {
+	pb.mu.RLock()
+	defer pb.mu.RUnlock()
+	return !pb.firstValidAt.IsZero() && len(pb.quotes) > 0
+}
+
+// MarketDataReady reports readiness for trading: at least one valid quote and
+// every tracked required symbol (if provided) is present and fresh within maxAge.
+// When required is empty, readiness only requires any valid data not globally stale.
+func (pb *PriceBook) MarketDataReady(required []string, maxAge time.Duration) (bool, string) {
+	pb.mu.RLock()
+	defer pb.mu.RUnlock()
+	if pb.firstValidAt.IsZero() || len(pb.quotes) == 0 {
+		return false, "no_valid_tick"
+	}
+	now := time.Now()
+	check := required
+	if len(check) == 0 {
+		// Any symbol: require at least one non-stale quote.
+		for sym, q := range pb.quotes {
+			age := now.Sub(time.UnixMilli(q.Timestamp))
+			if age >= -MaxFutureSkew && age <= maxAge && (q.Last > 0 || (q.Bid > 0 && q.Ask > 0)) {
+				_ = sym
+				return true, "ok"
+			}
+		}
+		return false, "all_quotes_stale"
+	}
+	for _, sym := range check {
+		q, ok := pb.quotes[sym]
+		if !ok {
+			return false, "missing_symbol:" + sym
+		}
+		age := now.Sub(time.UnixMilli(q.Timestamp))
+		if age < -MaxFutureSkew {
+			return false, "anomaly:" + sym
+		}
+		if age > maxAge {
+			return false, "stale:" + sym
+		}
+		if q.Last <= 0 && (q.Bid <= 0 || q.Ask <= 0) {
+			return false, "incomplete_quote:" + sym
+		}
+	}
+	return true, "ok"
 }
 
 // getOrCreateQuoteLocked gets or creates a quote for a symbol.
@@ -191,6 +298,8 @@ func (pb *PriceBook) GetAllSymbols() []string {
 }
 
 // IsStale returns true if the quote is older than the given duration.
+// Exactly-at-threshold (age == maxAge) is considered fresh (not stale).
+// Future timestamps (clock anomaly / negative age beyond skew) are treated as stale.
 func (pb *PriceBook) IsStale(symbol string, maxAge time.Duration) bool {
 	quote, exists := pb.GetQuote(symbol)
 	if !exists {
@@ -198,7 +307,27 @@ func (pb *PriceBook) IsStale(symbol string, maxAge time.Duration) bool {
 	}
 
 	age := time.Since(time.UnixMilli(quote.Timestamp))
+	if age < -2*time.Second {
+		// Clock anomaly: quote appears from the future — fail closed.
+		return true
+	}
 	return age > maxAge
+}
+
+// PriceAgeClassifies returns "fresh", "stale", or "anomaly" for readiness/tests.
+func (pb *PriceBook) PriceAgeClassifies(symbol string, maxAge time.Duration) string {
+	quote, exists := pb.GetQuote(symbol)
+	if !exists {
+		return "missing"
+	}
+	age := time.Since(time.UnixMilli(quote.Timestamp))
+	if age < -2*time.Second {
+		return "anomaly"
+	}
+	if age > maxAge {
+		return "stale"
+	}
+	return "fresh"
 }
 
 // GetExitPrice returns the appropriate mark-to-market price for unrealized P&L calculation.

@@ -1,0 +1,97 @@
+{
+  "ts": "2026-08-16T14:54:46.491Z",
+  "decision": "PHASE 6.2 — BLOCKED",
+  "hard_fail": 7,
+  "soft_fail": 0,
+  "rows": [
+    {
+      "id": "P62-00",
+      "name": "Prerequisite: local infrastructure fully qualified",
+      "hard": true,
+      "status": true,
+      "evidence": "PHASE-6.1-LOCAL-INFRA-CLOSURE PASS",
+      "result": "PASS"
+    },
+    {
+      "id": "P62-01",
+      "name": "Payment provider non-mock qualification",
+      "hard": true,
+      "status": false,
+      "evidence": "PAYMENT_PROVIDER_PASS (provider sandbox/prod, not mock)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-02",
+      "name": "Market-data production provider qualification",
+      "hard": true,
+      "status": false,
+      "evidence": "MARKET_DATA_PROVIDER_PASS (live feed, not placeholder)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-03",
+      "name": "Admin MFA production-like enrollment",
+      "hard": true,
+      "status": false,
+      "evidence": "MFA_STAGING_PASS or MFA_PROD_PASS (live admin session)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-04",
+      "name": "Security regression (auth packages)",
+      "hard": true,
+      "status": true,
+      "evidence": "SECURITY_REGRESSION_PASS from phase62 security run",
+      "result": "PASS"
+    },
+    {
+      "id": "P62-05",
+      "name": "Emergency pause live operator drill",
+      "hard": true,
+      "status": true,
+      "evidence": "EMERGENCY_PAUSE_PASS (admin pause or authorized last-resort stop)",
+      "result": "PASS"
+    },
+    {
+      "id": "P62-06",
+      "name": "Monitoring signals qualified",
+      "hard": true,
+      "status": false,
+      "evidence": "MONITORING_PASS (operator-visible unsafe-state signals)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-07",
+      "name": "Alerts exercised (fired)",
+      "hard": true,
+      "status": false,
+      "evidence": "ALERTS_PASS (at least one critical alert path fired)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-08",
+      "name": "External / legal / provider sign-offs CONFIRMED",
+      "hard": true,
+      "status": false,
+      "evidence": "EXTERNAL_SIGNOFF_CONFIRMED human matrix",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-09",
+      "name": "Controlled first production contest + reconcile",
+      "hard": true,
+      "status": false,
+      "evidence": "CONTROLLED_CONTEST_PASS + RECONCILE_CLEAN",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "P62-10",
+      "name": "Production launch-gate ready path documented",
+      "hard": false,
+      "status": true,
+      "evidence": "scripts/prod/launch-gate.mjs exists",
+      "result": "PASS"
+    }
+  ],
+  "kubernetes_required": false
+}

@@ -16,6 +16,7 @@ require (
 	github.com/Parsaeffatravesh/tragge/packages/secrets v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/validation v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/wallet v0.0.0
+	github.com/Parsaeffatravesh/tragge/packages/scoring v0.0.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/prometheus/client_golang v1.19.0

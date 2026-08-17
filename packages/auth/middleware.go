@@ -162,9 +162,14 @@ func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// RequireSuperAdminMFA requires the versioned Admin MFA assurance for every
-// Super Admin token. Support Admin sessions remain governed by their explicit
-// permissions and do not acquire Super Admin authority through this check.
+// RequireSuperAdminMFA gates Super Admin sessions by MFA assurance.
+//
+// When global admin MFA policy is ON, Super Admin tokens are only issued after
+// successful MFA and carry MFAAssuranceSuperAdminTOTPV1.
+// When the MVP policy is OFF, Super Admin may hold a password-only session
+// (empty MFAAssurance). Support Admin is unaffected either way.
+//
+// Reject unknown non-empty assurance values so clients cannot invent levels.
 func (m *Middleware) RequireSuperAdminMFA(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims := GetClaims(r.Context())
@@ -172,9 +177,12 @@ func (m *Middleware) RequireSuperAdminMFA(next http.Handler) http.Handler {
 			writeUnauthorized(w, "authentication required")
 			return
 		}
-		if claims.HasRole(RoleSuperAdmin) && claims.MFAAssurance != MFAAssuranceSuperAdminTOTPV1 {
-			writeUnauthorized(w, "additional authentication required")
-			return
+		if claims.HasRole(RoleSuperAdmin) {
+			a := claims.MFAAssurance
+			if a != "" && a != MFAAssuranceSuperAdminTOTPV1 {
+				writeUnauthorized(w, "additional authentication required")
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

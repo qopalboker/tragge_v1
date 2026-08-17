@@ -1,0 +1,225 @@
+{
+  "ts": "2026-08-17T01:28:00.938Z",
+  "decision": "MVP — PASS",
+  "failed": 0,
+  "results": [
+    {
+      "cat": "AUTH",
+      "name": "user login route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "admin login route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "user-bff login handler",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "AUTH",
+      "name": "admin-bff login handler",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "user wallet page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "user wallet store",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "admin charge API route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "admin charge handler uses wallet.Service",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "admin charge UI",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "wallet CreditIdempotent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "contest create form page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "contests list page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "user detail + wallet",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "financial page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN",
+      "name": "admin contest handlers",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "user contests page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "contest details page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "contest results page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "JOIN",
+      "name": "user join route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trading page route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trade-bff place order",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trade-bff positions close",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "FINALIZATION",
+      "name": "settlement tables exist (migrations)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SETTLEMENT",
+      "name": "wallet prize credit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RECONCILIATION",
+      "name": "contest-reconcile script",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SECURITY",
+      "name": "admin charge requires permission",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SECURITY",
+      "name": "sensitive action on wallet charge",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "E2E",
+      "name": "compose postgres running",
+      "ok": true,
+      "detail": "tragge_postgres"
+    },
+    {
+      "cat": "E2E",
+      "name": "MVP financial spine (admin credit→join→settle)",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "E2E",
+      "name": "Phase 1.1 financial lifecycle regression",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "E2E",
+      "name": "Phase 2 trading→settlement",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "E2E",
+      "name": "trading restart WAL regression",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "E2E",
+      "name": "api user-bff healthz",
+      "ok": true,
+      "detail": "{\"status\":\"ok\"}\n"
+    },
+    {
+      "cat": "E2E",
+      "name": "trading-engine wal_recovery",
+      "ok": true,
+      "detail": "{\"circuits\":\"healthy\",\"database\":\"healthy\",\"kafka\":{\"consumer_group\":\"trading-en"
+    },
+    {
+      "cat": "USER RESULT",
+      "name": "contest results view",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN RESULT",
+      "name": "contest detail admin",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "production_go": false,
+  "payment_gateway": false
+}

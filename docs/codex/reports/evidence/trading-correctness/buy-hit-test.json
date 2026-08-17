@@ -1,0 +1,23 @@
+{
+  "cx": 313.25,
+  "cy": 228.5,
+  "width": 131.5,
+  "height": 82,
+  "top": 187.5,
+  "left": 247.5,
+  "inViewport": true,
+  "topTag": "BUTTON",
+  "topClass": "tp-qtbb",
+  "isBuyOrChild": true,
+  "path": [
+    "button.tp-qtbb",
+    "div.tp-qtrow",
+    "div.tp-qtp",
+    "div.tp-wll.scrollbar-thin",
+    "div.tp-sb",
+    "div.tp-main",
+    "div.tp-root.tp-dark",
+    "div"
+  ],
+  "navRightCovers": false
+}

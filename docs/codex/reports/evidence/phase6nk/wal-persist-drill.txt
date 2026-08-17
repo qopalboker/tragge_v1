@@ -1,0 +1,7 @@
+WAL_HOST_PERSIST_PASS
+proof_survived=true
+proof=wal-host-proof-1786851823581
+readyz_ok=true
+readyz={"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status":"healthy"},"market_data":{"ready":false,"reason":"no_valid_tick"},"redis":"hea
+wal_host_path=D:\Grok\tragge_v0-main\tragge_v0-main\var\lib\tragge\wal
+PASS

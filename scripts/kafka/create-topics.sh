@@ -16,6 +16,11 @@ set -euo pipefail
 
 BROKERS="${KAFKA_BROKERS:-localhost:9092}"
 REPLICATION="${REPLICATION_FACTOR:-1}"
+# Lite/dev single-node Redpanda may not support 16 partitions (hardware constraints).
+# Override: TOPIC_PARTITIONS_HIGH=1 TOPIC_PARTITIONS_MED=1 for compose-lite.
+HIGH_PARTITIONS="${TOPIC_PARTITIONS_HIGH:-16}"
+MED_PARTITIONS="${TOPIC_PARTITIONS_MED:-8}"
+LOW_PARTITIONS="${TOPIC_PARTITIONS_LOW:-4}"
 
 # Wait for Kafka/Redpanda to be ready
 wait_for_broker() {
@@ -47,43 +52,43 @@ wait_for_broker() {
 #    1 partition  - Control topics requiring global ordering (contests)
 topics=(
     # =========================================================================
-    # HIGH-THROUGHPUT TRADING TOPICS (16 partitions)
+    # HIGH-THROUGHPUT TRADING TOPICS
     # Partitioned by contest_id or symbol for local ordering
     # =========================================================================
-    "orders.v1:16:$REPLICATION"
-    "ticks.v1:16:$REPLICATION"
-    "fills.v1:16:$REPLICATION"
-    "positions.v1:16:$REPLICATION"
-    "order_acks.v1:16:$REPLICATION"
-    "pnl_deltas.v1:16:$REPLICATION"
-    "order_cancelled.v1:16:$REPLICATION"
-    "position_closed.v1:16:$REPLICATION"
+    "orders.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "ticks.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "fills.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "positions.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "order_acks.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "pnl_deltas.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "order_cancelled.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "position_closed.v1:${HIGH_PARTITIONS}:$REPLICATION"
 
     # =========================================================================
-    # TRADING ENGINE COMMAND TOPICS (16 partitions)
+    # TRADING ENGINE COMMAND TOPICS
     # User-initiated mutations routed to trading-engine
     # =========================================================================
-    "close_positions.v1:16:$REPLICATION"
-    "cancel_orders.v1:16:$REPLICATION"
-    "modify_tpsl.v1:16:$REPLICATION"
+    "close_positions.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "cancel_orders.v1:${HIGH_PARTITIONS}:$REPLICATION"
+    "modify_tpsl.v1:${HIGH_PARTITIONS}:$REPLICATION"
 
     # =========================================================================
-    # ALERTS (16 partitions, fire-and-forget)
+    # ALERTS (fire-and-forget)
     # =========================================================================
-    "alerts.v1:16:$REPLICATION"
+    "alerts.v1:${HIGH_PARTITIONS}:$REPLICATION"
 
     # =========================================================================
-    # SETTLEMENT TOPICS (8 partitions)
+    # SETTLEMENT TOPICS
     # =========================================================================
-    "settlement_requests.v1:8:$REPLICATION"
-    "settlement_events.v1:8:$REPLICATION"
-    "contest_close_positions.v1:8:$REPLICATION"
-    "contest_cancel_orders.v1:8:$REPLICATION"
+    "settlement_requests.v1:${MED_PARTITIONS}:$REPLICATION"
+    "settlement_events.v1:${MED_PARTITIONS}:$REPLICATION"
+    "contest_close_positions.v1:${MED_PARTITIONS}:$REPLICATION"
+    "contest_cancel_orders.v1:${MED_PARTITIONS}:$REPLICATION"
 
     # =========================================================================
-    # NOTIFICATION TOPICS (4 partitions)
+    # NOTIFICATION TOPICS
     # =========================================================================
-    "notifications.v1:4:$REPLICATION"
+    "notifications.v1:${LOW_PARTITIONS}:$REPLICATION"
 
     # =========================================================================
     # CONTROL TOPICS (1 partition for global ordering)

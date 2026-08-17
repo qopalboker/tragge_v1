@@ -1,0 +1,5 @@
+
+select vdisk file="D:\tragge-local-infra\wal-disk.vhdx"
+select partition 1
+assign letter=W
+exit

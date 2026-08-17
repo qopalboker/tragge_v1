@@ -1,0 +1,3 @@
+LOCAL_VM_DISK_REATTACH_PASS
+note=Docker Desktop cannot bind into VHD mount points; VHD used as detachable companion disk with copy
+restored=true

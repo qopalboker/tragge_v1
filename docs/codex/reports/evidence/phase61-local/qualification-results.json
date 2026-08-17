@@ -1,0 +1,126 @@
+{
+  "ts": "2026-08-16T14:25:45.091Z",
+  "results": [
+    {
+      "name": "host_forensics",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "wal=D:/tragge-local-infra/wal"
+    },
+    {
+      "name": "compose_up",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "exit=0"
+    },
+    {
+      "name": "trading_ready_wal",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "{\"circuits\":\"healthy\",\"database\":\"healthy\",\"kafka\":{\"consumer_group\":\"trading-engine\",\"orders_topic\":\"orders.v1\",\"status\":\"healthy\"},\"market_data\":{\"ready\":fals"
+    },
+    {
+      "name": "wal_on_host_bind_not_ephemeral",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "D:\\tragge-local-infra\\wal\\local-infra.proof"
+    },
+    {
+      "name": "container_recreate_wal",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "proof=true ready=true ms=24423"
+    },
+    {
+      "name": "phase11_financial",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": ""
+    },
+    {
+      "name": "phase2_trading",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": ""
+    },
+    {
+      "name": "docker_compose_restart_recovery",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "ms=29074 wal_host=true"
+    },
+    {
+      "name": "docker_engine_restart",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "HOST_DOCKER_RESTART_PASS"
+    },
+    {
+      "name": "pg_dump_created",
+      "ok": true,
+      "classification": "LOCAL-OBJECT-STORAGE",
+      "detail": "bytes=704668"
+    },
+    {
+      "name": "minio_upload",
+      "ok": true,
+      "classification": "LOCAL-OBJECT-STORAGE",
+      "detail": "Added `local` successfully.\nBucket created successfully `local/tragge-local-backups`.\n`/dump/local-infra-1786890219728.dump` -> `local/tragge-local-backups/loca"
+    },
+    {
+      "name": "minio_download_integrity",
+      "ok": true,
+      "classification": "LOCAL-OBJECT-STORAGE",
+      "detail": "size_match=true"
+    },
+    {
+      "name": "clean_restore",
+      "ok": true,
+      "classification": "LOCAL-OBJECT-STORAGE",
+      "detail": "tables=89 pg_restore_exit=0"
+    },
+    {
+      "name": "durable_contest_reconcile",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "contest-reconcile"
+    },
+    {
+      "name": "restore_schema_financial_tables",
+      "ok": true,
+      "classification": "LOCAL-OBJECT-STORAGE",
+      "detail": "251 175 103 "
+    },
+    {
+      "name": "vhd_detach_reattach",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "restored=true attach_exit=0 detach_exit=0"
+    },
+    {
+      "name": "rollback_a_b_a",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "compose recreate api-server A→B→A"
+    },
+    {
+      "name": "single_active_trading_core",
+      "ok": true,
+      "classification": "LOCAL-CONTAINER",
+      "detail": "count=1"
+    },
+    {
+      "name": "wsl_vm_available",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "Ubuntu WSL2 present; set WSL_REBOOT_DRILL=1 for full reboot"
+    },
+    {
+      "name": "wsl_vm_reboot",
+      "ok": true,
+      "classification": "LOCAL-VM",
+      "detail": "LOCAL_VM_REBOOT_PASS"
+    }
+  ],
+  "classification_note": "No CLOUD-PRODUCTION claims"
+}

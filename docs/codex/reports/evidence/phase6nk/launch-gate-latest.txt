@@ -1,0 +1,24 @@
+PASS  Engineering release gates (Phase 3) — scripts/phase3/release-gates.mjs exit 0
+PASS  Local staging fully qualified (baseline) — PHASE-4.1-LITE report PASS
+PASS  Production compose path exists — infra/docker/docker-compose.production.yml
+PASS  Production preflight tools — phase6nk/preflight-latest.txt preflight_tools_ok=true
+PASS  Persistent WAL (host/block bind — not ephemeral) — WAL_HOST_PERSIST_PASS or Phase 4.1-Lite WAL recreate proof
+PASS  Trading readiness after recovery — health-gate or compose-gate with wal_recovery ok [from phase4.1lite/phase5lite]
+PASS  Container restart recovery (trading-core) — CONTAINER_RESTART_PASS or Phase 4.1-Lite trading recreate [from phase4.1lite]
+PASS  Worker restart + settlement idempotency — WORKER_RESTART_PASS or Phase 4.1-Lite worker drill [from phase4.1lite]
+PASS  Dependency restart drills (redis/broker/postgres) — DEP_RESTART_PASS or Phase 4.1-Lite dep restarts [from phase4.1lite]
+PASS  Local/prod-path backup restore — BACKUP_RESTORE_PASS or Phase 4.1-Lite backup [from phase4.1lite]
+BLOCKED  Object storage backup E2E (production pipeline) — S3_BACKUP_RESTORE_PASS or OBJECT_STORAGE_BACKUP_PASS
+BLOCKED  VM reboot / host Docker restart durability — VM_REBOOT_PASS | HOST_DOCKER_RESTART_PASS | VM_REPLACEMENT_PASS
+BLOCKED  VM replacement + volume reattach (hard gate) — VM_REPLACEMENT_PASS
+BLOCKED  Rollback procedure tested — ROLLBACK_DRILL_PASS
+PASS  Emergency pause tested — EMERGENCY_PAUSE_PASS
+BLOCKED  Payment provider (non-mock) — PAYMENT_PROVIDER_PASS
+BLOCKED  Market-data production provider — MARKET_DATA_PROVIDER_PASS
+BLOCKED  Admin MFA production-like — MFA_STAGING_PASS or MFA_PROD_PASS
+BLOCKED  Monitoring + alerts exercised — MONITORING_PASS + ALERTS_PASS
+BLOCKED  Controlled production contest + reconcile — CONTROLLED_CONTEST_PASS + RECONCILE_CLEAN
+BLOCKED  External / legal sign-offs — EXTERNAL_SIGNOFF_CONFIRMED
+
+PRODUCTION — NO-GO (10 blocked gates)
+kubernetes_required=false

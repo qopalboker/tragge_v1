@@ -258,3 +258,9 @@ configMapGenerator:
       - OTEL_SERVICE_NAME_PREFIX=prod-
       # Google OAuth redirect URI for production domain
       - GOOGLE_REDIRECT_URI=https://api.tragge.io/api/user/auth/google/callback
+      # Phase 3: durable trading WAL (must match StatefulSet mount)
+      - WAL_PERSIST_PATH=/var/lib/tragge/wal/engine.jsonl
+      - WAL_REQUIRE_PERSIST=true
+      - WAL_SYNC_ON_WRITE=true
+      - REQUIRE_MARKET_DATA_READY=true
+      - SHARD_ENABLED=false

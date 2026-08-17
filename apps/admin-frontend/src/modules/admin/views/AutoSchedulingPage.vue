@@ -52,17 +52,7 @@ async function fetchConfig(): Promise<void> {
     configError.value = false;
   } catch {
     configError.value = true;
-    // Fallback to mock data for development
-    config.value = {
-      enabled: true,
-      interval_minutes: 60,
-      duration_minutes: 30,
-      asset_classes: ['crypto', 'forex'],
-      weekdays_only: true,
-      active_hours_start: 8,
-      active_hours_end: 22,
-      lead_time_minutes: 5,
-    };
+    config.value = null;
   }
 }
 

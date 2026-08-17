@@ -31,6 +31,8 @@ components:
   - patches/ingress-patch.yaml
   # TLS certificate issuer - Let's Encrypt staging
   - patches/tls-patch.yaml
+  # Phase 5: WAL PVC storage class for trading-core StatefulSet
+  - patches/wal-storage-patch.yaml
 
 # =============================================================================
 # STAGING PATCHES

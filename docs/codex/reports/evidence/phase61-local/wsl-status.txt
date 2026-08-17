@@ -1,0 +1,7 @@
+LOCAL_VM_PLATFORM=WSL2
+  NAME              STATE           VERSION
+* Ubuntu            Stopped         2
+  docker-desktop    Running         2
+
+NOTE=full reboot drill optional via WSL_REBOOT_DRILL=1
+LOCAL_VM_PLATFORM_PASS

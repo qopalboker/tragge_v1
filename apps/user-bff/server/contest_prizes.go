@@ -11,6 +11,7 @@ import (
 	"time"
 
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -37,27 +38,13 @@ type PrizeRankPreview struct {
 	Percentage  float64 `json:"percentage"`
 }
 
-// DefaultPlatformFeeBps is the default platform fee (20% = 2000 bps).
-const DefaultPlatformFeeBps = 2000
+// DefaultPlatformFeeBps re-exports the canonical default (20% = 2000 bps).
+const DefaultPlatformFeeBps = economics.DefaultPlatformFeeBps
 
-// ResolveEffectiveFeeBps determines the effective platform fee in basis points
-// from the two possibly-set database columns on the contests table.
-//
-// Priority:
-//  1. platform_fee_bps if > 0 (already in bps, most precise)
-//  2. commission_rate converted to bps via math.Round(rate * 100)
-//  3. DefaultPlatformFeeBps (2000 = 20%)
+// ResolveEffectiveFeeBps is the single fee authority for user-bff.
+// Canonical field is platform_fee_bps; commission_rate is deprecated fallback only.
 func ResolveEffectiveFeeBps(platformFeeBps int, commissionRate float64) int {
-	if platformFeeBps > 0 {
-		return platformFeeBps
-	}
-	if commissionRate > 0 {
-		bps := int(math.Round(commissionRate * 100))
-		if bps > 0 && bps <= 10000 {
-			return bps
-		}
-	}
-	return DefaultPlatformFeeBps
+	return economics.ResolvePlatformFeeBps(platformFeeBps, commissionRate)
 }
 
 // CalculatePrizeDistribution computes the full prize table for a contest
@@ -73,7 +60,7 @@ func CalculatePrizeDistribution(
 
 	cfg := prizedistribution.ConfigFromEnv()
 
-	// Net prize pool after commission
+	// Net prize pool after platform fee (canonical economics).
 	if platformFeeBps <= 0 {
 		platformFeeBps = DefaultPlatformFeeBps
 	}

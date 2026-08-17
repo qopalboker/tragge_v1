@@ -1,0 +1,9 @@
+﻿{
+    "mvp_gate":  0,
+    "ts":  "2026-08-16T22:27:29.5460070Z",
+    "admin_browser":  "5/5",
+    "admin_mfa_enabled":  false,
+    "frontend_gate":  0,
+    "decision":  "RC BROWSER — PASS",
+    "production_go":  false
+}

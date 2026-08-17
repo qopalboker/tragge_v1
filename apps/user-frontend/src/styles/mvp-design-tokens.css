@@ -1,0 +1,105 @@
+/**
+ * MVP mobile design tokens — aligned to TRAGGE mobile reference
+ * (deep navy + emerald glass UI). Complements frontend-shared tokens.
+ */
+
+:root {
+  /* Reference palette */
+  --mvp-bg-deep: #050810;
+  --mvp-bg-mid: #0a1220;
+  --mvp-bg-card: rgba(14, 24, 42, 0.72);
+  --mvp-bg-card-solid: #0e182a;
+  --mvp-border: rgba(0, 212, 160, 0.14);
+  --mvp-border-strong: rgba(0, 212, 160, 0.35);
+  --mvp-emerald: #00d4a0;
+  --mvp-emerald-dim: #00b386;
+  --mvp-emerald-glow: rgba(0, 212, 160, 0.35);
+  --mvp-emerald-soft: rgba(0, 212, 160, 0.12);
+  --mvp-text: #f2f5fa;
+  --mvp-text-secondary: #8b95a8;
+  --mvp-text-muted: #5c667a;
+  --mvp-radius-lg: 20px;
+  --mvp-radius-md: 16px;
+  --mvp-radius-sm: 12px;
+  --mvp-page-pad: 16px;
+  --mvp-section-gap: 20px;
+  --mvp-bottom-nav-h: 72px;
+  --mvp-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Align global theme with reference (dark product surface) */
+  --theme-bg: radial-gradient(120% 80% at 50% -10%, #0d1f2e 0%, #050810 45%, #03060c 100%);
+  --theme-surface: var(--mvp-bg-card);
+  --theme-glass: var(--mvp-bg-card);
+  --theme-glass-border: var(--mvp-border);
+  --theme-text: var(--mvp-text);
+  --theme-text-secondary: var(--mvp-text-secondary);
+  --theme-accent: var(--mvp-emerald);
+  --theme-accent-glow: var(--mvp-emerald-glow);
+  --theme-green: var(--mvp-emerald);
+  --theme-nav-bg: rgba(5, 10, 18, 0.92);
+  --bottom-nav-height: var(--mvp-bottom-nav-h);
+  --font-family-fa: 'Dana', 'Tahoma', 'Segoe UI', sans-serif;
+}
+
+/* Glass utility used across dashboard */
+.mvp-glass {
+  background: var(--mvp-bg-card);
+  border: 1px solid var(--mvp-border);
+  border-radius: var(--mvp-radius-md);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.mvp-glass-strong {
+  background: linear-gradient(145deg, rgba(16, 36, 56, 0.9), rgba(8, 16, 28, 0.85));
+  border: 1px solid var(--mvp-border-strong);
+  border-radius: var(--mvp-radius-lg);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 0 40px rgba(0, 212, 160, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Prevent document-level horizontal scroll on mobile viewports */
+html,
+body,
+#app {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Horizontal rails: page stable, rail scrolls */
+.mvp-h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  padding-bottom: 4px;
+  /* Keep rail inside parent width; avoid expanding document scrollWidth */
+  max-width: 100%;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+.mvp-h-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mvp-h-scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

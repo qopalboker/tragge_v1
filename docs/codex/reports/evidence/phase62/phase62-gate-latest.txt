@@ -1,0 +1,13 @@
+PASS  P62-00  Prerequisite: local infrastructure fully qualified — PHASE-6.1-LOCAL-INFRA-CLOSURE PASS
+BLOCKED  P62-01  Payment provider non-mock qualification — PAYMENT_PROVIDER_PASS (provider sandbox/prod, not mock)
+BLOCKED  P62-02  Market-data production provider qualification — MARKET_DATA_PROVIDER_PASS (live feed, not placeholder)
+BLOCKED  P62-03  Admin MFA production-like enrollment — MFA_STAGING_PASS or MFA_PROD_PASS (live admin session)
+PASS  P62-04  Security regression (auth packages) — SECURITY_REGRESSION_PASS from phase62 security run
+PASS  P62-05  Emergency pause live operator drill — EMERGENCY_PAUSE_PASS (admin pause or authorized last-resort stop)
+BLOCKED  P62-06  Monitoring signals qualified — MONITORING_PASS (operator-visible unsafe-state signals)
+BLOCKED  P62-07  Alerts exercised (fired) — ALERTS_PASS (at least one critical alert path fired)
+BLOCKED  P62-08  External / legal / provider sign-offs CONFIRMED — EXTERNAL_SIGNOFF_CONFIRMED human matrix
+BLOCKED  P62-09  Controlled first production contest + reconcile — CONTROLLED_CONTEST_PASS + RECONCILE_CLEAN
+PASS  P62-10  Production launch-gate ready path documented — scripts/prod/launch-gate.mjs exists
+
+PHASE 6.2 — BLOCKED (7 hard, 0 soft)

@@ -128,14 +128,15 @@ export const freeTournamentsApi = {
    * Get free tournaments (running and scheduled)
    */
   async getFreeTournaments(limit = 5): Promise<FreeTournament[]> {
-    const response = await api.get<FreeTournament[]>('/api/user/contests', {
+    const response = await api.get<FreeTournament[] | { contests: FreeTournament[] }>('/api/user/contests', {
       params: {
         is_free: true,
         status: 'running,scheduled,registration_open',
         limit,
       },
     });
-    return response.data;
+    const raw = response.data;
+    return Array.isArray(raw) ? raw : (raw?.contests ?? []);
   },
 
   /**

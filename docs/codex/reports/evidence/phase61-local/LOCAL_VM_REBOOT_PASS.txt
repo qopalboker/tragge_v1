@@ -1,0 +1,4 @@
+LOCAL_VM_REBOOT_PASS
+PASS
+classification=LOCAL-VM
+

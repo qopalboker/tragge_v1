@@ -1,0 +1,37 @@
+{
+  "contest_id": "5fde67db-081b-4b1d-9f3b-10e45a520fb2",
+  "status": "completed",
+  "participants": 3,
+  "entry_fee_cents": 10000,
+  "platform_fee_bps": 2000,
+  "expected_gross": 30000,
+  "expected_fee": 6000,
+  "expected_net": 24000,
+  "stored_prize_pool_net": 24000,
+  "settlements": [
+    {
+      "id": "df9c95b5-199a-4355-9b40-cee05056bbb9",
+      "status": "completed",
+      "prize_pool_gross_cents": 30000,
+      "prize_pool_net_cents": 24000,
+      "total_distributed_cents": 24000,
+      "platform_fee_cents": 6000,
+      "total_winners": 3
+    }
+  ],
+  "prize_distributions": {
+    "paid": 24000,
+    "n": 3
+  },
+  "ledger_by_type": [
+    {
+      "type": "contest_entry",
+      "total": -30000
+    },
+    {
+      "type": "prize_credit",
+      "total": 24000
+    }
+  ]
+}
+OK: no critical mismatches detected

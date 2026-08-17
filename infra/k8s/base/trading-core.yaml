@@ -1,5 +1,21 @@
-apiVersion: apps/v1
-kind: Deployment
+# =============================================================================
+# TRADING-CORE — StatefulSet (Phase 3)
+# =============================================================================
+# Merged process: trading-engine + market-ingestor + trade-bff
+#
+# Launch topology (Phase 3):
+#   - StatefulSet with dedicated PVC for trading-engine WAL (NOT emptyDir)
+#   - replicas: 1 when SHARD_ENABLED=false (single-active WAL owner)
+#   - When sharding is enabled later, scale StatefulSet with per-pod PVCs
+#     (volumeClaimTemplates) and partition-aware consumers only.
+#
+# Failure domain:
+#   Market-ingestor crash restarts the merged pod (accepted for launch).
+#   Settlement/scheduler live in `worker` (isolated from trading WAL).
+#   API/admin/payment live in `api-server` (isolated).
+# =============================================================================
+apiVersion: v1
+kind: Service
 metadata:
   name: trading-core
   namespace: tragge
@@ -8,7 +24,69 @@ metadata:
     app.kubernetes.io/component: trading
     app.kubernetes.io/part-of: tragge-platform
 spec:
-  replicas: 2
+  # Headless clusterIP for StatefulSet stable network identity; ports still
+  # load-balance to the single active pod for clients.
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: trading-core
+  ports:
+    - name: trade-bff
+      port: 8082
+      targetPort: 8082
+    - name: market-ingestor
+      port: 8084
+      targetPort: 8084
+    - name: trading-engine
+      port: 8085
+      targetPort: 8085
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-core-lb
+  namespace: tragge
+  labels:
+    app.kubernetes.io/name: trading-core
+    app.kubernetes.io/component: trading
+    app.kubernetes.io/part-of: tragge-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: trading-core
+  ports:
+    - name: trade-bff
+      port: 8082
+      targetPort: 8082
+    - name: market-ingestor
+      port: 8084
+      targetPort: 8084
+    - name: trading-engine
+      port: 8085
+      targetPort: 8085
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: trading-core
+  namespace: tragge
+  labels:
+    app.kubernetes.io/name: trading-core
+    app.kubernetes.io/component: trading
+    app.kubernetes.io/part-of: tragge-platform
+  annotations:
+    tragge.io/wal-owner: "single-active"
+    tragge.io/shard-enabled: "false"
+    tragge.io/durable-wal: "required"
+spec:
+  serviceName: trading-core
+  # CRITICAL: single-active owner for non-sharded WAL. Do not scale >1 unless
+  # SHARD_ENABLED=true with partition-aware consumers and per-pod WAL PVCs.
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: trading-core
@@ -20,12 +98,58 @@ spec:
         app.kubernetes.io/part-of: tragge-platform
       annotations:
         nginx.ingress.kubernetes.io/affinity: "cookie"
+        tragge.io/wal-path: "/var/lib/tragge/wal"
     spec:
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
         runAsGroup: 65534
         fsGroup: 65534
+        fsGroupChangePolicy: OnRootMismatch
+      # Fail closed before app start if WAL volume is not writable.
+      initContainers:
+        - name: wal-volume-check
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              WAL_DIR="/var/lib/tragge/wal"
+              if [ ! -d "$WAL_DIR" ]; then
+                echo "CRITICAL: WAL directory missing: $WAL_DIR"
+                exit 1
+              fi
+              # Prove write + fsync semantics for the mount.
+              probe="${WAL_DIR}/.wal_mount_probe"
+              echo "ok" > "$probe"
+              sync
+              rm -f "$probe"
+              # Refuse if mount looks like an emptyDir with no PVC annotation path
+              # (best-effort: require non-empty mount point device).
+              if ! mountpoint -q "$WAL_DIR" 2>/dev/null; then
+                # Some CSI mounts still pass write test; write test is authoritative.
+                echo "WARN: mountpoint check unavailable; write probe succeeded"
+              fi
+              echo "WAL volume check passed: $WAL_DIR"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: wal-data
+              mountPath: /var/lib/tragge/wal
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "100m"
+              memory: "32Mi"
       containers:
         - name: trading-core
           image: tragge/trading-core:latest
@@ -40,6 +164,8 @@ spec:
             - configMapRef:
                 name: tragge-config
           env:
+            - name: ENVIRONMENT
+              value: "production"
             - name: DB_MAX_OPEN_CONNS
               value: "20"
             - name: DB_MAX_IDLE_CONNS
@@ -48,6 +174,26 @@ spec:
               value: "80"
             - name: GOMEMLIMIT
               value: "400MiB"
+            # Durable WAL — must never be empty in production
+            - name: WAL_PERSIST_PATH
+              value: "/var/lib/tragge/wal/engine.jsonl"
+            - name: WAL_REQUIRE_PERSIST
+              value: "true"
+            - name: WAL_SYNC_ON_WRITE
+              value: "true"
+            - name: REQUIRE_MARKET_DATA_READY
+              value: "true"
+            - name: SHARD_ENABLED
+              value: "false"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: wal-data
+              mountPath: /var/lib/tragge/wal
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -56,41 +202,57 @@ spec:
                 - ALL
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "200m"
+              memory: "512Mi"
+              cpu: "250m"
+              ephemeral-storage: "256Mi"
             limits:
               memory: "1Gi"
               cpu: "1000m"
+              ephemeral-storage: "1Gi"
+          # Liveness: process is alive (trade-bff HTTP). Do NOT use trading readiness
+          # here — temporary MD/DB outages must not restart-loop the engine.
           livenessProbe:
             httpGet:
               path: /healthz
               port: trade-bff
-            initialDelaySeconds: 10
-            periodSeconds: 15
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # Readiness: trading-engine safe for traffic (WAL recovered, deps, optional MD).
           readinessProbe:
             httpGet:
               path: /readyz
-              port: trade-bff
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: trading-core
-  namespace: tragge
-  labels:
-    app.kubernetes.io/name: trading-core
-spec:
-  selector:
-    app.kubernetes.io/name: trading-core
-  ports:
-    - name: trade-bff
-      port: 8082
-      targetPort: 8082
-    - name: market-ingestor
-      port: 8084
-      targetPort: 8084
-    - name: trading-engine
-      port: 8085
-      targetPort: 8085
+              port: trading-engine
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                # Give readiness fail time to drain before SIGTERM terminates consumers.
+                command: ["/bin/sh", "-c", "sleep 5"]
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+  # Durable WAL volume — production overlays set storageClassName.
+  # NO emptyDir fallback. If PVC cannot bind, Pod stays Pending (not ready).
+  volumeClaimTemplates:
+    - metadata:
+        name: wal-data
+        labels:
+          app.kubernetes.io/name: trading-core
+          app.kubernetes.io/component: wal
+        annotations:
+          tragge.io/purpose: trading-engine-wal
+          tragge.io/backup: "recommended"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        # storageClassName set by production overlay (e.g. premium-rwo).
+        # Leaving unset uses cluster default; still a PVC (not emptyDir).

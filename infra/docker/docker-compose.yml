@@ -8,6 +8,7 @@ networks:
 
 volumes:
   postgres_data:
+  trading_core_wal:
   redpanda_data:
   redis_data:
   uploads_data:
@@ -353,7 +354,8 @@ services:
       MAX_DEPOSIT_CENTS: ${MAX_DEPOSIT_CENTS:-1000000}
       MIN_WITHDRAW_CENTS: ${MIN_WITHDRAW_CENTS:-1000}
       # Staging payment modes
-      APP_ENV: ${APP_ENV:-staging}
+      # Must match ENVIRONMENT (user-bff resolveSecurityEnvironment rejects mismatches).
+      APP_ENV: ${APP_ENV:-${ENVIRONMENT:-development}}
       SEPAL_MODE: ${SEPAL_MODE:-sandbox}
       SEPAL_API_KEY: ${SEPAL_API_KEY:-test}
       SEPAL_BASE_URL: ${SEPAL_BASE_URL:-https://sepal.ir}
@@ -424,6 +426,10 @@ services:
       dockerfile: apps/trading-core/Dockerfile
     container_name: tragge_trading_core
     restart: unless-stopped
+    # Local staging: image USER is 65534 but named WAL volume is root-owned on first
+    # create. Start as root only long enough for entrypoint ownership fix is not
+    # available in busybox; run as root for Compose local only (K8s uses fsGroup).
+    user: "0:0"
     deploy:
       resources:
         limits:
@@ -503,7 +509,18 @@ services:
       NOTIFICATIONS_TOPIC: notifications.v1
       SHARD_ID: "0"
       SHARD_COUNT: "1"
-      SHARD_ENABLED: "false"
+      SHARD_ENABLED: ${SHARD_ENABLED:-false}
+      # Phase 3/5-Lite: durable WAL via named volume (local analog of PVC; not emptyDir).
+      # Survives container recreate. Never remove trading_core_wal for restart tests.
+      WAL_PERSIST_PATH: ${WAL_PERSIST_PATH:-/var/lib/tragge/wal/engine.jsonl}
+      WAL_REQUIRE_PERSIST: ${WAL_REQUIRE_PERSIST:-false}
+      WAL_SYNC_ON_WRITE: ${WAL_SYNC_ON_WRITE:-true}
+      REQUIRE_MARKET_DATA_READY: ${REQUIRE_MARKET_DATA_READY:-false}
+      # Product policy FIXED_PRODUCT §5.5: min order QTY=1; full contest allocation tradable
+      QTY_MIN_PER_TRADE: ${QTY_MIN_PER_TRADE:-1}
+      QTY_MAX_PCT_OF_TOTAL: ${QTY_MAX_PCT_OF_TOTAL:-100}
+    volumes:
+      - trading_core_wal:/var/lib/tragge/wal
     secrets:
       - redis_password
       - postgres_app_password

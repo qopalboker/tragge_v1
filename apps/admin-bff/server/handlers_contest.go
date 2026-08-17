@@ -152,6 +152,11 @@ func (a *App) handleCreateContest(w http.ResponseWriter, r *http.Request) {
 	if req.MinParticipants == 0 {
 		req.MinParticipants = 2
 	}
+	// Paid contests auto-start when schedule + quorum are met (product §5.3).
+	// Free practice contests keep caller AutoStart (often true from generator).
+	if !req.IsFree {
+		req.AutoStart = true
+	}
 	if req.CommissionRate == 0 && !req.IsFree {
 		req.CommissionRate = 20.00
 	}
@@ -690,21 +695,42 @@ func (a *App) handleUpdateContest(w http.ResponseWriter, r *http.Request) {
 	var currentStatus string
 	var currentIsFree bool
 	var currentEntryFeeCents int
-	err = tx.QueryRowContext(ctx, `SELECT status, is_free, entry_fee_cents FROM contests WHERE id = $1 FOR UPDATE`, contestID).Scan(&currentStatus, &currentIsFree, &currentEntryFeeCents)
+	var economicsLocked sql.NullTime
+	err = tx.QueryRowContext(ctx,
+		`SELECT status, is_free, entry_fee_cents, economics_locked_at FROM contests WHERE id = $1 FOR UPDATE`,
+		contestID,
+	).Scan(&currentStatus, &currentIsFree, &currentEntryFeeCents, &economicsLocked)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": adminMsg.ContestNotFound})
+		// Pre-migration fallback without economics_locked_at.
+		err = tx.QueryRowContext(ctx,
+			`SELECT status, is_free, entry_fee_cents FROM contests WHERE id = $1 FOR UPDATE`,
+			contestID,
+		).Scan(&currentStatus, &currentIsFree, &currentEntryFeeCents)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": adminMsg.ContestNotFound})
+				return
+			}
+			a.log().Error("Failed to check contest status", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
 			return
 		}
-		a.log().Error("Failed to check contest status", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
-		return
 	}
 	if currentStatus != "draft" && currentStatus != "scheduled" {
 		writeJSON(w, http.StatusConflict, map[string]string{
 			"error": adminMsg.CannotModifyState,
 		})
 		return
+	}
+	// Economics lock: reject fee/timing mutation after first join lock.
+	if economicsLocked.Valid {
+		if req.EntryFeeCents != nil || req.PlatformFeeBps != nil || req.StartsAt != nil || req.EndsAt != nil || req.CommissionRate != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error":   "economics_locked",
+				"message": "contest economics are immutable after the first participant join",
+			})
+			return
+		}
 	}
 
 	// Cross-field validation: ensure is_free and entry_fee_cents are consistent
@@ -755,6 +781,7 @@ func (a *App) handleUpdateContest(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 	if req.PlatformFeeBps != nil {
+		// Canonical fee only — do not write commission_rate as authority.
 		updates = append(updates, "platform_fee_bps = $"+itoa(argIdx))
 		args = append(args, *req.PlatformFeeBps)
 		argIdx++

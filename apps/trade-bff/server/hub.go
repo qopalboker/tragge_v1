@@ -546,15 +546,18 @@ type WSMessage struct {
 // WSOrderRequest represents an incoming order via WebSocket
 type WSOrderRequest struct {
 	Type       string              `json:"type"` // "order_request"
-	RequestID  string              `json:"request_id"`
-	Symbol     string              `json:"symbol"`
-	Side       contracts.OrderSide `json:"side"`       // "BUY" or "SELL"
-	OrderType  contracts.OrderType `json:"order_type"` // "MARKET", "BUY_LIMIT", etc.
-	Qty        int64               `json:"qty"`
-	LimitPrice *float64            `json:"limit_price,omitempty"`
-	StopPrice  *float64            `json:"stop_price,omitempty"`
-	TakeProfit *float64            `json:"take_profit,omitempty"`
-	StopLoss   *float64            `json:"stop_loss,omitempty"`
+	RequestID  string              `json:"request_id"` // Correlation only (ack/reject matching)
+	// ClientOrderID is the durable logical submission identity (UUID).
+	// Retries MUST reuse the same value. Maps 1:1 to engine order_id.
+	ClientOrderID string              `json:"client_order_id,omitempty"`
+	Symbol        string              `json:"symbol"`
+	Side          contracts.OrderSide `json:"side"`       // "BUY" or "SELL"
+	OrderType     contracts.OrderType `json:"order_type"` // "MARKET", "BUY_LIMIT", etc.
+	Qty           int64               `json:"qty"`
+	LimitPrice    *float64            `json:"limit_price,omitempty"`
+	StopPrice     *float64            `json:"stop_price,omitempty"`
+	TakeProfit    *float64            `json:"take_profit,omitempty"`
+	StopLoss      *float64            `json:"stop_loss,omitempty"`
 }
 
 // WSOrderAck represents order acknowledgment sent to client

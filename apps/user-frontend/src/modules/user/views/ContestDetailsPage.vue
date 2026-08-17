@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
 import { useContestsStore, type Contest } from '@/stores/contests';
@@ -29,6 +29,8 @@ const loading = ref(true);
 const loadingParticipants = ref(false);
 const error = ref<string | null>(null);
 const showJoinModal = ref(false);
+/** server_time - Date.now() for countdown presentation sync */
+const serverTimeDeltaMs = ref(0);
 
 // Contest ID from route
 const contestId = computed(() => route.params.contestId as string);
@@ -49,15 +51,10 @@ const showStatusBanner = computed(() => {
   return isPreStart && isPaid;
 });
 
+// Authoritative server field only — never invent prize economics in the UI.
 const estimatedPrizePool = computed(() => {
   if (!contest.value) return 0;
-  if (contest.value.estimated_prize_pool_cents) {
-    return contest.value.estimated_prize_pool_cents;
-  }
-  // Estimate based on current participants and entry fee
-  // Assuming 83% of entry fees go to prize pool (17% platform fee)
-  const participantCount = contest.value.participant_count ?? 0;
-  return Math.round(participantCount * contest.value.entry_fee_cents * 0.83);
+  return contest.value.estimated_prize_pool_cents ?? 0;
 });
 
 // Check balance for paid contests
@@ -80,11 +77,36 @@ async function fetchContestDetails(): Promise<void> {
   error.value = null;
 
   try {
-    const response = await api.get<Contest & { user_joined?: boolean }>(`/api/user/contests/${contestId.value}`);
-    contest.value = response.data;
+    const response = await api.get<
+      Contest & {
+        user_joined?: boolean;
+        server_time?: string;
+        min_participants?: number;
+        current_participants?: number;
+        start_time?: string;
+        end_time?: string;
+        prize_pool_cents?: number;
+      }
+    >(`/api/user/contests/${contestId.value}`);
+    const data = response.data;
+    // Normalize details API (start_time) → store shape (starts_at)
+    contest.value = {
+      ...data,
+      starts_at: data.starts_at || data.start_time || '',
+      ends_at: data.ends_at || data.end_time || '',
+      participant_count: data.participant_count ?? data.current_participants ?? 0,
+      min_participants: data.min_participants ?? 2,
+      estimated_prize_pool_cents: data.estimated_prize_pool_cents ?? data.prize_pool_cents ?? 0,
+    };
+    if (data.server_time) {
+      const serverMs = new Date(data.server_time).getTime();
+      if (!Number.isNaN(serverMs)) {
+        serverTimeDeltaMs.value = serverMs - Date.now();
+      }
+    }
 
     // Sync join status from contest details API response
-    if (response.data.user_joined) {
+    if (data.user_joined) {
       contestsStore.joinedContestIds.add(contestId.value);
     }
 
@@ -150,9 +172,8 @@ async function handleJoinConfirm(): Promise<void> {
     // Refresh data
     await fetchContestDetails();
     await fetchParticipants();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : t('common.error');
-    toast.error(message);
+  } catch {
+    // Global API interceptor already surfaces a single user-friendly toast.
   }
 }
 
@@ -164,8 +185,16 @@ function handleViewResults(): void {
 // Handle enter trading
 function handleEnterTrading(): void {
   if (!contest.value) return;
+  if (contest.value.status !== 'running') {
+    toast.error(t('contestDetails.tradingLocked') || 'Trading unlocks when the contest starts');
+    void fetchContestDetails();
+    return;
+  }
   redirectToTrade(contest.value.id);
 }
+
+// Periodic re-fetch so countdown expiry surfaces real backend status (not FE invent).
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 // Go back
 function goBack(): void {
@@ -196,6 +225,23 @@ onMounted(async () => {
 
   await fetchContestDetails();
   await fetchParticipants();
+
+  refreshTimer = setInterval(() => {
+    if (
+      document.visibilityState === 'visible' &&
+      contest.value &&
+      ['registration_open', 'scheduled', 'registration_closed', 'running'].includes(contest.value.status)
+    ) {
+      void fetchContestDetails();
+    }
+  }, 15_000);
+});
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
 });
 </script>
 
@@ -306,12 +352,14 @@ onMounted(async () => {
             :market-type="contest.market_type"
             :participant-count="contest.participant_count ?? 0"
             :max-participants="contest.max_participants"
+            :min-participants="contest.min_participants ?? 2"
             :qty-total="contest.qty_total"
             :entry-fee-cents="contest.entry_fee_cents"
             :is-joined="isJoined"
             :is-joining="isJoining"
             :can-join="canJoin"
             :status="contest.status"
+            :server-time-delta-ms="serverTimeDeltaMs"
             @join="handleJoinClick"
             @enter-trading="handleEnterTrading"
             @view-results="handleViewResults"

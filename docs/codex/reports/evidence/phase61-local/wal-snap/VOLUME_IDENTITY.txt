@@ -1,0 +1,6 @@
+TRAGGE_LOCAL_WAL
+classification=LOCAL-VM-HOST-PATH
+disk=D: (non-OS volume)
+path=D:\tragge-local-infra\wal
+companion_vhdx=D:\tragge-local-infra\wal-disk.vhdx
+note=Docker Desktop cannot bind-mount into VHD folder mounts; VHD retained for detach/reattach of disk image

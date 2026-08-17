@@ -1,0 +1,16 @@
+PASS  [LOCAL-VM] Host forensics + WAL host path
+PASS  [LOCAL-VM] WSL2 / Linux VM platform available
+PASS  [LOCAL-VM] Companion VHD detach/reattach (data preserve)
+PASS  [LOCAL-VM] Full WSL/VM reboot drill
+PASS  [LOCAL-CONTAINER] Trading ready + WAL recovery
+PASS  [LOCAL-CONTAINER] Container recreate WAL survive
+PASS  [LOCAL-CONTAINER] Compose service restart recovery
+PASS  [LOCAL-CONTAINER] Full Docker Engine restart
+PASS  [LOCAL-CONTAINER] Financial + trading regression
+PASS  [LOCAL-CONTAINER] Single-active trading-core
+PASS  [LOCAL-OBJECT-STORAGE] MinIO backup upload + integrity
+PASS  [LOCAL-OBJECT-STORAGE] Clean restore + schema
+PASS  [LOCAL-OBJECT-STORAGE] Financial reconcile (live path)
+PASS  [LOCAL-ROLLBACK] Release A→B→A compose rollback
+
+PHASE 6.1-LOCAL-INFRA — PASS

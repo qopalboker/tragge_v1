@@ -111,7 +111,12 @@
         <!-- Quick trade panel (only for selected symbol) -->
         <div v-if="item.symbol === selectedSymbol" class="tp-qtp">
           <div class="tp-qtrow">
-            <button class="tp-qtsb" @click="placeTrade('sell', item)">
+            <button
+              class="tp-qtsb"
+              type="button"
+              :disabled="submitting"
+              @click="placeTrade('sell', item)"
+            >
               <span class="tp-qt-l">{{ t('order.sell') }}</span>
               <span class="tp-qt-p">{{ item.bid > 0 ? formatPrice(item.bid, item.decimals) : '—' }}</span>
             </button>
@@ -122,18 +127,25 @@
                 class="tp-qtlot-i"
                 :value="quantity"
                 @input="updateQuantity($event)"
+                @keydown.enter.prevent
                 min="1"
                 :max="maxQty"
                 step="1"
+                :disabled="submitting"
               />
               <div class="tp-qtlot-u">QTY: {{ quantity }} / {{ maxQty }}</div>
               <div class="tp-qtlot-b">
-                <button class="tp-qtpm" @click="adjustQty(-1)">−</button>
-                <button class="tp-qtpm" @click="adjustQty(1)">+</button>
+                <button class="tp-qtpm" type="button" :disabled="submitting" @click="adjustQty(-1)">−</button>
+                <button class="tp-qtpm" type="button" :disabled="submitting" @click="adjustQty(1)">+</button>
               </div>
             </div>
 
-            <button class="tp-qtbb" @click="placeTrade('buy', item)">
+            <button
+              class="tp-qtbb"
+              type="button"
+              :disabled="submitting"
+              @click="placeTrade('buy', item)"
+            >
               <span class="tp-qt-l">{{ t('order.buy') }}</span>
               <span class="tp-qt-p">{{ item.ask > 0 ? formatPrice(item.ask, item.decimals) : '—' }}</span>
             </button>
@@ -190,6 +202,8 @@ const props = defineProps<{
   quantity: number
   maxQty: number
   favorites: string[]
+  /** True while an order submission is in flight (disables Buy/Sell). */
+  submitting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -240,6 +254,7 @@ function selectSymbol(symbol: string) {
 }
 
 function placeTrade(side: 'buy' | 'sell', item: WatchlistItem) {
+  if (props.submitting) return
   emit('trade', side, item.symbol, props.quantity)
 }
 

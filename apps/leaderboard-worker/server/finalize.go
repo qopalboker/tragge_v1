@@ -518,7 +518,9 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 	var payout *ContestPayout
 	var contestAlertInfo ContestInfoAlert
 
-	// STEP 1: Calculate payouts (skip if already done)
+	// STEP 1: PREVIEW payouts for notifications only (skip if already done).
+	// Final financial payout amounts are owned by settlement-service.
+	// Values stored here must never drive wallet credits (P0-FIN-05).
 	if !finState.PayoutsCalculated {
 		// Use stored prize pool if available (accumulated during joins), otherwise calculate
 		if contestInfo.PrizePoolNetCents > 0 {
@@ -720,8 +722,9 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 	// Send contest ended emails to ALL participants with personalized results
 	a.sendContestEndedEmails(ctx, contestID, contestInfo, rankedUsers, payout)
 
-	// Record settlement and prize distributions for audit
-	a.recordSettlementAndPrizeDistributions(ctx, contestID, payout, rankedUsers)
+	// Settlement records + prize ledger credits are owned exclusively by
+	// settlement-service. Leaderboard must not write contest_settlements or
+	// prize_distributions (P0-FIN-05).
 
 	// Update Redis global leaderboard (leaderboard:global sorted set)
 	if err := a.updateGlobalLeaderboard(ctx, contestID, rankedUsers, payout.ParticipantsCount, contestInfo.EndTime); err != nil {

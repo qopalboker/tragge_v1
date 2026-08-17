@@ -1,0 +1,86 @@
+
+--- Playwright E2E Test Suite ---
+Running 8 project(s)
+Workers: 1
+Retries: 0
+-----------------------------------
+
+Mode: INTEGRATION (tests will call real backend APIs)
+
+Frontend health checks:
+  ✓ user-frontend (http://127.0.0.1:5173) — 200
+  ✓ admin-frontend (http://127.0.0.1:5174) — 200
+
+
+Running 17 tests using 1 worker
+
+  ok  1 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:47:3 › RC User — auth › login, refresh persistence, protected redirect, logout (43.3s)
+  ok  2 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 320x568 (43.2s)
+  ok  3 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 360x800 (44.1s)
+  x   4 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 375x812 (2.0m)
+  ok  5 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 390x844 (43.4s)
+  ok  6 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 414x896 (43.3s)
+  ok  7 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 430x932 (44.1s)
+  ok  8 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:132:3 › RC User — wallet + contests + join › wallet page shows API balance (43.2s)
+  ok  9 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:141:3 › RC User — wallet + contests + join › contest list + detail load real data (46.2s)
+  ok 10 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:158:3 › RC User — wallet + contests + join › join free running contest when available (1.5m)
+  ok 11 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:243:3 › RC User — trading route › trade page loads for running free contest when joined (47.0s)
+  ok 12 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:283:3 › RC User — support + challenges + bottom nav › support empty/create surface + bottom nav routes (43.4s)
+  ok 13 [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:299:3 › RC User — support + challenges + bottom nav › tablet and desktop dashboards render (1.1m)
+  ok 14 [rc-admin-integration] › apps\admin-frontend\e2e\rc-browser-admin.spec.ts:88:3 › RC Admin — auth › login with MFA and session persists (32.5s)
+  ok 15 [rc-admin-integration] › apps\admin-frontend\e2e\rc-browser-admin.spec.ts:101:3 › RC Admin — users + wallet credit › open user and credit wallet via browser (34.4s)
+  ok 16 [rc-admin-integration] › apps\admin-frontend\e2e\rc-browser-admin.spec.ts:173:3 › RC Admin — contests › contests list loads (25.6s)
+  ok 17 [rc-admin-integration] › apps\admin-frontend\e2e\rc-browser-admin.spec.ts:185:3 › RC Admin — authorization isolation › user frontend cannot reach admin API (browser origin isolation check via API) (28ms)
+
+--- E2E Test Suite Completed ---
+Projects: 8
+--------------------------------
+
+
+
+  1) [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 375x812 
+
+    [31mTest timeout of 120000ms exceeded.[39m
+
+    Error: page.waitForTimeout: Test timeout of 120000ms exceeded.
+
+      35 |       const txt = (await err.textContent().catch(() => '')) || '';
+      36 |       if (/unavailable|rate|too many|زیاد/i.test(txt) || attempt < 4) {
+    > 37 |         await page.waitForTimeout(3000 * (attempt + 1));
+         |                    ^
+      38 |         continue;
+      39 |       }
+      40 |       throw new Error(`login failed: ${txt || 'no redirect'}`);
+        at loginUser (D:\Grok\tragge_v0-main\tragge_v0-main\apps\user-frontend\e2e\rc-browser-user.spec.ts:37:20)
+        at D:\Grok\tragge_v0-main\tragge_v0-main\apps\user-frontend\e2e\rc-browser-user.spec.ts:79:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\rc-browser-user-RC-User-—--8a9b8-hierarchy-hierarchy-375x812-rc-user-integration\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\rc-browser-user-RC-User-—--8a9b8-hierarchy-hierarchy-375x812-rc-user-integration\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\rc-browser-user-RC-User-—--8a9b8-hierarchy-hierarchy-375x812-rc-user-integration\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\rc-browser-user-RC-User-—--8a9b8-hierarchy-hierarchy-375x812-rc-user-integration\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [rc-user-integration] › apps\user-frontend\e2e\rc-browser-user.spec.ts:77:5 › RC User — mobile home hierarchy › hierarchy @ 375x812 
+  16 passed (13.6m)
+
+(node:28512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

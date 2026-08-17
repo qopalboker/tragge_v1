@@ -1,0 +1,85 @@
+TEST_B_DOCKER_ENGINE_RESTART 2026-08-16T18:13:32.9874621+03:30
+procedure=docker desktop restart (Docker Desktop CLI — restarts full Desktop + engine, not container-only)
+pre_proof=closure-pre-20260816180606
+
+mechanism=docker desktop restart
+engine_proof=closure-engine-20260816181333
+engine_proof_host=True
+cli: G£ô Starting Docker Desktop
+restart_cli_exit=0 restart_done_at=2026-08-16T18:14:07.5831224+03:30
+engine_back_attempt=1 version=29.7.2
+wal_exists=True
+closure_proof=closure-pre-20260816180606
+
+engine_proof_content=closure-engine-20260816181333
+
+docker :  Container tragge_trading_core Running 
+At line:49 char:1
++ docker compose -f docker-compose.yml -f docker-compose.lite.yml -f do ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Container tragge_trading_core Running :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Container tragge_redpanda Running 
+ Container tragge_minio Running 
+ Container tragge_redis Running 
+ Container tragge_worker Running 
+ Container tragge_postgres Running 
+ Container tragge_api_server Running 
+ Container tragge_minio Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_redpanda Healthy 
+ Container tragge_minio Healthy 
+ Container tragge_kafka_init Starting 
+ Container tragge_minio_init Starting 
+ Container tragge_kafka_init Started 
+ Container tragge_postgres Waiting 
+ Container tragge_postgres Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_kafka_init Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_postgres Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_kafka_init Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_kafka_init Waiting 
+ Container tragge_minio_init Started 
+ Container tragge_redpanda Healthy 
+ Container tragge_postgres Healthy 
+ Container tragge_postgres Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_redpanda Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_redpanda Healthy 
+ Container tragge_postgres Healthy 
+ Container tragge_kafka_init Exited 
+ Container tragge_kafka_init Exited 
+ Container tragge_kafka_init Exited 
+
+readyz={"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status":"healthy"},"market_data":{"ready":false,"reason":"no_valid_tick"},"redis":"healthy","service":"trading-engine","status":"ready","timestamp":"2026-08-16T14:44:51Z","wal_recovery":"ok"}
+
+proofs_survived=True
+wal_recovery_ok=True
+recovery_ms=78411
+health_gate_exit=0
+health_gate_pass=False
+health_gate_tail=IL  api_user_bff_healthz
+PASS  worker_up GÇö Up 39 seconds (healthy)
+FAIL  gateway_port_8080 GÇö closed (optional if LB elsewhere)
+PASS  postgres_ready GÇö /var/run/postgresql:5432 - accepting connections
+PASS  redis_ping GÇö PONG
+==================================
+PRODUCTION HEALTH GÇö PASS
+
+phase11=True
+phase2=True
+reconcile=True
+HOST_DOCKER_RESTART_PASS
+LOCAL_DOCKER_ENGINE_RESTART_PASS
+PASS
+classification=LOCAL-CONTAINER+LOCAL-VM
+NOT cloud production
+not_container_only_restart=true

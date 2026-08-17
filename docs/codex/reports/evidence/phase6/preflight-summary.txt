@@ -1,0 +1,28 @@
+PHASE 6 PRODUCTION PREFLIGHT — 2026-08-16T03:20Z
+================================================
+node scripts/phase4/preflight.mjs
+  kubectl (preflight PATH detect) = MISSING / PRESENT via Docker Desktop bin only when PATH set
+  docker = PRESENT (Docker Desktop 29.7.2)
+  helm = MISSING
+  aws / az / gcloud / terraform = MISSING
+  k8s_cluster = UNAVAILABLE (kubectl default API localhost:8080 refused)
+  storageclasses = UNAVAILABLE
+  csi = UNAVAILABLE
+  live_qualification_possible = false
+  live_compose_qualification_possible = false (default staging_platform=kubernetes)
+
+kubectl cluster-info:
+  Unable to connect to the server: dial tcp [::1]:8080 refused
+
+node scripts/phase5/provision-checklist.mjs
+  phase5_provision_ready = false
+  k8s_cluster = UNREACHABLE
+
+node scripts/phase4/launch-gate.mjs
+  PRODUCTION — NO-GO (blocked live evidence gates)
+
+Local Compose (NOT production evidence):
+  ports 5432/6379/9092 open when Compose stack running
+  Phase 4.1-Lite PASS = LOCAL STAGING FULLY QUALIFIED only
+
+CTO decision: STOP at Task 1/2 — cannot provision or qualify production without cluster + cloud.

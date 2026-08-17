@@ -1,0 +1,8 @@
+{
+  "platform": "win32",
+  "arch": "x64",
+  "wal_host": "D:/tragge-local-infra/wal",
+  "minio_host": "D:/tragge-local-infra/minio",
+  "docker": "29.7.2",
+  "wal_identity": "TRAGGE_LOCAL_WAL\nclassification=LOCAL-VM-HOST-PATH\ndisk=D: (non-OS volume)\npath=D:\\tragge-local-infra\\wal\ncompanion_vhdx=D:\\tragge-local-infra\\wal-disk.vhdx\nnote=Docker Desktop cannot bind-mount into VHD folder mounts; VHD retained for detach/reattach of disk image\r\n"
+}

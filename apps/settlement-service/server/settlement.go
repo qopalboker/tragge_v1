@@ -600,13 +600,17 @@ func (s *SettlementService) calculatePrizes(rankings []contracts.FinalRanking, c
 	}
 
 	if prizePoolNet <= 0 {
-		// Fallback: recalculate (legacy contests without stored pool)
+		// Fallback: recalculate from locked/contest fee only — never use mutable
+		// global defaults when economics are locked.
 		platformFeeBps := contestInfo.PlatformFeeBps
-		if platformFeeBps == 0 {
+		if contestInfo.EconomicsLocked && contestInfo.LockedPlatformFeeBps > 0 {
+			platformFeeBps = contestInfo.LockedPlatformFeeBps
+		} else if platformFeeBps == 0 && !contestInfo.EconomicsLocked {
 			platformFeeBps = s.app.config.PlatformFeeBps
 		}
-		platformFee = (prizePoolGross * int64(platformFeeBps)) / 10000
-		prizePoolNet = prizePoolGross - platformFee
+		// Floor-net formula matches packages/scoring/economics.CalculatePool.
+		prizePoolNet = (prizePoolGross * int64(10000-platformFeeBps)) / 10000
+		platformFee = prizePoolGross - prizePoolNet
 	}
 
 	pool := PrizePool{

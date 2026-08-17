@@ -6,6 +6,7 @@ export const SensitiveAdminAction = {
   UserRolesUpdate: 'user.roles.update',
   ElevatedUserCreate: 'user.create.elevated',
   AdminMFAReset: 'admin.mfa.reset',
+  AdminMFAPolicy: 'admin.mfa.policy',
 } as const;
 
 export type SensitiveAdminAction = typeof SensitiveAdminAction[keyof typeof SensitiveAdminAction];

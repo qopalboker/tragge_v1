@@ -49,6 +49,18 @@ type EngineMetrics struct {
 
 	// Redis price fallback metric
 	RedisPriceFallbackTotal prometheus.Counter
+
+	// Phase 2 operational minimum
+	WALReplaySuccess        prometheus.Counter
+	WALReplayFailure        prometheus.Counter
+	EngineReady             prometheus.Gauge
+	MarketTicksAccepted     prometheus.Counter
+	MarketTicksRejected     prometheus.Counter
+	MarketTickRejectReasons *prometheus.CounterVec
+	OrderProcessingErrors   prometheus.Counter
+	FillCreationErrors      prometheus.Counter
+	PositionUpdateErrors    prometheus.Counter
+	FinalizationFailures    prometheus.Counter
 }
 
 // NewEngineMetrics creates and registers metrics for the trading engine.
@@ -59,6 +71,58 @@ func NewEngineMetrics(registry prometheus.Registerer, namespace string) *EngineM
 			Name:      "orders_rejected_stale_price_total",
 			Help:      "Total number of orders rejected due to stale price data",
 		}, []string{"contest_id", "order_type"}),
+
+		// Phase 2 minimum operational signals
+		WALReplaySuccess: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "wal_replay_success_total",
+			Help:      "Successful WAL recovery/replay completions",
+		}),
+		WALReplayFailure: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "wal_replay_failure_total",
+			Help:      "Failed WAL recovery/replay attempts (engine not ready)",
+		}),
+		EngineReady: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "ready",
+			Help:      "1 when trading-engine is ready to accept trading traffic",
+		}),
+		MarketTicksAccepted: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "market_ticks_accepted_total",
+			Help:      "Accepted market ticks applied to the price book",
+		}),
+		MarketTicksRejected: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "market_ticks_rejected_total",
+			Help:      "Rejected market ticks (invalid timestamp/price/regression)",
+		}),
+		MarketTickRejectReasons: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "market_tick_reject_reasons_total",
+			Help:      "Market tick rejection reasons",
+		}, []string{"reason"}),
+		OrderProcessingErrors: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "order_processing_errors_total",
+			Help:      "Order processing hard errors",
+		}),
+		FillCreationErrors: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "fill_creation_errors_total",
+			Help:      "Fill insert/creation failures",
+		}),
+		PositionUpdateErrors: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "position_update_errors_total",
+			Help:      "Position update failures",
+		}),
+		FinalizationFailures: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "finalization_failures_total",
+			Help:      "Contest finalization / bulk close failures",
+		}),
 
 		PriceStalenessSeconds: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -162,6 +226,16 @@ func NewEngineMetrics(registry prometheus.Registerer, namespace string) *EngineM
 		metrics.OrdersProcessedTotal,
 		metrics.KafkaProduceFailures,
 		metrics.RedisPriceFallbackTotal,
+		metrics.WALReplaySuccess,
+		metrics.WALReplayFailure,
+		metrics.EngineReady,
+		metrics.MarketTicksAccepted,
+		metrics.MarketTicksRejected,
+		metrics.MarketTickRejectReasons,
+		metrics.OrderProcessingErrors,
+		metrics.FillCreationErrors,
+		metrics.PositionUpdateErrors,
+		metrics.FinalizationFailures,
 	)
 
 	return metrics
@@ -223,10 +297,18 @@ type Engine struct {
 
 	// P3-1: Monotonic sequence counter for PnL delta ordering
 	pnlSeqNum atomic.Uint64
+
+	// Contest trading gate (optional): when set, returns false if trading is disabled
+	// for the contest (settling/completed/cancelled/paused). Wired from App.
+	contestTradingEnabled func(contestID string) bool
+
+	// Market-data readiness: require first valid tick before market orders (configurable).
+	// When RequireMarketDataReady is true, ProcessOrder rejects without fresh book.
+	requireMarketDataReady atomic.Bool
 }
 
 // NewEngine creates a new trading engine.
-func NewEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client, config *Config, logger *zap.Logger) *Engine {
+func NewEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client, config *Config, logger *zap.Logger) (*Engine, error) {
 	e := &Engine{
 		db:              db,
 		redis:           redis,
@@ -250,16 +332,21 @@ func NewEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client, confi
 	}
 
 	// Initialize WAL (Write-Ahead Log) for state consistency - logger will be set later
-	e.wal = NewWriteAheadLog(WALConfig{
+	wal, err := NewWriteAheadLog(WALConfig{
 		MaxEntries:  DefaultWALConfig().MaxEntries,
 		PersistPath: config.WALPersistPath,
-	}, nil)
+		SyncOnWrite: config.WALSyncOnWrite,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initialize WAL: %w", err)
+	}
+	e.wal = wal
 
-	return e
+	return e, nil
 }
 
 // NewShardedEngine creates a new trading engine with sharding enabled.
-func NewShardedEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client, config *Config, shardedState *ShardedStateManager, logger *zap.Logger) *Engine {
+func NewShardedEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client, config *Config, shardedState *ShardedStateManager, logger *zap.Logger) (*Engine, error) {
 	e := &Engine{
 		db:              db,
 		redis:           redis,
@@ -284,12 +371,17 @@ func NewShardedEngine(db *sql.DB, redis redis.UniversalClient, kafka *kgo.Client
 	}
 
 	// Initialize WAL (Write-Ahead Log) for state consistency - logger will be set later
-	e.wal = NewWriteAheadLog(WALConfig{
+	wal, err := NewWriteAheadLog(WALConfig{
 		MaxEntries:  DefaultWALConfig().MaxEntries,
 		PersistPath: config.WALPersistPath,
-	}, nil)
+		SyncOnWrite: config.WALSyncOnWrite,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initialize WAL: %w", err)
+	}
+	e.wal = wal
 
-	return e
+	return e, nil
 }
 
 // SetMetrics sets the metrics for the engine.
@@ -465,8 +557,12 @@ func (e *Engine) IsStateDiverged() bool {
 }
 
 // ReplayWAL replays pending WAL entries on startup.
+// Fail-closed: returns error if replay cannot complete safely.
 func (e *Engine) ReplayWAL(ctx context.Context) error {
 	if e.stateOperator == nil {
+		if e.wal != nil && !e.wal.IsHealthy() {
+			return fmt.Errorf("%w: state operator not initialized and WAL unhealthy", ErrWALReplayFailed)
+		}
 		return nil
 	}
 
@@ -474,6 +570,26 @@ func (e *Engine) ReplayWAL(ctx context.Context) error {
 		// Apply the entry to in-memory state based on operation type
 		return e.applyWALEntry(entry)
 	})
+}
+
+// CanAcceptTrading reports whether the engine is safe to process trading traffic.
+// False when WAL is unhealthy or state has diverged.
+func (e *Engine) CanAcceptTrading() bool {
+	if e == nil {
+		return false
+	}
+	if e.wal != nil && !e.wal.IsHealthy() {
+		return false
+	}
+	return true
+}
+
+// WALUnhealthyReason returns a human-readable recovery failure reason.
+func (e *Engine) WALUnhealthyReason() string {
+	if e == nil || e.wal == nil {
+		return "WAL not initialized"
+	}
+	return e.wal.UnhealthyReason()
 }
 
 // applyWALEntry applies a WAL entry to in-memory state.
@@ -588,7 +704,16 @@ func (e *Engine) safeUpdateInMemoryState(
 		// If we can't marshal, just execute without WAL tracking
 		return updateFunc()
 	}
-	seqNum := e.wal.Write(op, contestID, userID, symbol, dataBytes)
+	seqNum, walErr := e.wal.Write(op, contestID, userID, symbol, dataBytes)
+	if walErr != nil {
+		// DB already committed in caller path; record divergence and attempt update without durable mark.
+		e.logger.Error("CRITICAL: WAL write failed after DB commit path",
+			zap.Error(walErr),
+			zap.String("contest_id", contestID),
+			zap.String("user_id", userID))
+		e.wal.SetDiverged()
+		return updateFunc()
+	}
 
 	// Execute with panic recovery
 	var updateErr error
@@ -688,14 +813,58 @@ func (e *Engine) GetPositionLockCount() int {
 }
 
 // ProcessTick processes a tick snapshot and evaluates pending orders and TP/SL.
+// Invalid ticks are rejected by the price book and never become authoritative state.
 func (e *Engine) ProcessTick(ctx context.Context, tick *contracts.TickSnapshot) {
-	// Update price book
-	e.priceBook.UpdateFromTick(tick)
+	stats := e.priceBook.UpdateFromTick(tick)
+	if e.metrics != nil {
+		if stats.Accepted > 0 {
+			e.metrics.MarketTicksAccepted.Add(float64(stats.Accepted))
+		}
+		if stats.Rejected > 0 {
+			e.metrics.MarketTicksRejected.Add(float64(stats.Rejected))
+			for reason, n := range stats.Reasons {
+				e.metrics.MarketTickRejectReasons.WithLabelValues(reason).Add(float64(n))
+			}
+		}
+	}
+	if stats.Accepted == 0 {
+		return
+	}
 
-	// Process each symbol in the tick
+	// Process each symbol that was present (re-evaluate only symbols with quotes)
 	for _, st := range tick.Symbols {
+		if st.Symbol == "" {
+			continue
+		}
 		e.processSymbolTick(ctx, st.Symbol)
 	}
+}
+
+// SetContestTradingGate wires the contest-level trading enable check from the App.
+func (e *Engine) SetContestTradingGate(fn func(contestID string) bool) {
+	e.contestTradingEnabled = fn
+}
+
+// SetRequireMarketDataReady toggles whether market orders require a ready price book.
+func (e *Engine) SetRequireMarketDataReady(require bool) {
+	e.requireMarketDataReady.Store(require)
+}
+
+// MarketDataReady reports whether the engine has safe market data for trading.
+func (e *Engine) MarketDataReady() (bool, string) {
+	if e == nil || e.priceBook == nil {
+		return false, "no_price_book"
+	}
+	maxAge := 60 * time.Second
+	if e.config != nil && e.config.MaxPriceAgeMarket > 0 {
+		maxAge = e.config.MaxPriceAgeMarket
+	}
+	return e.priceBook.MarketDataReady(nil, maxAge)
+}
+
+// RequiresMarketDataReady reports whether readiness/trading depends on market feed.
+func (e *Engine) RequiresMarketDataReady() bool {
+	return e != nil && e.requireMarketDataReady.Load()
 }
 
 // processSymbolTick evaluates pending orders and TP/SL for a single symbol.

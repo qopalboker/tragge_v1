@@ -1046,144 +1046,27 @@ func (h *ContestHandlers) notifyTradingEnd(ctx context.Context, contest *Contest
 // SETTLEMENT HANDLER (OnCompleted)
 // ============================================================================
 
-// HandleSettlement handles all side effects when a contest transitions to COMPLETED.
-// It reads prizes from the contest_prize_locks table, handles tied ranks,
-// credits wallets atomically, and retries any failed credits.
+// HandleSettlement is invoked on COMPLETED transitions.
+//
+// Phase 1 financial authority: prize wallet credits and settlement row ownership
+// belong exclusively to apps/settlement-service. This handler records that
+// completion was observed and must NOT credit wallets (avoids dual payout paths).
+// Settlement-service consumes contest-state Kafka events / settlement_requests.
+// HandleSettlement is invoked on COMPLETED transitions.
+//
+// Phase 1 financial authority: prize wallet credits and settlement row ownership
+// belong exclusively to apps/settlement-service. This handler must NOT credit
+// wallets (avoids dual payout paths). Settlement-service consumes contest-state
+// Kafka events and settlement_requests.
 func (h *ContestHandlers) HandleSettlement(ctx context.Context, result *TransitionResult) error {
-	if h.pool == nil {
-		return fmt.Errorf("database pool is nil")
+	if result == nil || result.Contest == nil {
+		return fmt.Errorf("nil transition result")
 	}
-	contestID := result.Contest.ID
-	startTime := time.Now()
-
-	h.logger.Info("Handling settlement",
-		zap.String("contest_id", contestID),
-		zap.String("name", result.Contest.Name))
-
-	// 1. Create or resume settlement record
-	settlementID, err := h.getOrCreateSettlement(ctx, contestID, result.Contest.CurrentParticipants)
-	if err != nil {
-		h.logger.Error("Failed to create settlement record",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		return fmt.Errorf("create settlement record: %w", err)
+	if h.logger != nil {
+		h.logger.Info("Contest completed — financial settlement deferred to settlement-service",
+			zap.String("contest_id", result.Contest.ID),
+			zap.String("name", result.Contest.Name))
 	}
-
-	// 2. Log settlement start
-	h.logSettlementEvent(ctx, settlementID, contestID, "settlement_started", map[string]any{
-		"participants": result.Contest.CurrentParticipants,
-		"started_at":   startTime.UnixMilli(),
-	}, nil)
-
-	// 3. Get final rankings (should already be calculated in settling phase)
-	rankings, err := h.getFinalRankings(ctx, contestID)
-	if err != nil {
-		h.logger.Error("Failed to get final rankings",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		h.logSettlementEvent(ctx, settlementID, contestID, "settlement_failed", nil,
-			strPtr(fmt.Sprintf("get final rankings: %v", err)))
-		return fmt.Errorf("get final rankings: %w", err)
-	}
-
-	// 4. Calculate prize distribution (from locked table or fallback, with tie handling)
-	prizes, err := h.calculatePrizeDistribution(ctx, result.Contest, rankings)
-	if err != nil {
-		h.logger.Error("Failed to calculate prizes",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		h.logSettlementEvent(ctx, settlementID, contestID, "settlement_failed", nil,
-			strPtr(fmt.Sprintf("calculate prizes: %v", err)))
-		return fmt.Errorf("calculate prizes: %w", err)
-	}
-
-	// 5. Log prizes calculated
-	h.logSettlementEvent(ctx, settlementID, contestID, "prizes_calculated", map[string]any{
-		"total_winners":  len(prizes),
-		"total_rankings": len(rankings),
-	}, nil)
-
-	// 6. Distribute prizes to winners (per-winner transactions)
-	distributedCount, failedAllocations, err := h.distributePrizes(ctx, contestID, settlementID, prizes)
-	if err != nil {
-		h.logger.Error("Failed to distribute prizes",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-	}
-
-	// 7. Retry failed credits (one retry pass)
-	if len(failedAllocations) > 0 {
-		h.logger.Info("Retrying failed prize credits",
-			zap.String("contest_id", contestID),
-			zap.Int("failed_count", len(failedAllocations)))
-
-		h.logSettlementEvent(ctx, settlementID, contestID, "retry_started", map[string]any{
-			"failed_count": len(failedAllocations),
-		}, nil)
-
-		retryCount, stillFailed, _ := h.distributePrizes(ctx, contestID, settlementID, failedAllocations)
-		distributedCount += retryCount
-		failedAllocations = stillFailed
-
-		if len(stillFailed) > 0 {
-			h.logger.Warn("Some prizes still failed after retry",
-				zap.String("contest_id", contestID),
-				zap.Int("still_failed", len(stillFailed)))
-		}
-	}
-
-	// 8. Mark settlement complete (or partial if some credits failed)
-	settlementStatus := "completed"
-	if len(failedAllocations) > 0 {
-		settlementStatus = "partial"
-	}
-	h.completeSettlement(ctx, settlementID, settlementStatus, distributedCount)
-
-	// 9. Log settlement completed
-	h.logSettlementEvent(ctx, settlementID, contestID, "settlement_completed", map[string]any{
-		"distributed_count": distributedCount,
-		"failed_count":      len(failedAllocations),
-		"status":            settlementStatus,
-		"duration_ms":       time.Since(startTime).Milliseconds(),
-	}, nil)
-
-	// 10. Update T-Points (global leaderboard)
-	if err := h.updateTraggePoints(ctx, contestID, rankings); err != nil {
-		h.logger.Error("Failed to update T-Points",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		// Non-fatal: T-Points can be recalculated
-	}
-
-	// 11. Send results notifications
-	if err := h.notifyResults(ctx, result.Contest, rankings, prizes); err != nil {
-		h.logger.Error("Failed to send results notifications",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-	}
-
-	// 12. Archive contest data
-	if err := h.archiveContest(ctx, contestID); err != nil {
-		h.logger.Error("Failed to archive contest",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-	}
-
-	// 13. Broadcast completion event
-	if err := h.broadcastContestEvent(ctx, result.Contest, contracts.ContestEventCompleted,
-		"Contest has been completed. Check your results!"); err != nil {
-		h.logger.Error("Failed to broadcast completion event",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-	}
-
-	h.logger.Info("Settlement completed",
-		zap.String("contest_id", contestID),
-		zap.Duration("duration", time.Since(startTime)),
-		zap.Int("participants", len(rankings)),
-		zap.Int("prizes_distributed", distributedCount),
-		zap.Int("prizes_failed", len(failedAllocations)))
-
 	return nil
 }
 
@@ -1234,7 +1117,7 @@ func (h *ContestHandlers) calculatePrizeDistribution(ctx context.Context, contes
 	).Scan(&netPool, &distributionJSON)
 
 	if err == nil && len(distributionJSON) > 0 {
-		// Locked distribution exists — use it
+		// Locked distribution exists â€” use it
 		if err := json.Unmarshal(distributionJSON, &slots); err != nil {
 			return nil, fmt.Errorf("unmarshal locked distribution: %w", err)
 		}
@@ -1406,7 +1289,7 @@ func (h *ContestHandlers) creditSinglePrize(ctx context.Context, contestID, sett
 		idempotencyKey,
 	).Scan(&existingID)
 	if err == nil {
-		// Already credited — idempotent success
+		// Already credited â€” idempotent success
 		p.LedgerEntryID = existingID
 		p.Status = "credited"
 		return tx.Commit()
@@ -1643,7 +1526,7 @@ func (h *ContestHandlers) getOrCreateSettlement(ctx context.Context, contestID s
 }
 
 // logSettlementEvent records an event in the settlement_events audit table.
-// Failures are logged but never propagated — audit logging must not block
+// Failures are logged but never propagated â€” audit logging must not block
 // the settlement flow.
 func (h *ContestHandlers) logSettlementEvent(ctx context.Context, settlementID, contestID, eventType string, data map[string]any, errMsg *string) {
 	eventData, _ := json.Marshal(data)

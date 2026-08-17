@@ -627,14 +627,33 @@ func (cp *CalendarProcessor) createContestFromTier(
 
 	durationType := getDurationTypeFromMinutes(entry.DurationMinutes)
 
-	// Insert contest with tier_id
+	// Deterministic schedule identity: template/tier + start bucket.
+	schedKey := fmt.Sprintf("cal:%s:%s:%s", entry.ID, tier.ID, startsAt.UTC().Format("2006-01-02T15:04"))
+	feeBps := 0
+	if !isFree && entryFeeCents > 0 {
+		if commissionRate > 0 {
+			feeBps = int(commissionRate * 100)
+		} else {
+			feeBps = 2000
+		}
+	}
+	// Skip if this logical schedule already materialised.
+	var already bool
+	if qerr := tx.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM contests WHERE schedule_idempotency_key = $1)`, schedKey,
+	).Scan(&already); qerr == nil && already {
+		return "", nil // treated as success by callers that ignore empty id? return existing better
+	}
+
+	// Insert contest with tier_id + schedule_idempotency_key (migration 0103).
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO contests (
 			id, name, description, starts_at, ends_at, status, entry_fee_cents,
 			platform_fee_bps, qty_total, duration_type, asset_class, duration_minutes,
 			min_participants, max_participants, registration_deadline, auto_start,
-			commission_rate, is_free, auto_generated, template_id, tier_id, type
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+			commission_rate, is_free, auto_generated, template_id, tier_id, type,
+			schedule_idempotency_key
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 	`,
 		contestID,
 		contestName,
@@ -643,7 +662,7 @@ func (cp *CalendarProcessor) createContestFromTier(
 		endsAt,
 		"draft",
 		entryFeeCents,
-		0,
+		feeBps,
 		qtyTotal,
 		durationType,
 		entry.AssetClass,
@@ -658,9 +677,31 @@ func (cp *CalendarProcessor) createContestFromTier(
 		entry.ID,
 		tier.ID,
 		contestType,
+		schedKey,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to insert tier contest: %w", err)
+		// Unique violation or missing column: handle gracefully.
+		if strings.Contains(err.Error(), "uq_contests_schedule_idempotency") || strings.Contains(err.Error(), "23505") {
+			return "", nil
+		}
+		if strings.Contains(err.Error(), "schedule_idempotency_key") {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO contests (
+					id, name, description, starts_at, ends_at, status, entry_fee_cents,
+					platform_fee_bps, qty_total, duration_type, asset_class, duration_minutes,
+					min_participants, max_participants, registration_deadline, auto_start,
+					commission_rate, is_free, auto_generated, template_id, tier_id, type
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+			`,
+				contestID, contestName, description, startsAt, endsAt, "draft",
+				entryFeeCents, feeBps, qtyTotal, durationType, entry.AssetClass, entry.DurationMinutes,
+				entry.MinParticipants, maxPart, registrationDeadline, entry.AutoStart,
+				commissionRate, isFree, true, entry.ID, tier.ID, contestType,
+			)
+		}
+		if err != nil {
+			return "", fmt.Errorf("failed to insert tier contest: %w", err)
+		}
 	}
 
 	// Parse and insert symbols

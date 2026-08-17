@@ -17,12 +17,43 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
+
+// contestJoinAllowed implements product policy §5.6.
+// Free contests: registration_open only (no late entry).
+// Paid contests: registration_open, or running until late_join_cutoff when enabled.
+func contestJoinAllowed(status string, isFree, lateJoinEnabled bool, startsAt, endsAt, now time.Time) (ok bool, isLate bool, reason string) {
+	switch status {
+	case "registration_open", "scheduled":
+		// Scheduled+open registration are pre-start joins.
+		if status == "scheduled" {
+			// Prefer explicit registration_open; scheduled alone is not open unless product opens it.
+			// Keep compatibility: only registration_open for pre-start unless already open.
+			return false, false, "contest_not_open"
+		}
+		return true, false, ""
+	case "running":
+		if isFree {
+			return false, false, "free_contest_no_late_join"
+		}
+		if !lateJoinEnabled {
+			return false, false, "late_join_disabled"
+		}
+		cutoff := economics.LateJoinCutoff(startsAt, endsAt)
+		if !now.Before(cutoff) {
+			return false, false, "late_join_cutoff_passed"
+		}
+		return true, true, ""
+	default:
+		return false, false, "contest_not_open"
+	}
+}
 
 func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -58,7 +89,8 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 		       c.entry_fee_cents, c.qty_total, c.duration_type, c.asset_class, COALESCE(c.duration_minutes, 0),
 		       c.min_participants, c.max_participants, c.registration_deadline, c.commission_rate,
 		       c.is_free, c.rules_json,
-		       (SELECT COUNT(*) FROM contest_participants cp WHERE cp.contest_id = c.id) as participant_count
+		       (SELECT COUNT(*) FROM contest_participants cp
+		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE) as participant_count
 		FROM contests c
 		WHERE c.status IN ('registration_open', 'scheduled', 'running')`
 
@@ -241,14 +273,15 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 	err := a.pool.Replica().QueryRowContext(ctx, `
 		SELECT c.id, c.name, COALESCE(c.description, ''), c.status, c.asset_class, c.duration_type,
 		       c.starts_at, c.ends_at, c.entry_fee_cents, c.is_free, c.qty_total,
-		       c.max_participants, c.commission_rate, COALESCE(c.platform_fee_bps, 0),
-		       (SELECT COUNT(*) FROM contest_participants cp WHERE cp.contest_id = c.id)
+		       c.max_participants, COALESCE(c.min_participants, 2), c.commission_rate, COALESCE(c.platform_fee_bps, 0),
+		       (SELECT COUNT(*) FROM contest_participants cp
+		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE)
 		FROM contests c
 		WHERE c.id = $1
 	`, contestID).Scan(
 		&resp.ID, &resp.Name, &resp.Description, &resp.Status, &resp.MarketType, &resp.DurationType,
 		&startsAt, &endsAt, &resp.EntryFeeCents, &resp.IsFree, &resp.AvailableQty,
-		&resp.MaxParticipants, &commissionRate, &platformFeeBps, &resp.CurrentParticipants,
+		&resp.MaxParticipants, &resp.MinParticipants, &commissionRate, &platformFeeBps, &resp.CurrentParticipants,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -263,9 +296,12 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 	// Expose asset_class alongside legacy market_type
 	resp.AssetClass = resp.MarketType
 
-	// Format timestamps as ISO8601
+	// Format timestamps as ISO8601 (+ aliases used by FE store)
 	resp.StartTime = startsAt.Format(time.RFC3339)
 	resp.EndTime = endsAt.Format(time.RFC3339)
+	resp.StartsAt = resp.StartTime
+	resp.EndsAt = resp.EndTime
+	resp.ParticipantCount = resp.CurrentParticipants
 
 	// P2-P3-2: Fee transparency - expose commission rate and gross/net prize pool
 	resp.CommissionRate = commissionRate
@@ -507,39 +543,63 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if contest exists and is open for registration (use Primary before write)
+	// Load contest for join authorization (use Primary before write).
+	// Product policy §5.2: max_participants is NOT a product capacity rule — ignored.
+	// Product policy §5.6: paid contests may join while running until late-join cutoff.
 	var status string
 	var qtyTotal int64
 	var entryFeeCents int
 	var contestName string
 	var platformFeeBps int
 	var commissionRate float64
-	var maxParticipants sql.NullInt64
 	var currentParticipants int
-	err := a.pool.Primary().QueryRowContext(ctx,
-		`SELECT status, qty_total, entry_fee_cents, name, COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0), max_participants, current_participants FROM contests WHERE id = $1`,
+	var startsAt, endsAt time.Time
+	var isFree bool
+	var lateJoinEnabled bool
+	var economicsLockedAt sql.NullTime
+	err := a.pool.Primary().QueryRowContext(ctx, `
+		SELECT status, qty_total, entry_fee_cents, name,
+		       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0), current_participants,
+		       starts_at, ends_at, COALESCE(is_free, FALSE),
+		       COALESCE(late_join_enabled, TRUE), economics_locked_at
+		FROM contests WHERE id = $1`,
 		contestID,
-	).Scan(&status, &qtyTotal, &entryFeeCents, &contestName, &platformFeeBps, &commissionRate, &maxParticipants, &currentParticipants)
+	).Scan(&status, &qtyTotal, &entryFeeCents, &contestName, &platformFeeBps, &commissionRate,
+		&currentParticipants, &startsAt, &endsAt, &isFree, &lateJoinEnabled, &economicsLockedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": msg.ContestNotFound})
 			return
 		}
-		a.log().Error("Failed to query contest", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
+		// Older DBs without late_join_enabled column: fall back.
+		err = a.pool.Primary().QueryRowContext(ctx, `
+			SELECT status, qty_total, entry_fee_cents, name,
+			       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0), current_participants,
+			       starts_at, ends_at, COALESCE(is_free, FALSE)
+			FROM contests WHERE id = $1`,
+			contestID,
+		).Scan(&status, &qtyTotal, &entryFeeCents, &contestName, &platformFeeBps, &commissionRate,
+			&currentParticipants, &startsAt, &endsAt, &isFree)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": msg.ContestNotFound})
+				return
+			}
+			a.log().Error("Failed to query contest", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+		lateJoinEnabled = true
 	}
 
-	if status != "registration_open" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen})
+	now := time.Now().UTC()
+	isLate := false
+	joinOK, isLate, joinReason := contestJoinAllowed(status, isFree || entryFeeCents <= 0, lateJoinEnabled, startsAt, endsAt, now)
+	if !joinOK {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, "reason": joinReason})
 		return
 	}
-
-	// Check if contest has reached max participants
-	if maxParticipants.Valid && int64(currentParticipants) >= maxParticipants.Int64 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": msg.ContestFull})
-		return
-	}
+	_ = isLate // used inside transaction after re-check
 
 	// Block system accounts from joining paid contests
 	if entryFeeCents > 0 {
@@ -596,34 +656,58 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	// Lock the contest row to prevent race conditions on prize pool updates.
-	// Re-read authoritative fields inside the transaction with FOR UPDATE.
-	// qty_total and entry_fee_cents are always server-side contest values —
-	// never taken from the client request body.
+	// qty_total and entry_fee_cents are always server-side contest values.
 	var txStatus string
-	var txCurrentParticipants int
-	var txMaxParticipants sql.NullInt64
 	var txQtyTotal int64
 	var txEntryFeeCents int
+	var txPlatformFeeBps int
+	var txCommissionRate float64
+	var txStartsAt, txEndsAt time.Time
+	var txIsFree bool
+	var txLateJoinEnabled bool
 	err = tx.QueryRowContext(ctx, `
-		SELECT status, current_participants, max_participants, qty_total, entry_fee_cents
+		SELECT status, qty_total, entry_fee_cents,
+		       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0),
+		       starts_at, ends_at, COALESCE(is_free, FALSE),
+		       COALESCE(late_join_enabled, TRUE)
 		FROM contests WHERE id = $1 FOR UPDATE
-	`, contestID).Scan(&txStatus, &txCurrentParticipants, &txMaxParticipants, &txQtyTotal, &txEntryFeeCents)
+	`, contestID).Scan(&txStatus, &txQtyTotal, &txEntryFeeCents, &txPlatformFeeBps, &txCommissionRate,
+		&txStartsAt, &txEndsAt, &txIsFree, &txLateJoinEnabled)
 	if err != nil {
-		a.log().Error("Failed to lock contest row", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
+		// Fallback without late_join_enabled for pre-migration DBs.
+		err = tx.QueryRowContext(ctx, `
+			SELECT status, qty_total, entry_fee_cents,
+			       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0),
+			       starts_at, ends_at, COALESCE(is_free, FALSE)
+			FROM contests WHERE id = $1 FOR UPDATE
+		`, contestID).Scan(&txStatus, &txQtyTotal, &txEntryFeeCents, &txPlatformFeeBps, &txCommissionRate,
+			&txStartsAt, &txEndsAt, &txIsFree)
+		if err != nil {
+			a.log().Error("Failed to lock contest row", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+		txLateJoinEnabled = true
 	}
-	if txStatus != "registration_open" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen})
-		return
-	}
-	if txMaxParticipants.Valid && int64(txCurrentParticipants) >= txMaxParticipants.Int64 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": msg.ContestFull})
+	nowTx := time.Now().UTC()
+	ok, isLateJoin, reason := contestJoinAllowed(txStatus, txIsFree || txEntryFeeCents <= 0, txLateJoinEnabled, txStartsAt, txEndsAt, nowTx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, "reason": reason})
 		return
 	}
 	// Authoritative values from locked row.
 	qtyTotal = txQtyTotal
 	entryFeeCents = txEntryFeeCents
+	feeBps := economics.ResolvePlatformFeeBps(txPlatformFeeBps, txCommissionRate)
+	// Freeze economics on first real join (immutable entry fee + fee bps).
+	_, _ = tx.ExecContext(ctx, `
+		UPDATE contests SET
+			platform_fee_bps = $2,
+			locked_entry_fee_cents = COALESCE(locked_entry_fee_cents, $3),
+			locked_platform_fee_bps = COALESCE(locked_platform_fee_bps, $2),
+			economics_locked_at = COALESCE(economics_locked_at, NOW())
+		WHERE id = $1 AND (economics_locked_at IS NULL OR platform_fee_bps = 0 OR platform_fee_bps IS NULL)
+	`, contestID, feeBps, entryFeeCents)
 
 	// Concurrent join race: another request may have inserted while we waited.
 	err = tx.QueryRowContext(ctx,
@@ -647,9 +731,10 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If there's an entry fee, check balance and deduct from wallet (idempotent ledger key).
-	if entryFeeCents > 0 {
-		_, err = a.wallet.DeductContestEntryFeeWithName(ctx, tx, userID, contestID, contestName, int64(entryFeeCents))
+	// Charge total join amount (base + late surcharge when applicable).
+	charge := economics.ComputeJoinCharge(int64(entryFeeCents), feeBps, isLateJoin)
+	if charge.TotalCents > 0 {
+		_, err = a.wallet.DeductContestEntryFeeWithName(ctx, tx, userID, contestID, contestName, charge.TotalCents)
 		if err != nil {
 			if insufficientErr, ok := err.(*wallet.InsufficientBalanceError); ok {
 				writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
@@ -710,23 +795,14 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate commission and prize contribution, then update the contest record atomically
-	var commissionCents int64
-	var prizeContributionCents int64
-	if entryFeeCents > 0 {
-		effectiveCommissionRate := commissionRate
-		if effectiveCommissionRate <= 0 {
-			effectiveCommissionRate = 20.00 // default 20%
-		}
-		commissionCents = int64(math.Round(float64(entryFeeCents) * effectiveCommissionRate / 100.0))
-		prizeContributionCents = int64(entryFeeCents) - commissionCents
-
+	// Prize pool contribution uses base entry only (late surcharge is platform revenue).
+	if charge.PrizeCents > 0 || charge.PlatformCents > 0 {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE contests
 			SET prize_pool_net_cents = COALESCE(prize_pool_net_cents, 0) + $1,
-			    commission_amount = commission_amount + $2
+			    commission_amount = COALESCE(commission_amount, 0) + $2
 			WHERE id = $3
-		`, prizeContributionCents, commissionCents, contestID)
+		`, charge.PrizeCents, charge.PlatformCents+charge.SurchargeCents, contestID)
 		if err != nil {
 			a.log().Error("Failed to update contest prize pool and commission",
 				zap.Error(err),

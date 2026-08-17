@@ -1,0 +1,38 @@
+# Phase 4 launch manifest freeze — TEMPLATE
+# Fill only after live staging GO criteria met. Never invent digests.
+
+DATE=
+GIT_SHA=
+KUSTOMIZE_PATH=infra/k8s/overlays/production
+
+# Images (tag + digest)
+IMAGE_API_SERVER=
+IMAGE_TRADING_CORE=
+IMAGE_WORKER=
+IMAGE_GATEWAY=
+
+# Schema
+MIGRATION_VERSION=
+
+# Runtime
+ENVIRONMENT=production
+TRADING_CORE_REPLICAS=1
+SHARD_ENABLED=false
+WAL_PERSIST_PATH=/var/lib/tragge/wal/engine.jsonl
+WAL_REQUIRE_PERSIST=true
+WAL_SYNC_ON_WRITE=true
+REQUIRE_MARKET_DATA_READY=true
+STORAGE_CLASS=
+PVC_SIZE=
+
+# Secret *names* only (not values)
+SECRET_POSTGRES=
+SECRET_REDIS=
+SECRET_JWT=
+SECRET_PAYMENT=
+SECRET_MARKET_PROVIDER=
+
+# External approvals (human sign-off)
+PROVIDER_APPROVAL=PENDING
+LEGAL_APPROVAL=PENDING
+SECURITY_MFA_APPROVAL=PENDING

@@ -318,20 +318,21 @@ export async function getLeaderboard(
  */
 export async function getActiveContests(): Promise<Contest[]> {
   try {
-    const response = await api.get<{ contests: Contest[] }>(
+    const response = await api.get<Contest[] | { contests: Contest[] }>(
       '/api/user/contests?status=running,registration_open'
     );
-    return response.data.contests || [];
+    const raw = response.data;
+    return Array.isArray(raw) ? raw : (raw?.contests ?? []);
   } catch (error) {
     if (isNetworkError(error)) {
-      throw new Error('Unable to fetch contests. Please check your connection.');
+      throw new Error(getErrorMessage(error, 'Unable to fetch contests. Please check your connection.'));
     }
 
     if (error instanceof AxiosError && error.response) {
       const status = error.response.status;
       switch (status) {
         case 500:
-          throw new Error('Server error fetching contests');
+          throw new Error(getErrorMessage(error));
         default:
           throw new Error(getErrorMessage(error));
       }

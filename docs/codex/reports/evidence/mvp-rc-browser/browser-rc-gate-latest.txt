@@ -1,0 +1,8 @@
+﻿PASS  [MFA-OFF MVP MODE] admin MFA policy handler present
+PASS  [ADMIN LOGIN WITHOUT MFA] password-only Super Admin (browser 5/5)
+PASS  [FRONTEND] frontend-gate exit=0
+PASS  [MVP] mvp-gate exit=0
+PASS  [FINANCIAL] TestMVP_AdminCreditJoinSettle_E2E exit=0
+PASS  [TRADING] Phase2 E2E exit=0
+
+RC BROWSER — PASS

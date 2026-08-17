@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -373,10 +374,27 @@ func (c *Client) handleOrderRequest(message []byte) {
 		return
 	}
 
-	// Generate order ID
-	orderID := uuid.New().String()
+	// Durable logical identity: client_order_id (UUID) → order_id (same value)
+	clientOrderID, err := resolveClientOrderID(req.ClientOrderID)
+	if err != nil {
+		c.sendOrderReject(req.RequestID, "invalid_client_order_id", err.Error())
+		return
+	}
+	orderID, isNew, err := c.app.claimClientOrderID(ctx, c.userID, c.contestID, clientOrderID)
+	if err != nil {
+		if errors.Is(err, ErrClientOrderOwnership) {
+			c.sendOrderReject(req.RequestID, "client_order_id_conflict", "client_order_id conflict")
+			return
+		}
+		c.app.log().Error("Failed to claim client_order_id",
+			zap.Error(err),
+			zap.String("client_order_id", clientOrderID),
+			zap.String("user_id", c.userID))
+		c.sendOrderReject(req.RequestID, "internal_error", "Failed to process order")
+		return
+	}
 
-	// Build OrderRequest for Kafka
+	// Build OrderRequest for Kafka (order_id == client_order_id)
 	orderReq := contracts.OrderRequest{
 		OrderID:    orderID,
 		UserID:     c.userID,
@@ -401,6 +419,7 @@ func (c *Client) handleOrderRequest(message []byte) {
 	}
 
 	// Publish to Kafka with contest_id as partition key
+	// Same order_id on retry/concurrent claim is safe (engine PK + GetOrderByID short-circuit).
 	if c.app.ordersKafka != nil {
 		record := &kgo.Record{
 			Topic: c.app.config.OrdersTopic,
@@ -418,6 +437,8 @@ func (c *Client) handleOrderRequest(message []byte) {
 		}
 		c.app.log().Info("Order published to Kafka via WebSocket",
 			zap.String("order_id", orderID),
+			zap.String("client_order_id", clientOrderID),
+			zap.Bool("idempotent_claim_new", isNew),
 			zap.String("user_id", c.userID),
 			zap.String("contest_id", c.contestID),
 			zap.String("symbol", req.Symbol),
@@ -430,7 +451,7 @@ func (c *Client) handleOrderRequest(message []byte) {
 		return
 	}
 
-	// Send acknowledgment
+	// Send acknowledgment (order_id is stable across retries of client_order_id)
 	c.sendOrderAck(req.RequestID, orderID)
 }
 

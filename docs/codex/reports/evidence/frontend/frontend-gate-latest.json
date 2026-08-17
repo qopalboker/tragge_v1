@@ -1,0 +1,169 @@
+{
+  "ts": "2026-08-17T01:27:55.322Z",
+  "decision": "FRONTEND — PASS",
+  "failed": 0,
+  "results": [
+    {
+      "cat": "ROUTES",
+      "name": "user dashboard page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ROUTES",
+      "name": "trade route",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ROUTES",
+      "name": "wallet page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ROUTES",
+      "name": "tickets page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "mobile header",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "featured contest",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "challenge rail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "support card below challenges",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "bottom nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "dashboard uses MobileHomeHeader",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "dashboard uses FeaturedContestCard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "dashboard uses ChallengeRail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "dashboard uses SupportTicketCard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "horizontal scroll class",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "WALLET",
+      "name": "wallet store balance API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST",
+      "name": "contests API fetch",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CHALLENGE",
+      "name": "challenge uses real total_contests",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "tickets API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trading page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "dashboard dir=rtl",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "design tokens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "tokens imported in main",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESPONSIVE",
+      "name": "safe-area bottom nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESPONSIVE",
+      "name": "mobile content padding for nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "TYPECHECK",
+      "name": "vue-tsc",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "BUILD",
+      "name": "vite production build",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "E2E",
+      "name": "reference image archived",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

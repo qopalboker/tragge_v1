@@ -1,0 +1,70 @@
+TEST_A_WSL_DOCKER_REBOOT 2026-08-16T18:06:56.1469163+03:30
+procedure=wsl --shutdown then wait for Docker Desktop engine + compose up
+pre_proof=closure-pre-20260816180606
+
+wsl_shutdown_at=2026-08-16T18:06:58.1009636+03:30
+docker_engine_back_attempt=6 version=29.7.2 at=2026-08-16T18:12:05.8997883+03:30
+wal_path_exists=True
+proof_after_reboot=True
+proof_content=closure-pre-20260816180606
+
+vhdx_exists=True
+docker :  Container tragge_worker Running 
+At line:58 char:1
++ docker compose -f docker-compose.yml -f docker-compose.lite.yml -f do ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Container tragge_worker Running :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ Container tragge_postgres Running 
+ Container tragge_redis Running 
+ Container tragge_api_server Running 
+ Container tragge_redpanda Running 
+ Container tragge_minio Running 
+ Container tragge_minio Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_minio Healthy 
+ Container tragge_minio_init Starting 
+ Container tragge_redpanda Healthy 
+ Container tragge_kafka_init Starting 
+ Container tragge_minio_init Started 
+ Container tragge_kafka_init Started 
+ Container tragge_kafka_init Waiting 
+ Container tragge_postgres Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_kafka_init Waiting 
+ Container tragge_postgres Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_kafka_init Waiting 
+ Container tragge_postgres Waiting 
+ Container tragge_redis Waiting 
+ Container tragge_redpanda Waiting 
+ Container tragge_redpanda Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_redpanda Healthy 
+ Container tragge_redpanda Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_redis Healthy 
+ Container tragge_kafka_init Exited 
+ Container tragge_kafka_init Exited 
+ Container tragge_kafka_init Exited 
+ Container tragge_postgres Healthy 
+ Container tragge_postgres Healthy 
+ Container tragge_trading_core Starting 
+ Container tragge_postgres Healthy 
+ Container tragge_trading_core Started 
+
+readyz_after={"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-engine","orders_topic":"orders.v1","status":"healthy"},"market_data":{"ready":false,"reason":"no_valid_tick"},"redis":"healthy","service":"trading-engine","status":"ready","timestamp":"2026-08-16T14:42:45Z","wal_recovery":"ok"}
+
+proof_survived=True
+wal_recovery_ok=True
+recovery_ms=349442
+phase11_after=True
+phase2_after=True
+reconcile_after=True
+LOCAL_VM_REBOOT_PASS
+PASS
+classification=LOCAL-VM
+NOT cloud production

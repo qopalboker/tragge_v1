@@ -1,0 +1,10 @@
+LOCAL_OBJECT_STORAGE_BACKUP_PASS
+LOCAL_OBJECT_STORAGE_RESTORE_PASS
+bucket=tragge-local-backups
+endpoint=http://127.0.0.1:9000
+dump_bytes=704668
+restore_db=app_restore_local_1786890221513
+tables=89
+classification=LOCAL-OBJECT-STORAGE
+NOT cloud S3 production
+PASS

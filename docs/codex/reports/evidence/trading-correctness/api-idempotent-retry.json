@@ -1,0 +1,8 @@
+{
+  "error": "login failed",
+  "loginStatus": 429,
+  "loginBody": {
+    "code": "RATE_LIMITED",
+    "error": "request unavailable"
+  }
+}

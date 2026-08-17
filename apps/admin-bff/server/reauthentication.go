@@ -22,6 +22,7 @@ const (
 	actionUserRolesUpdate       = "user.roles.update"
 	actionElevatedUserCreate    = "user.create.elevated"
 	actionAdminMFAReset         = "admin.mfa.reset"
+	actionAdminMFAPolicy        = "admin.mfa.policy"
 )
 
 type sensitiveActionSpec struct {
@@ -34,6 +35,7 @@ var sensitiveAdminActions = map[string]sensitiveActionSpec{
 	actionUserRolesUpdate:    {Permission: "users.edit"},
 	actionElevatedUserCreate: {Permission: "users.edit"},
 	actionAdminMFAReset:      {Permission: "users.edit"},
+	actionAdminMFAPolicy:     {Permission: "settings.manage"},
 }
 
 type adminSecurityState struct {

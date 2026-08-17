@@ -1,0 +1,4 @@
+
+select vdisk file="D:\tragge-local-infra\wal-disk.vhdx"
+detach vdisk
+exit

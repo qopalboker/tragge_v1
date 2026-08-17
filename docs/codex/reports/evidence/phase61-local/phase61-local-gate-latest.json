@@ -1,0 +1,107 @@
+{
+  "ts": "2026-08-16T14:50:07.503Z",
+  "decision": "PHASE 6.1-LOCAL-INFRA — PASS",
+  "core_fail": 0,
+  "optional_fail": 0,
+  "rows": [
+    {
+      "group": "LOCAL-VM",
+      "name": "Host forensics + WAL host path",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-VM",
+      "name": "WSL2 / Linux VM platform available",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-VM",
+      "name": "Companion VHD detach/reattach (data preserve)",
+      "core": false,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-VM",
+      "name": "Full WSL/VM reboot drill",
+      "core": false,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Trading ready + WAL recovery",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Container recreate WAL survive",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Compose service restart recovery",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Full Docker Engine restart",
+      "core": false,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Financial + trading regression",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-CONTAINER",
+      "name": "Single-active trading-core",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-OBJECT-STORAGE",
+      "name": "MinIO backup upload + integrity",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-OBJECT-STORAGE",
+      "name": "Clean restore + schema",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-OBJECT-STORAGE",
+      "name": "Financial reconcile (live path)",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    },
+    {
+      "group": "LOCAL-ROLLBACK",
+      "name": "Release A→B→A compose rollback",
+      "core": true,
+      "status": true,
+      "result": "PASS"
+    }
+  ],
+  "cloud_production": false
+}

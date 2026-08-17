@@ -42,51 +42,9 @@ async function fetchShards(): Promise<void> {
   } catch {
     toast.error(t('shards.loadError'));
     error.value = t('common.error');
-    // Fallback to mock data for development
-    shards.value = [
-      {
-        id: 1,
-        status: 'active',
-        contest_count: 12,
-        participant_count: 1542,
-        orders_per_sec: 85.3,
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-06T10:00:00Z',
-      },
-      {
-        id: 2,
-        status: 'active',
-        contest_count: 8,
-        participant_count: 1023,
-        orders_per_sec: 62.1,
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-06T10:00:00Z',
-      },
-      {
-        id: 3,
-        status: 'draining',
-        contest_count: 3,
-        participant_count: 245,
-        orders_per_sec: 12.5,
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-06T10:00:00Z',
-      },
-      {
-        id: 4,
-        status: 'inactive',
-        contest_count: 0,
-        participant_count: 0,
-        orders_per_sec: 0,
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-06T10:00:00Z',
-      },
-    ];
-    shardStats.value = [
-      { shard_id: 1, timestamp: '2025-01-06T10:00:00Z', orders_per_sec: 85.3, participant_count: 1542, contest_count: 12 },
-      { shard_id: 2, timestamp: '2025-01-06T10:00:00Z', orders_per_sec: 62.1, participant_count: 1023, contest_count: 8 },
-      { shard_id: 3, timestamp: '2025-01-06T10:00:00Z', orders_per_sec: 12.5, participant_count: 245, contest_count: 3 },
-      { shard_id: 4, timestamp: '2025-01-06T10:00:00Z', orders_per_sec: 0, participant_count: 0, contest_count: 0 },
-    ];
+    // Never invent operational metrics — empty real state only.
+    shards.value = [];
+    shardStats.value = [];
   } finally {
     loading.value = false;
   }

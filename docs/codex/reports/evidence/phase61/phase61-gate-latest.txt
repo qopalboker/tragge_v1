@@ -1,0 +1,13 @@
+BLOCKED  HARD-01  Persistent WAL on dedicated block storage — WAL_BLOCK_STORAGE_PASS (real block device, not Desktop path)
+BLOCKED  HARD-02  VM reboot recovery — VM_REBOOT_PASS with pre/post trade + reconcile
+BLOCKED  HARD-03  VM replacement + volume reattach (or documented backup recovery) — VM_REPLACEMENT_PASS or backup-recovery equivalent + RPO_DOCUMENTED
+BLOCKED  HARD-04  Backup uploaded to real object storage — OBJECT_STORAGE_BACKUP_PASS / S3_BACKUP_RESTORE_PASS (not local FS)
+BLOCKED  HARD-05  Backup restored into clean environment — BACKUP_RESTORE_CLEAN_PASS
+BLOCKED  HARD-06  Restored DB financial reconciliation — RESTORE_RECONCILE_PASS / RECONCILE_CLEAN after restore
+BLOCKED  HARD-07  Rollback drill or proven forward-fix strategy — ROLLBACK_DRILL_PASS or FORWARD_FIX_PASS + MIGRATION_CLASSIFIED
+BLOCKED  HARD-08  Single-active trading owner during recovery — SINGLE_ACTIVE_OWNER_PASS (old host down before new engine ready)
+PASS  SUP-01  Container recreate WAL (production path) — WAL_HOST_PERSIST_PASS [phase6nk wal-persist-drill]
+BLOCKED  SUP-02  Docker engine restart drill — HOST_DOCKER_RESTART_PASS on production-equivalent host
+BLOCKED  SUP-03  Health gate after recovery — PRODUCTION HEALTH — PASS post-recovery
+
+PHASE 6.1 — BLOCKED (9 hard, 10 total)

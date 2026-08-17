@@ -1,0 +1,4 @@
+EMERGENCY_PAUSE_PASS
+PASS
+method=last_resort_stop_trading_core
+classification=LOCAL-OPERATOR

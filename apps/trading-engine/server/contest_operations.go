@@ -597,16 +597,21 @@ func (a *App) cancelAllContestOrders(ctx context.Context, contestID string, reas
 func (a *App) SetContestTradingEnabled(contestID string, enabled bool) {
 	a.contestTradingMu.Lock()
 	defer a.contestTradingMu.Unlock()
+	if a.contestTrading == nil {
+		a.contestTrading = make(map[string]bool)
+	}
 	a.contestTrading[contestID] = enabled
 
 	// Invalidate the contest cache so the engine re-fetches fresh state
-	if a.engine != nil {
+	if a.engine != nil && a.engine.contestCache != nil {
 		a.engine.contestCache.Invalidate(contestID)
 	}
 
-	a.log().Info("Contest trading status changed",
-		zap.String("contest_id", contestID),
-		zap.Bool("enabled", enabled))
+	if a.obs != nil {
+		a.log().Info("Contest trading status changed",
+			zap.String("contest_id", contestID),
+			zap.Bool("enabled", enabled))
+	}
 }
 
 // IsContestTradingEnabled checks if trading is enabled for a contest.

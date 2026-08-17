@@ -14,7 +14,6 @@ import (
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
 	"github.com/Parsaeffatravesh/tragge/packages/validation"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -144,15 +143,19 @@ func (a *App) validateContestRunning(w http.ResponseWriter, ctx context.Context,
 
 // OrderSubmitRequest represents the request body for order placement
 type OrderSubmitRequest struct {
-	ContestID  string              `json:"contest_id"`
-	Symbol     string              `json:"symbol"`
-	Side       contracts.OrderSide `json:"side"`
-	Type       contracts.OrderType `json:"type"`
-	Qty        int64               `json:"qty"`
-	LimitPrice *float64            `json:"limit_price,omitempty"`
-	StopPrice  *float64            `json:"stop_price,omitempty"`
-	TakeProfit *float64            `json:"take_profit,omitempty"`
-	StopLoss   *float64            `json:"stop_loss,omitempty"`
+	ContestID      string              `json:"contest_id"`
+	Symbol         string              `json:"symbol"`
+	Side           contracts.OrderSide `json:"side"`
+	Type           contracts.OrderType `json:"type"`
+	Qty            int64               `json:"qty"`
+	LimitPrice     *float64            `json:"limit_price,omitempty"`
+	StopPrice      *float64            `json:"stop_price,omitempty"`
+	TakeProfit     *float64            `json:"take_profit,omitempty"`
+	StopLoss       *float64            `json:"stop_loss,omitempty"`
+	// ClientOrderID is the durable logical submission identity (UUID).
+	// Retries of the same logical order MUST reuse the same value.
+	// Mapped 1:1 to engine order_id (PK idempotency).
+	ClientOrderID string `json:"client_order_id,omitempty"`
 }
 
 // handlePlaceOrder handles POST /api/trade/orders
@@ -225,10 +228,32 @@ func (a *App) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate order ID
-	orderID := uuid.New().String()
+	// Durable logical identity: client_order_id (UUID) → order_id (same value)
+	clientOrderID, err := resolveClientOrderID(req.ClientOrderID)
+	if err != nil {
+		validation.WriteBadRequest(w, err.Error())
+		return
+	}
+	orderID, isNew, err := a.claimClientOrderID(ctx, userID, req.ContestID, clientOrderID)
+	if err != nil {
+		if errors.Is(err, ErrClientOrderOwnership) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "client_order_id conflict"})
+			return
+		}
+		a.log().Error("Failed to claim client_order_id", zap.Error(err), zap.String("client_order_id", clientOrderID))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": tradeMsg.InternalError})
+		return
+	}
 
-	// Build OrderRequest
+	// Idempotent replay: return existing order_id without re-publishing if already claimed
+	// and engine may already have the order. Still publish when isNew so first claim always reaches engine.
+	// Concurrent first claims both publish same order_id — engine PK is the financial gate.
+	if !isNew {
+		// Safe re-publish of same order_id (engine short-circuits) so lost Kafka still recovers.
+		// Response is the same logical order.
+	}
+
+	// Build OrderRequest (order_id == client_order_id)
 	orderReq := contracts.OrderRequest{
 		OrderID:    orderID,
 		UserID:     userID,
@@ -270,6 +295,8 @@ func (a *App) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		a.log().Info("Order published to Kafka",
 			zap.String("order_id", orderID),
+			zap.String("client_order_id", clientOrderID),
+			zap.Bool("idempotent_claim_new", isNew),
 			zap.String("user_id", userID),
 			zap.String("contest_id", req.ContestID),
 			zap.String("symbol", req.Symbol))
@@ -277,10 +304,13 @@ func (a *App) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		a.log().Warn("Kafka producer not available, order not published", zap.String("order_id", orderID))
 	}
 
-	// Return 202 Accepted with order_id
+	// Return 202 Accepted with order_id (== client_order_id)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"order_id": orderID})
+	json.NewEncoder(w).Encode(map[string]string{
+		"order_id":        orderID,
+		"client_order_id": clientOrderID,
+	})
 }
 
 // handleCancelOrder handles DELETE /api/trade/orders/{order_id}

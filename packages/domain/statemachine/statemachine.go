@@ -64,10 +64,12 @@ func (s ContestStatus) IsActive() bool {
 	return s == StatusRunning
 }
 
-// AllowsRegistration returns true if registration is allowed in this state.
+// AllowsRegistration returns true if pre-start registration is allowed.
+// Paid late-join while running is evaluated separately via join cutoff
+// (packages/scoring/economics.LateJoinCutoff) — not status alone.
 func (s ContestStatus) AllowsRegistration() bool {
 	switch s {
-	case StatusScheduled, StatusRegistrationOpen:
+	case StatusRegistrationOpen:
 		return true
 	default:
 		return false
@@ -671,13 +673,15 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 func (sm *StateMachine) validateTransition(ctx context.Context, contest *Contest, toStatus ContestStatus) error {
 	switch toStatus {
 	case StatusRunning:
-		// Free contests always start regardless of participant count
+		// Paid contests: product §5.3 — at least min_participants REAL users.
+		// System/bot rows (is_system) never satisfy the real-user quorum.
+		// Free practice contests may start without the paid quorum (product §6).
 		if !contest.IsFree {
-			// Use actual participant count from contest_participants table
-			// because the denormalized current_participants column can be stale.
 			var actualParticipants int
 			err := sm.pool.Primary().QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM contest_participants WHERE contest_id = $1`,
+				`SELECT COUNT(*) FROM contest_participants
+				 WHERE contest_id = $1
+				   AND COALESCE(is_system, FALSE) = FALSE`,
 				contest.ID).Scan(&actualParticipants)
 			if err != nil {
 				// Fall back to denormalized value on query error
@@ -933,7 +937,7 @@ func (sm *StateMachine) FindContestsForAutoTransition(ctx context.Context) ([]Au
 	// the denormalized current_participants column, which may be stale.
 	rows, err := sm.pool.Primary().QueryContext(ctx, `
 		SELECT c.id, c.status, c.starts_at, c.min_participants, c.is_free,
-		       COUNT(cp.user_id) AS actual_participants
+		       COUNT(cp.user_id) FILTER (WHERE COALESCE(cp.is_system, FALSE) = FALSE) AS actual_participants
 		FROM contests c
 		LEFT JOIN contest_participants cp ON cp.contest_id = c.id
 		WHERE c.status = 'registration_closed'

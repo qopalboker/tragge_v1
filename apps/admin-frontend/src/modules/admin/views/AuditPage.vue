@@ -38,14 +38,8 @@ async function fetchAuditLogs(): Promise<void> {
     const response = await api.get<{ logs: AuditLog[] }>('/api/admin/audit');
     auditLogs.value = response.data.logs || [];
   } catch {
-    // Use mock data for development
-    auditLogs.value = [
-      { id: '1', action: 'contest.create', user_id: 'u1', user_email: 'admin@example.com', entity_type: 'contest', entity_id: 'c1', ip_address: '192.168.1.1', created_at: '2026-01-04T10:30:00Z' },
-      { id: '2', action: 'contest.update', user_id: 'u1', user_email: 'admin@example.com', entity_type: 'contest', entity_id: 'c1', ip_address: '192.168.1.1', created_at: '2026-01-04T10:35:00Z' },
-      { id: '3', action: 'user.role.assign', user_id: 'u1', user_email: 'admin@example.com', entity_type: 'user', entity_id: 'u2', ip_address: '192.168.1.1', created_at: '2026-01-04T09:00:00Z' },
-      { id: '4', action: 'contest.delete', user_id: 'u2', user_email: 'moderator@example.com', entity_type: 'contest', entity_id: 'c2', ip_address: '192.168.1.2', created_at: '2026-01-03T15:20:00Z' },
-      { id: '5', action: 'user.ban', user_id: 'u1', user_email: 'admin@example.com', entity_type: 'user', entity_id: 'u5', ip_address: '192.168.1.1', created_at: '2026-01-03T14:00:00Z' },
-    ];
+    // Empty list on error — never show fabricated audit rows.
+    auditLogs.value = [];
   } finally {
     loading.value = false;
   }

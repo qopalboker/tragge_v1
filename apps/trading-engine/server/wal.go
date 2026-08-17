@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,14 +93,27 @@ type PendingOrderData struct {
 type WALConfig struct {
 	MaxEntries  int    // Maximum entries in ring buffer (default: 10000)
 	PersistPath string // Path to WAL file for crash recovery; empty = in-memory only
+	// SyncOnWrite when true (default if PersistPath set) fsyncs each entry before Write returns.
+	// This is required so crash recovery can observe every acknowledged durable event.
+	SyncOnWrite bool
+	// FailClosedLoad when true (default) refuses to start if the WAL file is corrupt/unreadable.
+	FailClosedLoad bool
 }
 
 // DefaultWALConfig returns default WAL configuration.
 func DefaultWALConfig() WALConfig {
 	return WALConfig{
-		MaxEntries: 10000,
+		MaxEntries:     10000,
+		SyncOnWrite:    true,
+		FailClosedLoad: true,
 	}
 }
+
+// ErrWALNotDurable is returned when a durable write is required but persistence failed.
+var ErrWALNotDurable = fmt.Errorf("WAL durable write failed")
+
+// ErrWALReplayFailed is returned when startup replay cannot complete safely.
+var ErrWALReplayFailed = fmt.Errorf("WAL replay failed")
 
 // WAL file record types for JSON Lines persistence.
 const (
@@ -168,13 +182,19 @@ type WriteAheadLog struct {
 	divergedAt    time.Time
 	divergenceMu  sync.RWMutex
 
-	// File persistence
-	persistPath string
-	file        *os.File
-	fileMu      sync.Mutex
+	// Fail-closed health: once set, trading must remain NOT READY.
+	unhealthy   atomic.Bool
+	lastFailure atomic.Value // string
 
-	// Async file persistence: records are buffered and batch-fsynced
-	// to avoid per-entry fsync overhead on the hot path.
+	// File persistence
+	persistPath    string
+	syncOnWrite    bool
+	failClosedLoad bool
+	file           *os.File
+	fileMu         sync.Mutex
+
+	// Async file persistence for non-critical status marks (committed/rolled_back).
+	// Entry Write() always uses synchronous durable path when persistPath is set.
 	flushCh   chan WALFileRecord
 	flushDone chan struct{}
 
@@ -192,46 +212,96 @@ const (
 
 // NewWriteAheadLog creates a new Write-Ahead Log.
 // If config.PersistPath is set, pending entries are recovered from the file on startup.
-func NewWriteAheadLog(config WALConfig, logger *zap.Logger) *WriteAheadLog {
+// Fail-closed: load or open errors return an error (never silently disable persistence).
+// Durable path always fsyncs entry records on Write before returning.
+func NewWriteAheadLog(config WALConfig, logger *zap.Logger) (*WriteAheadLog, error) {
 	if config.MaxEntries <= 0 {
 		config.MaxEntries = 10000
 	}
 
+	// Durable backend always uses fail-closed load + sync-on-write for launch safety.
+	syncOnWrite := true
+	failClosedLoad := true
+	if config.PersistPath == "" {
+		syncOnWrite = false
+		failClosedLoad = false
+	}
+
 	w := &WriteAheadLog{
-		entries:     make([]WALEntry, config.MaxEntries),
-		maxEntries:  config.MaxEntries,
-		seqIndex:    make(map[uint64]int, config.MaxEntries),
-		logger:      logger,
-		persistPath: config.PersistPath,
+		entries:        make([]WALEntry, config.MaxEntries),
+		maxEntries:     config.MaxEntries,
+		seqIndex:       make(map[uint64]int, config.MaxEntries),
+		logger:         logger,
+		persistPath:    config.PersistPath,
+		syncOnWrite:    syncOnWrite,
+		failClosedLoad: failClosedLoad,
 	}
 
 	if config.PersistPath != "" {
 		if err := w.loadFromFile(); err != nil {
-			if logger != nil {
-				logger.Warn("Failed to load WAL from file, starting fresh",
-					zap.String("path", config.PersistPath),
-					zap.Error(err))
-			}
+			w.markUnhealthy(fmt.Sprintf("WAL load failed: %v", err))
+			return nil, fmt.Errorf("%w: load %s: %v", ErrWALReplayFailed, config.PersistPath, err)
 		}
 
-		// Open file for appending
-		f, err := os.OpenFile(config.PersistPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		// Open file for appending — never silently disable persistence.
+		f, err := os.OpenFile(config.PersistPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
 		if err != nil {
-			if logger != nil {
-				logger.Error("Failed to open WAL file for writing, persistence disabled",
-					zap.String("path", config.PersistPath),
-					zap.Error(err))
-			}
-		} else {
-			w.file = f
-			// Start async flusher goroutine
-			w.flushCh = make(chan WALFileRecord, walFlushBufferSize)
-			w.flushDone = make(chan struct{})
-			infra.SafeGo(w.logger, "wal-flusher", func() { w.flusherLoop() })
+			w.markUnhealthy(fmt.Sprintf("WAL open failed: %v", err))
+			return nil, fmt.Errorf("%w: open %s: %v", ErrWALNotDurable, config.PersistPath, err)
 		}
+		w.file = f
+		// Start async flusher for status records only (entries use sync path).
+		w.flushCh = make(chan WALFileRecord, walFlushBufferSize)
+		w.flushDone = make(chan struct{})
+		infra.SafeGo(w.logger, "wal-flusher", func() { w.flusherLoop() })
 	}
 
+	return w, nil
+}
+
+// MustNewWriteAheadLog is a test helper that panics on error.
+func MustNewWriteAheadLog(config WALConfig, logger *zap.Logger) *WriteAheadLog {
+	w, err := NewWriteAheadLog(config, logger)
+	if err != nil {
+		panic(err)
+	}
 	return w
+}
+
+// markUnhealthy records a critical WAL failure (fail-closed).
+func (w *WriteAheadLog) markUnhealthy(reason string) {
+	w.unhealthy.Store(true)
+	w.lastFailure.Store(reason)
+	if w.logger != nil {
+		w.logger.Error("CRITICAL: WAL marked unhealthy (fail-closed)",
+			zap.String("reason", reason))
+	}
+}
+
+// IsHealthy returns false when the WAL cannot safely support trading.
+func (w *WriteAheadLog) IsHealthy() bool {
+	if w == nil {
+		return false
+	}
+	return !w.unhealthy.Load() && !w.stateDiverged.Load()
+}
+
+// UnhealthyReason returns the last failure reason, if any.
+func (w *WriteAheadLog) UnhealthyReason() string {
+	if v := w.lastFailure.Load(); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	if w.stateDiverged.Load() {
+		return "state divergence detected"
+	}
+	return ""
+}
+
+// IsPersistent reports whether this WAL has a durable file backend.
+func (w *WriteAheadLog) IsPersistent() bool {
+	return w != nil && w.persistPath != "" && w.file != nil
 }
 
 // loadFromFile reads the WAL file and loads pending entries into the ring buffer.
@@ -250,7 +320,9 @@ func (w *WriteAheadLog) loadFromFile() error {
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB line limit
+	lineNo := 0
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
@@ -258,7 +330,15 @@ func (w *WriteAheadLog) loadFromFile() error {
 
 		var record WALFileRecord
 		if err := json.Unmarshal(line, &record); err != nil {
-			// Skip corrupt lines
+			if w.failClosedLoad {
+				return fmt.Errorf("corrupt WAL record at line %d: %w", lineNo, err)
+			}
+			continue
+		}
+		if record.Type != walFileRecordEntry && record.Type != walFileRecordStatus {
+			if w.failClosedLoad {
+				return fmt.Errorf("unknown WAL record type %q at line %d", record.Type, lineNo)
+			}
 			continue
 		}
 
@@ -277,21 +357,32 @@ func (w *WriteAheadLog) loadFromFile() error {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scan WAL file: %w", err)
+	}
 
-	// Load only pending entries into the ring buffer
-	var pendingCount int
+	// Load only pending entries into the ring buffer in deterministic seq order.
+	pendingList := make([]*WALEntry, 0, len(entries))
 	for _, entry := range entries {
 		if entry.Status == WALStatusPending {
-			if w.size >= w.maxEntries {
-				// Ring buffer full — shouldn't happen normally, but be safe
-				break
-			}
-			w.entries[w.head] = *entry
-			w.seqIndex[entry.SeqNum] = w.head
-			w.head = (w.head + 1) % w.maxEntries
-			w.size++
-			pendingCount++
+			pendingList = append(pendingList, entry)
 		}
+	}
+	sort.Slice(pendingList, func(i, j int) bool {
+		return pendingList[i].SeqNum < pendingList[j].SeqNum
+	})
+
+	var pendingCount int
+	for _, entry := range pendingList {
+		if w.size >= w.maxEntries {
+			// Ring buffer full — shouldn't happen normally, but be safe
+			break
+		}
+		w.entries[w.head] = *entry
+		w.seqIndex[entry.SeqNum] = w.head
+		w.head = (w.head + 1) % w.maxEntries
+		w.size++
+		pendingCount++
 	}
 
 	// Set sequence counter to continue from the highest seen
@@ -323,13 +414,16 @@ func (w *WriteAheadLog) appendToFile(record WALFileRecord) {
 	}
 
 	// Synchronous fallback (also used when persistence is not configured)
-	w.syncWriteRecord(record)
+	if err := w.syncWriteRecord(record); err != nil {
+		w.markUnhealthy(fmt.Sprintf("syncWriteRecord failed: %v", err))
+	}
 }
 
 // syncWriteRecord writes a single record synchronously with fsync.
-func (w *WriteAheadLog) syncWriteRecord(record WALFileRecord) {
+// Returns an error if the durable write cannot be completed.
+func (w *WriteAheadLog) syncWriteRecord(record WALFileRecord) error {
 	if w.file == nil {
-		return
+		return nil
 	}
 
 	w.fileMu.Lock()
@@ -340,7 +434,7 @@ func (w *WriteAheadLog) syncWriteRecord(record WALFileRecord) {
 		if w.logger != nil {
 			w.logger.Error("Failed to marshal WAL file record", zap.Error(err))
 		}
-		return
+		return fmt.Errorf("marshal WAL record: %w", err)
 	}
 
 	data = append(data, '\n')
@@ -348,20 +442,28 @@ func (w *WriteAheadLog) syncWriteRecord(record WALFileRecord) {
 		if w.logger != nil {
 			w.logger.Error("Failed to write WAL file record", zap.Error(err))
 		}
-		return
+		return fmt.Errorf("write WAL record: %w", err)
 	}
 
 	if err := w.file.Sync(); err != nil {
 		if w.logger != nil {
 			w.logger.Error("Failed to fsync WAL file", zap.Error(err))
 		}
+		return fmt.Errorf("fsync WAL: %w", err)
 	}
+	return nil
 }
 
 // flusherLoop is the async batch flusher goroutine.
 // It drains the flush channel, batches writes, and does a single fsync per batch.
+// Captures the channel locally so Close can nil w.flushCh without hanging the select.
 func (w *WriteAheadLog) flusherLoop() {
 	defer close(w.flushDone)
+
+	ch := w.flushCh
+	if ch == nil {
+		return
+	}
 
 	ticker := time.NewTicker(walFlushInterval)
 	defer ticker.Stop()
@@ -370,7 +472,7 @@ func (w *WriteAheadLog) flusherLoop() {
 
 	for {
 		select {
-		case record, ok := <-w.flushCh:
+		case record, ok := <-ch:
 			if !ok {
 				// Channel closed — flush remaining and exit
 				w.flushBatch(batch)
@@ -380,7 +482,7 @@ func (w *WriteAheadLog) flusherLoop() {
 			// Drain up to batch size without blocking
 			for len(batch) < walFlushBatchSize {
 				select {
-				case r, ok2 := <-w.flushCh:
+				case r, ok2 := <-ch:
 					if !ok2 {
 						w.flushBatch(batch)
 						return
@@ -437,7 +539,14 @@ func (w *WriteAheadLog) flushBatch(records []WALFileRecord) {
 }
 
 // Write creates a new WAL entry and returns its sequence number.
-func (w *WriteAheadLog) Write(op WALOperationType, contestID, userID, symbol string, data []byte) uint64 {
+// When a persist path is configured, the entry is fsynced before Write returns
+// (durable-before-mutate contract for ExecuteWithWAL).
+// On durable write failure the entry is not retained and the WAL is marked unhealthy.
+func (w *WriteAheadLog) Write(op WALOperationType, contestID, userID, symbol string, data []byte) (uint64, error) {
+	if w.unhealthy.Load() {
+		return 0, fmt.Errorf("%w: %s", ErrWALNotDurable, w.UnhealthyReason())
+	}
+
 	w.mu.Lock()
 
 	seqNum := w.seqCounter.Add(1)
@@ -446,12 +555,12 @@ func (w *WriteAheadLog) Write(op WALOperationType, contestID, userID, symbol str
 		SeqNum:    seqNum,
 		Operation: op,
 		Status:    WALStatusPending,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		ContestID: contestID,
 		UserID:    userID,
 		Symbol:    symbol,
 		Data:      data,
-		DBTxID:    fmt.Sprintf("wal-%d-%d", seqNum, time.Now().UnixNano()),
+		DBTxID:    fmt.Sprintf("wal-%d", seqNum),
 	}
 
 	// If ring buffer is full, remove the overwritten entry from the index
@@ -462,8 +571,9 @@ func (w *WriteAheadLog) Write(op WALOperationType, contestID, userID, symbol str
 		}
 	}
 
-	w.entries[w.head] = entry
-	w.seqIndex[seqNum] = w.head
+	slot := w.head
+	w.entries[slot] = entry
+	w.seqIndex[seqNum] = slot
 	w.head = (w.head + 1) % w.maxEntries
 
 	if w.size < w.maxEntries {
@@ -480,16 +590,38 @@ func (w *WriteAheadLog) Write(op WALOperationType, contestID, userID, symbol str
 	entryCopy := entry
 	w.mu.Unlock()
 
-	// Persist to file outside the ring buffer lock
-	w.appendToFile(WALFileRecord{
-		Type:  walFileRecordEntry,
-		Entry: &entryCopy,
-	})
+	// Durable path: fsync before caller may mutate DB / acknowledge.
+	if w.file != nil && w.syncOnWrite {
+		if err := w.syncWriteRecord(WALFileRecord{
+			Type:  walFileRecordEntry,
+			Entry: &entryCopy,
+		}); err != nil {
+			// Roll back ring buffer entry so we never treat non-durable events as pending.
+			w.mu.Lock()
+			if idx, ok := w.seqIndex[seqNum]; ok && w.entries[idx].SeqNum == seqNum {
+				w.entries[idx].Status = WALStatusRolledBack
+				delete(w.seqIndex, seqNum)
+			}
+			w.mu.Unlock()
+			w.markUnhealthy(fmt.Sprintf("durable Write failed seq=%d: %v", seqNum, err))
+			return 0, fmt.Errorf("%w: %v", ErrWALNotDurable, err)
+		}
+		return seqNum, nil
+	}
 
-	return seqNum
+	// In-memory or async path (dev/test without persist file).
+	if w.file != nil {
+		w.appendToFile(WALFileRecord{
+			Type:  walFileRecordEntry,
+			Entry: &entryCopy,
+		})
+	}
+
+	return seqNum, nil
 }
 
 // MarkCommitted marks a WAL entry as committed after successful DB and in-memory update.
+// Status is durably fsynced when a persist file is configured so restart does not re-apply.
 func (w *WriteAheadLog) MarkCommitted(seqNum uint64) bool {
 	w.mu.Lock()
 
@@ -508,12 +640,15 @@ func (w *WriteAheadLog) MarkCommitted(seqNum uint64) bool {
 	walEntriesTotal.WithLabelValues(string(w.entries[idx].Operation), string(WALStatusCommitted)).Inc()
 	w.mu.Unlock()
 
-	// Persist status change to file
-	w.appendToFile(WALFileRecord{
+	// Persist status change durably (sync) so recovery never re-applies committed work.
+	if err := w.syncWriteRecord(WALFileRecord{
 		Type:   walFileRecordStatus,
 		SeqNum: seqNum,
 		Status: WALStatusCommitted,
-	})
+	}); err != nil {
+		w.markUnhealthy(fmt.Sprintf("MarkCommitted fsync failed seq=%d: %v", seqNum, err))
+		return false
+	}
 
 	return true
 }
@@ -537,12 +672,14 @@ func (w *WriteAheadLog) MarkRolledBack(seqNum uint64) bool {
 	walEntriesTotal.WithLabelValues(string(w.entries[idx].Operation), string(WALStatusRolledBack)).Inc()
 	w.mu.Unlock()
 
-	// Persist status change to file
-	w.appendToFile(WALFileRecord{
+	if err := w.syncWriteRecord(WALFileRecord{
 		Type:   walFileRecordStatus,
 		SeqNum: seqNum,
 		Status: WALStatusRolledBack,
-	})
+	}); err != nil {
+		w.markUnhealthy(fmt.Sprintf("MarkRolledBack fsync failed seq=%d: %v", seqNum, err))
+		return false
+	}
 
 	return true
 }
@@ -732,10 +869,16 @@ func (w *WriteAheadLog) Compact() error {
 }
 
 // Close drains any pending async writes and closes the WAL file handle.
+// Safe to call multiple times.
 func (w *WriteAheadLog) Close() error {
-	// Stop the flusher goroutine and wait for it to drain
-	if w.flushCh != nil {
-		close(w.flushCh)
+	// Stop the flusher goroutine and wait for it to drain (once).
+	w.fileMu.Lock()
+	ch := w.flushCh
+	w.flushCh = nil
+	w.fileMu.Unlock()
+
+	if ch != nil {
+		close(ch)
 		<-w.flushDone
 	}
 
@@ -774,13 +917,17 @@ func (so *StateOperator) SetDivergenceCallback(callback func(ctx context.Context
 }
 
 // ExecuteWithWAL executes a state change with WAL protection.
-// The flow is:
-// 1. Write operation to WAL (pending)
-// 2. Execute DB transaction
-// 3. If DB fails: mark WAL entry as rolled_back, return error
-// 4. If DB succeeds: execute in-memory update
-// 5. If in-memory fails: log CRITICAL, set divergence flag, trigger reload
-// 6. Mark WAL entry as committed
+// Durability ordering (launch contract):
+//
+//	1. validate/serialize
+//	2. append WAL entry + fsync (durable intent)
+//	3. execute DB transaction + commit
+//	4. mutate in-memory state
+//	5. mark WAL committed
+//	6. caller may acknowledge
+//
+// Never acknowledge an economically meaningful event that cannot be recovered:
+// a durable Write failure aborts before DB mutation.
 func (so *StateOperator) ExecuteWithWAL(
 	ctx context.Context,
 	op WALOperationType,
@@ -795,8 +942,11 @@ func (so *StateOperator) ExecuteWithWAL(
 		return fmt.Errorf("marshal WAL data: %w", err)
 	}
 
-	// 2. Write to WAL
-	seqNum := so.wal.Write(op, contestID, userID, symbol, dataBytes)
+	// 2. Durable Write to WAL (fsync when persist path configured)
+	seqNum, err := so.wal.Write(op, contestID, userID, symbol, dataBytes)
+	if err != nil {
+		return fmt.Errorf("WAL durable write: %w", err)
+	}
 
 	so.logger.Debug("WAL entry created",
 		zap.Uint64("seq_num", seqNum),
@@ -874,7 +1024,17 @@ func (so *StateOperator) ExecuteWithWAL(
 // - Check if the change exists in DB
 // - If yes: apply to in-memory state, mark committed
 // - If no: discard (mark rolled_back)
+//
+// Fail-closed: any DB check error or apply error aborts replay and returns
+// ErrWALReplayFailed. The engine must remain NOT READY.
 func (so *StateOperator) ReplayPendingEntries(ctx context.Context, applyFunc func(entry WALEntry) error) error {
+	if so.wal == nil {
+		return fmt.Errorf("%w: WAL is nil", ErrWALReplayFailed)
+	}
+	if !so.wal.IsHealthy() {
+		return fmt.Errorf("%w: WAL unhealthy before replay: %s", ErrWALReplayFailed, so.wal.UnhealthyReason())
+	}
+
 	pending := so.wal.GetPendingEntries()
 	if len(pending) == 0 {
 		so.logger.Info("No pending WAL entries to replay")
@@ -888,19 +1048,23 @@ func (so *StateOperator) ReplayPendingEntries(ctx context.Context, applyFunc fun
 		// Check if change exists in DB (based on operation type)
 		exists, err := so.checkDBForChange(ctx, entry)
 		if err != nil {
-			so.logger.Warn("Error checking DB for WAL entry",
+			reason := fmt.Sprintf("DB check failed for WAL seq=%d: %v", entry.SeqNum, err)
+			so.logger.Error("CRITICAL: WAL replay aborted (fail-closed)",
 				zap.Uint64("seq_num", entry.SeqNum),
 				zap.Error(err))
-			continue
+			so.wal.markUnhealthy(reason)
+			return fmt.Errorf("%w: %s", ErrWALReplayFailed, reason)
 		}
 
 		if exists {
 			// Apply to in-memory state
 			if err := applyFunc(entry); err != nil {
-				so.logger.Error("Failed to apply WAL entry to memory",
+				reason := fmt.Sprintf("apply failed for WAL seq=%d: %v", entry.SeqNum, err)
+				so.logger.Error("CRITICAL: WAL replay apply failed (fail-closed)",
 					zap.Uint64("seq_num", entry.SeqNum),
 					zap.Error(err))
-				continue
+				so.wal.markUnhealthy(reason)
+				return fmt.Errorf("%w: %s", ErrWALReplayFailed, reason)
 			}
 			so.wal.MarkCommitted(entry.SeqNum)
 			walReplayedEntries.Inc()
@@ -908,9 +1072,9 @@ func (so *StateOperator) ReplayPendingEntries(ctx context.Context, applyFunc fun
 				zap.Uint64("seq_num", entry.SeqNum),
 				zap.String("operation", string(entry.Operation)))
 		} else {
-			// DB doesn't have the change - discard
+			// DB doesn't have the change - discard (crash before commit)
 			so.wal.MarkRolledBack(entry.SeqNum)
-			so.logger.Debug("Discarded WAL entry (not in DB)",
+			so.logger.Info("Discarded WAL entry (not in DB — crash before commit)",
 				zap.Uint64("seq_num", entry.SeqNum),
 				zap.String("operation", string(entry.Operation)))
 		}
@@ -921,6 +1085,9 @@ func (so *StateOperator) ReplayPendingEntries(ctx context.Context, applyFunc fun
 
 // checkDBForChange verifies if a WAL entry's change exists in the database.
 func (so *StateOperator) checkDBForChange(ctx context.Context, entry WALEntry) (bool, error) {
+	if so.db == nil {
+		return false, fmt.Errorf("database is nil")
+	}
 	switch entry.Operation {
 	case WALOpCreatePosition, WALOpUpdatePosition:
 		var data PositionUpdateData

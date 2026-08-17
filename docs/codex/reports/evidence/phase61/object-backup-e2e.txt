@@ -1,0 +1,4 @@
+OBJECT_STORAGE_UNAVAILABLE
+Set S3_BUCKET or BACKUP_S3_BUCKET (and AWS credentials), or MINIO_ENDPOINT.
+Local filesystem is NOT accepted as object-storage evidence.
+PHASE 6.1 object backup E2E — BLOCKED

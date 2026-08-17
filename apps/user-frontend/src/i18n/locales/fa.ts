@@ -718,6 +718,8 @@ export default {
   // کلیدهای داشبورد
   dashboard: {
     welcome: 'خوش آمدید',
+    welcomeHero: 'به ترگنت خوش آمدی',
+    heroSub: 'برای شروع، یک مسابقه انتخاب کن و مهارت‌هات رو به چالش بکش.',
     subtitle: 'عملکردت رو دنبال کن و تو تورنمنت‌های جدید شرکت کن',
     highlights: 'خلاصه عملکرد',
     totalContests: 'مسابقات شرکت‌شده',
@@ -727,6 +729,14 @@ export default {
     traggePoint: 'تی‌پوینت',
     globalRanking: 'رتبه‌بندی جهانی',
     startingSoon: 'به‌زودی شروع می‌شوند',
+    suggestedContests: 'مسابقات پیشنهادی',
+    totalAssets: 'ارزش کل دارایی',
+    prizesEarned: 'جایزه کسب‌شده',
+    ultimateChallenge: 'چالش اولتیمیت',
+    ultimateChallengeSub: 'در ۷ مسابقه شرکت کن و مهارت خود را بسنج',
+    ultimateChallengeSubProgress: 'پیشرفت شرکت در مسابقات — بر اساس تعداد واقعی مسابقات شما',
+    milestone: 'مرحله',
+    contestsShort: 'مسابقه',
     seeAll: 'مشاهده همه',
     viewAll: 'مشاهده همه',
     helpSupport: 'راهنما و پشتیبانی',

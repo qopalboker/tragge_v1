@@ -1,0 +1,29 @@
+PASS  [ROUTES] user dashboard page
+PASS  [ROUTES] trade route
+PASS  [ROUTES] wallet page
+PASS  [ROUTES] tickets page
+PASS  [USER HOME] mobile header
+PASS  [USER HOME] featured contest
+PASS  [USER HOME] challenge rail
+PASS  [USER HOME] support card below challenges
+PASS  [USER HOME] bottom nav
+PASS  [USER HOME] dashboard uses MobileHomeHeader
+PASS  [USER HOME] dashboard uses FeaturedContestCard
+PASS  [USER HOME] dashboard uses ChallengeRail
+PASS  [USER HOME] dashboard uses SupportTicketCard
+PASS  [USER HOME] horizontal scroll class
+PASS  [WALLET] wallet store balance API
+PASS  [CONTEST] contests API fetch
+PASS  [CHALLENGE] challenge uses real total_contests
+PASS  [SUPPORT] tickets API
+PASS  [TRADING] trading page
+PASS  [RTL] dashboard dir=rtl
+PASS  [RTL] design tokens
+PASS  [RTL] tokens imported in main
+PASS  [RESPONSIVE] safe-area bottom nav
+PASS  [RESPONSIVE] mobile content padding for nav
+PASS  [TYPECHECK] vue-tsc — exit=0
+PASS  [BUILD] vite production build — exit=0
+PASS  [E2E] reference image archived
+
+FRONTEND — PASS

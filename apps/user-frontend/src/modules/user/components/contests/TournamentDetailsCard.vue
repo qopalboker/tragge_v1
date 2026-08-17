@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { t } from '@/i18n';
 import type { MarketType } from '@/stores/contests';
+import { useCountdown } from '@/composables/useCountdown';
 
 const props = defineProps<{
   startsAt: string;
@@ -9,12 +10,14 @@ const props = defineProps<{
   marketType?: MarketType;
   participantCount: number;
   maxParticipants?: number;
+  minParticipants?: number;
   qtyTotal: number;
   entryFeeCents: number;
   isJoined: boolean;
   isJoining: boolean;
   canJoin: boolean;
-  status: 'registration_open' | 'scheduled' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  status: 'registration_open' | 'scheduled' | 'registration_closed' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  serverTimeDeltaMs?: number;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +25,28 @@ const emit = defineEmits<{
   enterTrading: [];
   viewResults: [];
 }>();
+
+const minRequired = computed(() => props.minParticipants ?? 2);
+const needsMorePlayers = computed(
+  () =>
+    (props.status === 'registration_open' || props.status === 'scheduled' || props.status === 'registration_closed') &&
+    props.participantCount < minRequired.value
+);
+const countdownTarget = computed(() => {
+  if (props.status === 'running' || props.status === 'paused') return props.endsAt;
+  return props.startsAt;
+});
+const serverDelta = ref(props.serverTimeDeltaMs ?? 0);
+watch(
+  () => props.serverTimeDeltaMs,
+  (v) => {
+    serverDelta.value = v ?? 0;
+  }
+);
+const { compactDisplay, timeRemaining } = useCountdown({
+  targetDate: countdownTarget,
+  serverTimeDelta: serverDelta,
+});
 
 // Format date/time
 const formattedStartTime = computed(() => {
@@ -88,9 +113,9 @@ const availableQty = computed(() => {
   return `$${props.qtyTotal.toLocaleString()}`;
 });
 
-// Participant display
+// Participant display (real users only from API)
 const participantDisplay = computed(() => {
-  return props.participantCount.toString();
+  return `${props.participantCount} / ${minRequired.value}`;
 });
 
 // Available slots
@@ -99,9 +124,25 @@ const availableSlots = computed(() => {
   return props.maxParticipants - props.participantCount;
 });
 
-// Is running
 const isRunning = computed(() => props.status === 'running');
-const isCompleted = computed(() => props.status === 'completed');
+const isCompleted = computed(() => props.status === 'completed' || props.status === 'settling');
+const isPreStart = computed(
+  () =>
+    props.status === 'registration_open' ||
+    props.status === 'scheduled' ||
+    props.status === 'registration_closed'
+);
+const countdownLabel = computed(() => {
+  if (isRunning.value || props.status === 'paused') return t('countdown.endsIn') || 'Ends in';
+  if (isPreStart.value) return t('countdown.startsIn') || 'Starts in';
+  return '';
+});
+const waitLabel = computed(() => {
+  if (!needsMorePlayers.value) return '';
+  const need = Math.max(0, minRequired.value - props.participantCount);
+  return t('contestDetails.waitingParticipants', { current: props.participantCount, min: minRequired.value, need }) ||
+    `Waiting for participants (${props.participantCount}/${minRequired.value})`;
+});
 
 function handleJoin(): void {
   emit('join');
@@ -127,6 +168,21 @@ function handleViewResults(): void {
           <path d="M12 16v-4M12 8h.01" />
         </svg>
       </button>
+    </div>
+
+    <!-- Live countdown + quorum (presentation only; backend is authoritative) -->
+    <div v-if="isPreStart || isRunning" class="countdown-block">
+      <div v-if="needsMorePlayers" class="wait-banner">{{ waitLabel }}</div>
+      <div v-else-if="isPreStart && !timeRemaining.isExpired" class="ready-banner">
+        {{ t('contestDetails.readyToStart') || 'Ready — waiting for start time' }}
+      </div>
+      <div v-if="!timeRemaining.isExpired" class="countdown-row">
+        <span class="countdown-label">{{ countdownLabel }}</span>
+        <span class="countdown-value ma-ltr-num">{{ compactDisplay }}</span>
+      </div>
+      <div v-else-if="isPreStart" class="countdown-row muted">
+        {{ t('contestDetails.awaitingStart') || 'Start time reached — waiting for server…' }}
+      </div>
     </div>
 
     <!-- Details List -->
@@ -169,7 +225,7 @@ function handleViewResults(): void {
       </div>
     </div>
 
-    <!-- Action Button -->
+    <!-- Action Button — CTAs follow backend status only -->
     <div class="card-actions">
       <template v-if="canJoin && !isJoined">
         <button
@@ -188,16 +244,26 @@ function handleViewResults(): void {
           class="btn btn-success btn-enter"
           @click="handleEnterTrading"
         >
-          {{ t('contests.enterTrading') }}
+          {{ t('contests.enterTrading') || 'Enter Trading' }}
         </button>
       </template>
-      <template v-else-if="isCompleted">
+      <template v-else-if="isJoined && (props.status === 'settling' || props.status === 'completed')">
         <button
           class="btn btn-primary btn-results"
           @click="handleViewResults"
         >
-          {{ t('contestDetails.viewResults') }}
+          {{ t('contestDetails.viewResults') || 'View Result' }}
         </button>
+      </template>
+      <template v-else-if="isJoined && isPreStart">
+        <div class="joined-status">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>{{ needsMorePlayers
+            ? (t('contestDetails.waitingForPlayers') || 'Waiting for players')
+            : (t('contestDetails.waitingForStart') || 'Waiting for start') }}</span>
+        </div>
       </template>
       <template v-else-if="isJoined">
         <div class="joined-status">
@@ -226,6 +292,44 @@ function handleViewResults(): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   overflow: hidden;
+}
+
+.countdown-block {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.15));
+}
+.wait-banner {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warning, #f59e0b);
+  margin-bottom: 6px;
+}
+.ready-banner {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-success, #10b981);
+  margin-bottom: 6px;
+}
+.countdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.countdown-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.countdown-value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+.countdown-row.muted {
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .card-header {

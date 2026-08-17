@@ -1,0 +1,318 @@
+{
+  "decision": "TRADING — PASS",
+  "results": [
+    {
+      "cat": "QUANTITY",
+      "name": "engine min QTY default is 1 (product §5.5)",
+      "ok": true,
+      "detail": "must not default to 100"
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "engine max pct default 100 (full allocation)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "compose QTY_MIN_PER_TRADE env",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "validateOrderRequest qty int64 positive",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "freeQtyRequiredForOrder reduce/close path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "BFF qty int64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "UI whole-unit step=1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "product min order QTY=1 documented",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "PRICE",
+      "name": "fill_price numeric in schema",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "PRICE",
+      "name": "score formula decimal package",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ORDER",
+      "name": "market + directional limit/stop types",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ORDER",
+      "name": "idempotent order_id short-circuit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "FILL",
+      "name": "deterministicFillID",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "POSITION",
+      "name": "updatePositionTx new/add/close/partial",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "PNL",
+      "name": "Tralent score formula qty * pct",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESERVATION",
+      "name": "ReserveQty / ReleaseQty",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CANCELLATION",
+      "name": "cancel order handler",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "LONG",
+      "name": "BUY maps to long",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SHORT",
+      "name": "SELL maps to short",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CONTEST CUTOFF",
+      "name": "ends_at exclusive + settling reject",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "STALE MARKET",
+      "name": "stale price reject",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "order_id PK idempotency + deterministic fill",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "client_order_id claim table migration 0105",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "BFF claimClientOrderID",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "FE client_order_id + submit lock",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "double-click playwright spec",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESTART RECOVERY",
+      "name": "WAL path configured",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER TRADING",
+      "name": "trading-buy-minimal + layout CSS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER TRADING",
+      "name": "trading-correctness playwright spec",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DB CONSISTENCY",
+      "name": "orders/fills/positions bigint qty",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RECONCILIATION",
+      "name": "phase2 E2E trading settlement test",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "NO MOCK TRADING DATA",
+      "name": "certification test file present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "postgres up",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "trading-core up",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "api-server up",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "trade-bff healthz",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "user-bff healthz",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "TradingCert round-trip 1/2/5/10",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "TradingCert edge rejects",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "QUANTITY",
+      "name": "TradingCert concurrency",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "LONG",
+      "name": "open/increase/reduce/close long",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SHORT",
+      "name": "open/increase/reduce/close short",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "PNL",
+      "name": "independent PnL check",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "duplicate order_id single fill",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESTART RECOVERY",
+      "name": "WAL restart E2E",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ORDER",
+      "name": "Phase2 trading→settlement",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENGINE SUITE",
+      "name": "go test exit 0",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cat": "RECONCILIATION",
+      "name": "wallet financial regression",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cat": "BROWSER TRADING",
+      "name": "user frontend reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER TRADING",
+      "name": "playwright buy+double-click",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "browser double-click / API retry evidence",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cat": "NO MOCK TRADING DATA",
+      "name": "no fake price/position in trade module",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "ts": "2026-08-17T01:26:52.377Z"
+}

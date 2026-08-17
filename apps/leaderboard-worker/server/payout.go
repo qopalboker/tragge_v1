@@ -2,48 +2,38 @@ package server
 
 import (
 	"fmt"
-	"math"
 	"sort"
 
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
 )
 
-// PayoutResult represents the payout for a single user.
+// PayoutResult is a PREVIEW allocation for ranking/notification metadata.
+// Authoritative prize amounts are produced only by settlement-service.
 type PayoutResult struct {
 	UserID      string `json:"user_id"`
 	Rank        int    `json:"rank"`
-	PayoutCents int64  `json:"payout_cents"`
+	PayoutCents int64  `json:"payout_cents"` // preview only — not financial authority
 }
 
-// DefaultPlatformFeeBps is the default platform fee in basis points (20% = 2000 bps).
-const DefaultPlatformFeeBps = 2000
+// DefaultPlatformFeeBps re-exports canonical default (20% = 2000 bps).
+const DefaultPlatformFeeBps = economics.DefaultPlatformFeeBps
 
-// ResolveEffectiveFeeBps determines the effective platform fee in basis points
-// from the two possibly-set database columns on the contests table.
-//
-// Priority:
-//  1. platform_fee_bps if > 0 (already in bps, most precise)
-//  2. commission_rate converted to bps via math.Round(rate * 100)
-//  3. DefaultPlatformFeeBps (2000 = 20%)
+// ResolveEffectiveFeeBps delegates to packages/scoring/economics (sole fee authority).
 func ResolveEffectiveFeeBps(platformFeeBps int, commissionRate float64) int {
-	if platformFeeBps > 0 {
-		return platformFeeBps
-	}
-	if commissionRate > 0 {
-		bps := int(math.Round(commissionRate * 100))
-		if bps > 0 && bps <= 10000 {
-			return bps
-		}
-	}
-	return DefaultPlatformFeeBps
+	return economics.ResolvePlatformFeeBps(platformFeeBps, commissionRate)
 }
 
 // CalculatePrizePoolGross calculates the gross prize pool.
 func CalculatePrizePoolGross(participantsCount int, entryFeeCents int64) int64 {
-	return int64(participantsCount) * entryFeeCents
+	return economics.CalculatePool(participantsCount, entryFeeCents, 0).GrossCents
 }
 
 // CalculatePrizePoolNet calculates the net prize pool after platform fee deduction.
+// Uses floor((gross * (10000-bps)) / 10000) for historical consistency with tests
+// and settlement. packages/scoring/economics.CalculatePool uses fee-then-subtract
+// which can differ by 1 cent; callers that need package economics should call it
+// directly with participants+entry.
 func CalculatePrizePoolNet(prizePoolGross int64, platformFeeBps int) int64 {
 	if platformFeeBps <= 0 {
 		return prizePoolGross

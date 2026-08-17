@@ -1,0 +1,24 @@
+{
+  "contest_id": "a89ef75b-14d6-40d2-bdb7-762bba1bd8ef",
+  "users": [
+    "22cb18ba-76dd-4812-bdf5-af2dbced34d0",
+    "eb4dcecf-dcda-440e-bad9-d65cc490eec6",
+    "c19d1156-9c3d-4192-abda-57f956a691b0"
+  ],
+  "entry_fee_cents": 10000,
+  "platform_fee_bps": 2000,
+  "gross": 30000,
+  "fee": 6000,
+  "net": 24000,
+  "payouts": [
+    12000,
+    7200,
+    4800
+  ],
+  "payout_sum": 24000,
+  "settlement_id": "e32ea8a1-f3f7-4dc5-a158-ca47600f10c2",
+  "reconcile_exit": 0,
+  "reconcile_ok": true,
+  "reconcile_output": "{\n  \"contest_id\": \"a89ef75b-14d6-40d2-bdb7-762bba1bd8ef\",\n  \"status\": \"completed\",\n  \"participants\": 3,\n  \"entry_fee_cents\": 10000,\n  \"platform_fee_bps\": 2000,\n  \"expected_gross\": 30000,\n  \"expected_fee\": 6000,\n  \"expected_net\": 24000,\n  \"stored_prize_pool_net\": 24000,\n  \"settlements\": [\n    {\n      \"id\": \"e32ea8a1-f3f7-4dc5-a158-ca47600f10c2\",\n      \"status\": \"completed\",\n      \"prize_pool_gross_cents\": 30000,\n      \"prize_pool_net_cents\": 24000,\n      \"total_distributed_cents\": 24000,\n      \"platform_fee_cents\": 6000,\n      \"total_winners\": 3\n    }\n  ],\n  \"prize_distributions\": {\n    \"paid\": 24000,\n    \"n\": 3\n  },\n  \"ledger_by_type\": [\n    {\n      \"type\": \"contest_entry\",\n      \"total\": -30000\n    },\n    {\n      \"type\": \"prize_credit\",\n      \"total\": 24000\n    }\n  ]\n}\nOK: no critical mismatches detected\n",
+  "ts": "2026-08-16T14:44:55.936Z"
+}

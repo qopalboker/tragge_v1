@@ -472,8 +472,12 @@ function handleLogout(): void {
 @media (max-width: 767px) {
   .layout-main { margin-inline-start: 0; }
   .layout-content {
-    padding: 12px 10px;
-    padding-bottom: calc(var(--bottom-nav-height, 64px) + 24px);
+    padding: 8px 0 0;
+    padding-bottom: calc(var(--mvp-bottom-nav-h, 72px) + env(safe-area-inset-bottom, 0px) + 12px);
+    max-width: none;
+  }
+  .user-layout {
+    background: var(--mvp-bg-deep, #050810);
   }
 }
 </style>

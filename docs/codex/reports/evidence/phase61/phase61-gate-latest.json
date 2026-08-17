@@ -1,0 +1,99 @@
+{
+  "ts": "2026-08-16T03:59:04.689Z",
+  "decision": "PHASE 6.1 — BLOCKED",
+  "live_vm_blocked_by_inventory": true,
+  "blocked_hard": 9,
+  "blocked_all": 10,
+  "rows": [
+    {
+      "id": "HARD-01",
+      "name": "Persistent WAL on dedicated block storage",
+      "hard": true,
+      "status": false,
+      "evidence": "WAL_BLOCK_STORAGE_PASS (real block device, not Desktop path)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-02",
+      "name": "VM reboot recovery",
+      "hard": true,
+      "status": false,
+      "evidence": "VM_REBOOT_PASS with pre/post trade + reconcile",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-03",
+      "name": "VM replacement + volume reattach (or documented backup recovery)",
+      "hard": true,
+      "status": false,
+      "evidence": "VM_REPLACEMENT_PASS or backup-recovery equivalent + RPO_DOCUMENTED",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-04",
+      "name": "Backup uploaded to real object storage",
+      "hard": true,
+      "status": false,
+      "evidence": "OBJECT_STORAGE_BACKUP_PASS / S3_BACKUP_RESTORE_PASS (not local FS)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-05",
+      "name": "Backup restored into clean environment",
+      "hard": true,
+      "status": false,
+      "evidence": "BACKUP_RESTORE_CLEAN_PASS",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-06",
+      "name": "Restored DB financial reconciliation",
+      "hard": true,
+      "status": false,
+      "evidence": "RESTORE_RECONCILE_PASS / RECONCILE_CLEAN after restore",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-07",
+      "name": "Rollback drill or proven forward-fix strategy",
+      "hard": true,
+      "status": false,
+      "evidence": "ROLLBACK_DRILL_PASS or FORWARD_FIX_PASS + MIGRATION_CLASSIFIED",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "HARD-08",
+      "name": "Single-active trading owner during recovery",
+      "hard": true,
+      "status": false,
+      "evidence": "SINGLE_ACTIVE_OWNER_PASS (old host down before new engine ready)",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "SUP-01",
+      "name": "Container recreate WAL (production path)",
+      "hard": false,
+      "status": true,
+      "evidence": "WAL_HOST_PERSIST_PASS [phase6nk wal-persist-drill]",
+      "result": "PASS"
+    },
+    {
+      "id": "SUP-02",
+      "name": "Docker engine restart drill",
+      "hard": true,
+      "status": false,
+      "evidence": "HOST_DOCKER_RESTART_PASS on production-equivalent host",
+      "result": "BLOCKED"
+    },
+    {
+      "id": "SUP-03",
+      "name": "Health gate after recovery",
+      "hard": false,
+      "status": false,
+      "evidence": "PRODUCTION HEALTH — PASS post-recovery",
+      "result": "BLOCKED"
+    }
+  ],
+  "kubernetes_required": false,
+  "phase_6_2_not_started": true
+}

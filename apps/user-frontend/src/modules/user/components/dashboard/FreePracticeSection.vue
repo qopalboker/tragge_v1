@@ -31,9 +31,6 @@ const liveCountdowns = ref<Record<string, { hours: number; minutes: number; seco
 // Countdown state for upcoming tournaments (starts in)
 const upcomingCountdowns = ref<Record<string, { days: number; hours: number; minutes: number; seconds: number }>>({});
 
-// User rank in joined contests (mock data - would come from API in real implementation)
-const userRanks = ref<Record<string, { rank: number; totalParticipants: number }>>({});
-
 const refreshPending = ref(false);
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -44,15 +41,15 @@ const hasTournaments = computed(() =>
   liveTournaments.value.length > 0 || upcomingTournaments.value.length > 0
 );
 
-// Get next available time for free tournaments (mock schedule info)
+// Next start among real upcoming free contests (no invented schedule).
 const nextScheduledTime = computed(() => {
-  const now = new Date();
-  // Free practice tournaments run at the top of every hour on weekdays
-  const nextHour = new Date(now);
-  nextHour.setMinutes(0, 0, 0);
-  nextHour.setHours(nextHour.getHours() + 1);
-
-  return nextHour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const next = upcomingTournaments.value[0];
+  if (!next?.starts_at) return '—';
+  try {
+    return new Date(next.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '—';
+  }
 });
 
 function updateLiveCountdown(contest: Contest): void {
@@ -119,16 +116,6 @@ function applyContests(data: Contest[]): void {
 
   // Initialize countdowns
   updateAllCountdowns();
-
-  // Mock user ranks for joined contests (in real app, this would come from API)
-  liveTournaments.value.forEach((contest: Contest) => {
-    if (contestsStore.isJoined(contest.id)) {
-      userRanks.value[contest.id] = {
-        rank: Math.floor(Math.random() * 50) + 1,
-        totalParticipants: contest.participant_count || 100,
-      };
-    }
-  });
 }
 
 async function fetchFreeTournaments(): Promise<void> {
@@ -205,7 +192,7 @@ function isJoining(contestId: string): boolean {
 }
 
 function getParticipantCount(contest: Contest): number {
-  return contest.participant_count ?? Math.floor(Math.random() * 200) + 20;
+  return contest.participant_count ?? 0;
 }
 
 // React to the parent-supplied list. When DashboardPage hands us
@@ -330,10 +317,10 @@ onUnmounted(() => {
           </div>
 
           <!-- User Rank (if joined) -->
-          <div v-if="isJoined(contest.id) && userRanks[contest.id]" class="user-rank">
-            <span class="rank-label">{{ t('freePractice.yourRank') }}</span>
-            <span class="rank-value">
-              #{{ userRanks[contest.id].rank }} / {{ userRanks[contest.id].totalParticipants }}
+          <div v-if="isJoined(contest.id)" class="user-rank">
+            <span class="rank-label">{{ t('freePractice.joined') || t('contests.joined') || 'عضو شده' }}</span>
+            <span class="rank-value ma-ltr-num">
+              {{ getParticipantCount(contest) }} {{ t('dashboard.participants') || 'شرکت‌کننده' }}
             </span>
           </div>
 

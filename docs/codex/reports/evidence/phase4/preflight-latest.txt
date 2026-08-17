@@ -1,0 +1,22 @@
+PHASE4_PREFLIGHT 2026-08-16T01:54:55.215Z
+kubectl=MISSING
+docker=MISSING
+helm=MISSING
+aws=MISSING
+psql=MISSING
+pg_dump=MISSING
+go=PRESENT
+node=PRESENT
+port_5432_postgres=true
+port_6379_redis=true
+port_9092_kafka=false
+port_8080_gateway=false
+port_8081_user_bff=false
+port_8082_trade_bff=false
+port_8085_trading_engine=false
+port_8087_settlement=false
+k8s_cluster=UNAVAILABLE
+storageclasses=UNAVAILABLE
+csi=UNAVAILABLE
+live_qualification_possible=false
+NOTE=live K8s/app stack unavailable — PRODUCTION NO-GO until staging cluster is provided

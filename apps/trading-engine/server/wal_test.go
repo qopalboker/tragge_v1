@@ -8,11 +8,21 @@ import (
 	"time"
 )
 
+// mustWrite is a test helper for durable Write that fails the test on error.
+func mustWrite(t *testing.T, wal *WriteAheadLog, op WALOperationType, contestID, userID, symbol string, data []byte) uint64 {
+	t.Helper()
+	seq, err := wal.Write(op, contestID, userID, symbol, data)
+	if err != nil {
+		t.Fatalf("WAL Write failed: %v", err)
+	}
+	return seq
+}
+
 func TestWriteAheadLog_BasicOperations(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	// Test Write
-	seqNum := wal.Write(WALOpCreatePosition, "contest1", "user1", "AAPL", []byte(`{"test": true}`))
+	seqNum := mustWrite(t, wal, WALOpCreatePosition, "contest1", "user1", "AAPL", []byte(`{"test": true}`))
 	if seqNum != 1 {
 		t.Errorf("Expected seq_num 1, got %d", seqNum)
 	}
@@ -44,9 +54,9 @@ func TestWriteAheadLog_BasicOperations(t *testing.T) {
 }
 
 func TestWriteAheadLog_MarkRolledBack(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
-	seqNum := wal.Write(WALOpUpdatePosition, "contest1", "user1", "TSLA", []byte(`{}`))
+	seqNum := mustWrite(t, wal, WALOpUpdatePosition, "contest1", "user1", "TSLA", []byte(`{}`))
 
 	if !wal.MarkRolledBack(seqNum) {
 		t.Error("MarkRolledBack should return true for existing entry")
@@ -60,11 +70,11 @@ func TestWriteAheadLog_MarkRolledBack(t *testing.T) {
 
 func TestWriteAheadLog_RingBuffer(t *testing.T) {
 	maxEntries := 10
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: maxEntries}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: maxEntries}, nil)
 
 	// Write more entries than max capacity
 	for i := 0; i < maxEntries+5; i++ {
-		wal.Write(WALOpCreatePosition, "contest1", "user1", "SYM", []byte(`{}`))
+		mustWrite(t, wal, WALOpCreatePosition, "contest1", "user1", "SYM", []byte(`{}`))
 	}
 
 	// Ring buffer should only keep last maxEntries
@@ -80,12 +90,12 @@ func TestWriteAheadLog_RingBuffer(t *testing.T) {
 }
 
 func TestWriteAheadLog_GetPendingEntries(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	// Write some entries
-	seq1 := wal.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
-	seq2 := wal.Write(WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
-	seq3 := wal.Write(WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{}`))
+	seq1 := mustWrite(t, wal, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
+	seq2 := mustWrite(t, wal, WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
+	seq3 := mustWrite(t, wal, WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{}`))
 
 	// Mark one as committed
 	wal.MarkCommitted(seq2)
@@ -110,7 +120,7 @@ func TestWriteAheadLog_GetPendingEntries(t *testing.T) {
 }
 
 func TestWriteAheadLog_Divergence(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	if wal.IsDiverged() {
 		t.Error("New WAL should not be diverged")
@@ -136,7 +146,7 @@ func TestWriteAheadLog_Divergence(t *testing.T) {
 }
 
 func TestWriteAheadLog_Concurrency(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 1000}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 1000}, nil)
 
 	var wg sync.WaitGroup
 	numGoroutines := 10
@@ -148,7 +158,7 @@ func TestWriteAheadLog_Concurrency(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numWritesPerGoroutine; j++ {
-				wal.Write(WALOpCreatePosition, "contest", "user", "SYM", []byte(`{}`))
+				mustWrite(t, wal, WALOpCreatePosition, "contest", "user", "SYM", []byte(`{}`))
 			}
 		}(i)
 	}
@@ -163,7 +173,7 @@ func TestWriteAheadLog_Concurrency(t *testing.T) {
 }
 
 func TestWriteAheadLog_MarkNonExistent(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	// Try to mark a non-existent entry
 	if wal.MarkCommitted(999) {
@@ -175,14 +185,14 @@ func TestWriteAheadLog_MarkNonExistent(t *testing.T) {
 }
 
 func TestWriteAheadLog_EntryData(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	contestID := "test-contest"
 	userID := "test-user"
 	symbol := "AAPL"
 	data := []byte(`{"position_id": "pos-123", "qty": 100}`)
 
-	seqNum := wal.Write(WALOpCreatePosition, contestID, userID, symbol, data)
+	seqNum := mustWrite(t, wal, WALOpCreatePosition, contestID, userID, symbol, data)
 
 	pending := wal.GetPendingEntries()
 	if len(pending) != 1 {
@@ -217,12 +227,12 @@ func TestWriteAheadLog_EntryData(t *testing.T) {
 }
 
 func TestWALStats(t *testing.T) {
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100}, nil)
 
 	// Write some entries with different statuses
-	seq1 := wal.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
-	seq2 := wal.Write(WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
-	_ = wal.Write(WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{}`))
+	seq1 := mustWrite(t, wal, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
+	seq2 := mustWrite(t, wal, WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
+	_ = mustWrite(t, wal, WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{}`))
 
 	wal.MarkCommitted(seq1)
 	wal.MarkRolledBack(seq2)
@@ -256,13 +266,13 @@ func TestWAL_FilePersistence(t *testing.T) {
 	walPath := filepath.Join(dir, "wal.jsonl")
 
 	// Create WAL and write some entries
-	wal1 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
-	wal1.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"pos":"p1"}`))
-	wal1.Write(WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{"pos":"p2"}`))
+	wal1 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	mustWrite(t, wal1, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"pos":"p1"}`))
+	mustWrite(t, wal1, WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{"pos":"p2"}`))
 	wal1.Close()
 
 	// Create a new WAL from the same file — pending entries should be recovered
-	wal2 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	wal2 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
 	defer wal2.Close()
 
 	pending := wal2.GetPendingEntries()
@@ -291,15 +301,15 @@ func TestWAL_FileRecoveryAfterCommit(t *testing.T) {
 	walPath := filepath.Join(dir, "wal.jsonl")
 
 	// Create WAL, write entries, commit all
-	wal1 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
-	seq1 := wal1.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
-	seq2 := wal1.Write(WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
+	wal1 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	seq1 := mustWrite(t, wal1, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
+	seq2 := mustWrite(t, wal1, WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{}`))
 	wal1.MarkCommitted(seq1)
 	wal1.MarkCommitted(seq2)
 	wal1.Close()
 
 	// Recovery should yield zero pending entries
-	wal2 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	wal2 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
 	defer wal2.Close()
 
 	pending := wal2.GetPendingEntries()
@@ -313,16 +323,16 @@ func TestWAL_FileRecoveryMixed(t *testing.T) {
 	walPath := filepath.Join(dir, "wal.jsonl")
 
 	// Write 3 entries: commit 1, rollback 1, leave 1 pending
-	wal1 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
-	seq1 := wal1.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"id":"committed"}`))
-	seq2 := wal1.Write(WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{"id":"rolledback"}`))
-	wal1.Write(WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{"id":"pending"}`))
+	wal1 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	seq1 := mustWrite(t, wal1, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"id":"committed"}`))
+	seq2 := mustWrite(t, wal1, WALOpUpdatePosition, "c1", "u1", "GOOG", []byte(`{"id":"rolledback"}`))
+	mustWrite(t, wal1, WALOpClosePosition, "c1", "u1", "MSFT", []byte(`{"id":"pending"}`))
 	wal1.MarkCommitted(seq1)
 	wal1.MarkRolledBack(seq2)
 	wal1.Close()
 
 	// Recovery should only load the pending entry
-	wal2 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	wal2 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
 	defer wal2.Close()
 
 	pending := wal2.GetPendingEntries()
@@ -339,9 +349,9 @@ func TestWAL_Compact(t *testing.T) {
 	walPath := filepath.Join(dir, "wal.jsonl")
 
 	// Write many entries and commit most of them
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
 	for i := 0; i < 50; i++ {
-		seq := wal.Write(WALOpCreatePosition, "c1", "u1", "SYM", []byte(`{}`))
+		seq := mustWrite(t, wal, WALOpCreatePosition, "c1", "u1", "SYM", []byte(`{}`))
 		if i < 48 {
 			wal.MarkCommitted(seq)
 		}
@@ -368,7 +378,7 @@ func TestWAL_Compact(t *testing.T) {
 	}
 
 	// WAL should still be functional after compact
-	newSeq := wal.Write(WALOpUpdatePosition, "c1", "u1", "NEW", []byte(`{}`))
+	newSeq := mustWrite(t, wal, WALOpUpdatePosition, "c1", "u1", "NEW", []byte(`{}`))
 	if newSeq == 0 {
 		t.Error("WAL should still work after compaction")
 	}
@@ -377,9 +387,9 @@ func TestWAL_Compact(t *testing.T) {
 
 func TestWAL_BackwardCompatible(t *testing.T) {
 	// Empty PersistPath should work exactly like before
-	wal := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: ""}, nil)
+	wal := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: ""}, nil)
 
-	seq := wal.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
+	seq := mustWrite(t, wal, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{}`))
 	if seq != 1 {
 		t.Errorf("Expected seq 1, got %d", seq)
 	}
@@ -401,33 +411,33 @@ func TestWAL_BackwardCompatible(t *testing.T) {
 	}
 }
 
-func TestWAL_CorruptLine(t *testing.T) {
+func TestWAL_CorruptLineFailClosed(t *testing.T) {
 	dir := t.TempDir()
 	walPath := filepath.Join(dir, "wal.jsonl")
 
-	// Write a valid WAL file with a corrupt line in the middle
-	wal1 := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
-	wal1.Write(WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"pos":"p1"}`))
+	// Write a valid WAL file then inject a corrupt line
+	wal1 := MustNewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	mustWrite(t, wal1, WALOpCreatePosition, "c1", "u1", "AAPL", []byte(`{"pos":"p1"}`))
 	wal1.Close()
 
-	// Append a corrupt line to the file
 	f, err := os.OpenFile(walPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		t.Fatalf("Failed to open WAL file: %v", err)
 	}
-	f.Write([]byte("this is not valid json\n"))
-	f.Close()
+	_, _ = f.Write([]byte("this is not valid json\n"))
+	_ = f.Close()
 
-	// Write another valid entry manually (simulate append after corruption)
-	wal2temp := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	// Fail-closed: corrupt WAL must refuse to open (never silently trade).
+	wal2, err := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
+	if err == nil {
+		wal2.Close()
+		t.Fatal("expected NewWriteAheadLog to fail closed on corrupt WAL line")
+	}
+	if !isWALReplayError(err) && err == nil {
+		t.Fatalf("expected replay/load error, got %v", err)
+	}
+}
 
-	// The WAL should recover the valid entry and skip the corrupt one
-	pending := wal2temp.GetPendingEntries()
-	if len(pending) != 1 {
-		t.Fatalf("Expected 1 pending entry (corrupt line skipped), got %d", len(pending))
-	}
-	if pending[0].Symbol != "AAPL" {
-		t.Errorf("Expected AAPL, got %s", pending[0].Symbol)
-	}
-	wal2temp.Close()
+func isWALReplayError(err error) bool {
+	return err != nil
 }

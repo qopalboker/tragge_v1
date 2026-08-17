@@ -77,3 +77,5 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+require github.com/Parsaeffatravesh/tragge/packages/scoring v0.0.0

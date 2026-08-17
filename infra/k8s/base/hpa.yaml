@@ -100,76 +100,35 @@ spec:
 
 ---
 # =============================================================================
-# TRADING-CORE HPA (consolidates trade-bff, trading-engine, market-ingestor)
+# TRADING-CORE — NO HPA (Phase 3 single-active WAL owner)
 # =============================================================================
-# Most critical service - handles WebSocket connections, order processing,
-# market data ingestion, and real-time trading.
-# High min replicas ensure zero-downtime during traffic spikes.
-# Memory metric added because WebSocket connections are memory-intensive.
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# trading-core is a StatefulSet with a dedicated RWO WAL PVC and replicas: 1
+# when SHARD_ENABLED=false. Horizontal autoscaling would create concurrent
+# owners of the same trading state / consumer group and is forbidden for launch.
+#
+# When partition-aware sharding is enabled later:
+#   - scale StatefulSet manually to SHARD_COUNT
+#   - each ordinal gets its own PVC via volumeClaimTemplates
+#   - do NOT use HPA without a custom shard-aware controller
+#
+# This comment block intentionally replaces the previous HPA object. If an old
+# trading-core-hpa exists in a cluster, delete it:
+#   kubectl delete hpa trading-core-hpa -n tragge --ignore-not-found
+apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: trading-core-hpa
+  name: trading-core-scaling-policy
   namespace: tragge
   labels:
     app.kubernetes.io/name: trading-core
-    app.kubernetes.io/component: autoscaling
-    app.kubernetes.io/part-of: tragge-platform
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: trading-core
-  # Min 2: Ensures high availability with at least 2 pods for failover
-  # Max 10: Handles large trading volumes during peak market hours
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    # CPU: Primary scaling trigger for order processing and REST API requests
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    # Memory: Secondary trigger for WebSocket connection accumulation
-    # WebSocket connections hold state and consume memory over time
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
-    # Custom metric: Scale based on active WebSocket connections
-    # This is the most important scaling signal for the trading-core.
-    # With 1000 users across 2 pods = 500/pod, which would only trigger
-    # scale-up reactively. Target 400 provides headroom so the HPA scales
-    # to 3 pods proactively (1000/400 = 2.5, rounds up to 3).
-    - type: Pods
-      pods:
-        metric:
-          name: websocket_connections_active
-        target:
-          type: AverageValue
-          averageValue: "400"
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 15
-        - type: Pods
-          value: 4
-          periodSeconds: 15
-      selectPolicy: Max
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 10
-          periodSeconds: 60
-      selectPolicy: Min
+    app.kubernetes.io/component: scaling-policy
+data:
+  policy: |
+    replicas: 1
+    scale: manual-only
+    reason: single-active WAL ownership (SHARD_ENABLED=false)
+    forbid_hpa: true
+
 
 # =============================================================================
 # TRADING-CORE ENGINE COMPONENT - SHARDING NOTE

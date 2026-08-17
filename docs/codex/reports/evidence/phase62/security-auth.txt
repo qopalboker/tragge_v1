@@ -1,0 +1,3 @@
+SECURITY_REGRESSION_PASS
+auth_package=ok
+PASS

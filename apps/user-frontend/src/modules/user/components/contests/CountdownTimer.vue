@@ -5,8 +5,10 @@ import { t } from '@/i18n';
 const props = defineProps<{
   startsAt: string;
   endsAt: string;
-  status: 'registration_open' | 'scheduled' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  status: 'registration_open' | 'scheduled' | 'registration_closed' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
   compact?: boolean;
+  /** server_time - client_time (ms); from contest details when available */
+  serverTimeDeltaMs?: number;
 }>();
 
 const emit = defineEmits<{
@@ -50,19 +52,16 @@ const countdownLabel = computed(() => {
 });
 
 function calculateTimeLeft(): void {
-  const now = new Date().getTime();
+  // Timestamp-based presentation only — never invent backend status transitions.
+  // Domain/scheduler remains authoritative for registration_closed → running → settling.
+  const now = new Date().getTime() + (props.serverTimeDeltaMs || 0);
   const target = targetDate.value.getTime();
   const difference = target - now;
 
   if (difference <= 0) {
     timeLeft.value = { days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 };
-
-    // Emit status change when countdown reaches zero
-    if (!isLive.value && !isEnded.value && props.status !== 'running') {
-      emit('statusChange', 'running');
-    } else if (isLive.value && difference < -1000) {
-      emit('statusChange', 'completed');
-    }
+    // Notify parent to re-fetch contest (do not set status locally).
+    emit('statusChange', 'refresh');
     return;
   }
 

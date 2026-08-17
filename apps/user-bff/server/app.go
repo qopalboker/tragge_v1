@@ -704,7 +704,12 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	}
 
 	// Seed default admin and test users on startup
-	seedAdminUsers(ctx, pool.Primary(), log)
+	// Local/dev bootstrap only — never invent seed users in production/staging runtime.
+	if env := strings.ToLower(os.Getenv("ENVIRONMENT")); env == "" || env == "development" || env == "dev" || env == "local" {
+		if os.Getenv("SEED_DEV_USERS") != "false" {
+			seedAdminUsers(ctx, pool.Primary(), log)
+		}
+	}
 
 	// Initialize wallet service
 	walletService := wallet.NewService(pool.Primary())
@@ -1872,9 +1877,15 @@ type ContestDetailsResponse struct {
 	PrizePoolCents      int      `json:"prize_pool_cents"`
 	AvailableQty        int64    `json:"available_qty"`
 	MaxParticipants     *int     `json:"max_participants,omitempty"`
+	MinParticipants     int      `json:"min_participants"`
 	CurrentParticipants int      `json:"current_participants"`
 	UserJoined          bool     `json:"user_joined"`
 	Symbols             []string `json:"symbols"`
+	// Aliases for FE contest store shape
+	StartsAt string `json:"starts_at,omitempty"`
+	EndsAt   string `json:"ends_at,omitempty"`
+	// Real-user participant count (system bots excluded) for cards
+	ParticipantCount int `json:"participant_count,omitempty"`
 
 	// P2-P3-2: Fee transparency
 	CommissionRate  float64 `json:"commission_rate"` // Platform commission percentage (e.g. 20.0 = 20%)

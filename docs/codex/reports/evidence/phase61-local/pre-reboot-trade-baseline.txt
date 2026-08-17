@@ -1,0 +1,15 @@
+PRE_REBOOT_TRADE_BASELINE 2026-08-16T18:06:10.1981889+03:30
+wal_proof=closure-pre-20260816180606
+wal_host_visible=True
+phase11_ok=True
+phase2_ok=True
+durable_reconcile_ok=True
+phase11_tail=ok  	github.com/Parsaeffatravesh/tragge/packages/wallet	0.274s
+
+phase2_tail=ok  	github.com/Parsaeffatravesh/tragge/apps/trading-engine/server	0.384s
+
+durable_tail=ze_pool_net_cents\": 24000,\n      \"total_distributed_cents\": 24000,\n      \"platform_fee_cents\": 6000,\n      \"total_winners\": 3\n    }\n  ],\n  \"prize_distributions\": {\n    \"paid\": 24000,\n    \"n\": 3\n  },\n  \"ledger_by_type\": [\n    {\n      \"type\": \"contest_entry\",\n      \"total\": -30000\n    },\n    {\n      \"type\": \"prize_credit\",\n      \"total\": 24000\n    }\n  ]\n}\nOK: no critical mismatches detected\n",
+  "ts": "2026-08-16T14:36:10.189Z"
+}
+RECONCILE PASS
+

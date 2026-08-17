@@ -1,0 +1,39 @@
+PASS  [AUTH] user login route
+PASS  [AUTH] admin login route
+PASS  [AUTH] user-bff login handler
+PASS  [AUTH] admin-bff login handler
+PASS  [WALLET] user wallet page
+PASS  [WALLET] user wallet store
+PASS  [WALLET] admin charge API route
+PASS  [WALLET] admin charge handler uses wallet.Service
+PASS  [WALLET] admin charge UI
+PASS  [WALLET] wallet CreditIdempotent
+PASS  [ADMIN] contest create form page
+PASS  [ADMIN] contests list page
+PASS  [ADMIN] user detail + wallet
+PASS  [ADMIN] financial page
+PASS  [ADMIN] admin contest handlers
+PASS  [CONTEST] user contests page
+PASS  [CONTEST] contest details page
+PASS  [CONTEST] contest results page
+PASS  [JOIN] user join route
+PASS  [TRADING] trading page route
+PASS  [TRADING] trade-bff place order
+PASS  [TRADING] trade-bff positions close
+PASS  [FINALIZATION] settlement tables exist (migrations)
+PASS  [SETTLEMENT] wallet prize credit
+PASS  [RECONCILIATION] contest-reconcile script
+PASS  [SECURITY] admin charge requires permission
+PASS  [SECURITY] sensitive action on wallet charge
+PASS  [E2E] compose postgres running — tragge_postgres
+PASS  [E2E] MVP financial spine (admin credit→join→settle) — exit=0
+PASS  [E2E] Phase 1.1 financial lifecycle regression — exit=0
+PASS  [E2E] Phase 2 trading→settlement — exit=0
+PASS  [E2E] trading restart WAL regression — exit=0
+PASS  [E2E] api user-bff healthz — {"status":"ok"}
+
+PASS  [E2E] trading-engine wal_recovery — {"circuits":"healthy","database":"healthy","kafka":{"consumer_group":"trading-en
+PASS  [USER RESULT] contest results view
+PASS  [ADMIN RESULT] contest detail admin
+
+MVP — PASS

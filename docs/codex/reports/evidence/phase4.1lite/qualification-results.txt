@@ -1,0 +1,34 @@
+PASS  compose_gate — exit=0 LOCAL STAGING QUALIFIED
+PASS  live_compose_qualification_possible — true
+PASS  live_qualification_possible_false — false (not Kubernetes)
+PASS  contest1_financial_e2e
+PASS  contest1_trading_e2e
+PASS  contest2_wal_restart_test
+PASS  contest2_wal_volume_survives_recreate — 41lite-proof
+PASS  contest2_engine_ready_after_recreate — wal_recovery=ok
+PASS  contest2_trade_after_engine_recreate
+PASS  contest2_financial_after_engine_recreate
+PASS  contest3_financial_start
+PASS  contest3_worker_healthy_after_restart
+PASS  contest3_settlement_idempotency_after_worker_restart
+PASS  contest3_trading_after_worker_restart
+PASS  redis_restart_healthy
+PASS  redpanda_restart_healthy
+PASS  postgres_restart_healthy
+PASS  financial_after_dep_restarts
+PASS  engine_ready_after_dep_restarts
+PASS  market_data_validation_unit
+PASS  market_data_status_observed
+PASS  local_backup_restore_logical
+PASS  local_backup_restore_pg_dump
+PASS  security_auth_package
+PASS  security_user_bff_regression
+PASS  durable_contest_reconcile — 5fde67db-081b-4b1d-9f3b-10e45a520fb2
+PASS  operator_trading_core_restart
+PASS  operator_worker_restart
+PASS  operator_redpanda_restart
+PASS  final_compose_gate — exit=0
+
+PHASE 4.1-LITE — PASS
+LOCAL STAGING — FULLY QUALIFIED (non-Kubernetes)
+NOT: PRODUCTION — GO

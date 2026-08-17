@@ -68,6 +68,8 @@ export type OrderType = 'MARKET' | 'BUY_LIMIT' | 'SELL_LIMIT' | 'BUY_STOP' | 'SE
 export interface OrderRequest {
   type: 'order_request';
   request_id: string;
+  /** Durable logical submission identity (UUID). Retries reuse the same value. */
+  client_order_id: string;
   symbol: string;
   side: OrderSide;
   order_type: OrderType;
@@ -195,6 +197,12 @@ export interface PlaceOrderOptions {
   stopPrice?: number;
   takeProfit?: number;
   stopLoss?: number;
+  /**
+   * Durable logical submission identity (UUID).
+   * Generate once per user intent; reuse on network timeout retry.
+   * If omitted, a new UUID is minted (not retry-safe across callers).
+   */
+  clientOrderId?: string;
 }
 
 /** Rate limit state for UI display */
@@ -214,6 +222,9 @@ export interface UseTradingWebSocketReturn {
 
   // Raw message forwarding (for provide/inject to child components)
   lastMessage: Ref<WebSocketMessage | null>;
+
+  /** True while a placeOrder call is in flight (UI should disable Buy/Sell). */
+  isSubmittingOrder: Ref<boolean>;
 
   // Trading data
   prices: Ref<Map<string, SymbolTick>>;
@@ -306,8 +317,13 @@ export function useTradingWebSocket(
   const tickBuffer = ref<Map<string, SymbolTick>>(new Map());
   let tickFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Pending order requests waiting for ack/reject
+  // Pending order requests waiting for ack/reject (keyed by request_id for WS correlation)
   const pendingOrders = new Map<string, PendingOrder>();
+  // In-flight logical submissions by client_order_id (dedupe concurrent placeOrder)
+  const inFlightByClientOrderId = new Map<string, Promise<OrderAck>>();
+  // UI-level submit lock (double-click / Enter)
+  const isSubmittingOrder = ref(false);
+  const PENDING_STORAGE_KEY = `tragge:pending_client_order:${contestId}`;
 
   // Rate limit state
   const isRateLimited = ref(false);
@@ -770,23 +786,26 @@ export function useTradingWebSocket(
   }
 
   /**
-   * Send an order request via WebSocket
+   * Send an order request via WebSocket once (single request_id correlation).
    * @internal Used by placeOrder and queue resubmission
    */
-  function sendOrderRequest(options: PlaceOrderOptions, queuedOrderId?: string): Promise<OrderAck> {
+  function sendOrderRequestOnce(
+    options: PlaceOrderOptions,
+    clientOrderId: string,
+    queuedOrderId?: string
+  ): Promise<OrderAck> {
     return new Promise((resolve, reject) => {
-      // Generate unique request ID
+      // request_id is correlation-only; client_order_id is durable identity
       const requestId = crypto.randomUUID();
 
-      // Track queued order mapping if provided
       if (queuedOrderId) {
         queuedOrderToPendingMap.set(requestId, queuedOrderId);
       }
 
-      // Build order request
       const orderRequest: OrderRequest = {
         type: 'order_request',
         request_id: requestId,
+        client_order_id: clientOrderId,
         symbol: options.symbol,
         side: options.side,
         order_type: options.orderType,
@@ -797,7 +816,21 @@ export function useTradingWebSocket(
         stop_loss: options.stopLoss,
       };
 
-      // Set timeout for order response
+      try {
+        sessionStorage.setItem(
+          PENDING_STORAGE_KEY,
+          JSON.stringify({
+            client_order_id: clientOrderId,
+            symbol: options.symbol,
+            side: options.side,
+            qty: options.qty,
+            ts: Date.now(),
+          })
+        );
+      } catch {
+        /* ignore storage errors */
+      }
+
       const timeout = setTimeout(() => {
         pendingOrders.delete(requestId);
         queuedOrderToPendingMap.delete(requestId);
@@ -807,17 +840,33 @@ export function useTradingWebSocket(
         reject(new Error('Order request timed out'));
       }, ORDER_TIMEOUT);
 
-      // Track pending order
       pendingOrders.set(requestId, {
         request: orderRequest,
-        resolve,
-        reject,
+        resolve: (ack) => {
+          try {
+            sessionStorage.removeItem(PENDING_STORAGE_KEY);
+          } catch {
+            /* ignore */
+          }
+          resolve(ack);
+        },
+        reject: (err) => {
+          // Keep pending key on timeout so retry reuses client_order_id; clear on hard reject
+          if (!(err instanceof Error && err.message === 'Order request timed out')) {
+            try {
+              sessionStorage.removeItem(PENDING_STORAGE_KEY);
+            } catch {
+              /* ignore */
+            }
+          }
+          reject(err);
+        },
         timeout,
       });
 
-      // Send order request
       send(orderRequest);
       tradingLogger.info(`Order request sent: ${requestId}`, {
+        clientOrderId,
         symbol: options.symbol,
         side: options.side,
         orderType: options.orderType,
@@ -828,33 +877,75 @@ export function useTradingWebSocket(
   }
 
   /**
-   * Place an order via WebSocket
-   * If disconnected and queue is enabled, the order will be queued for later submission.
-   * @param options Order parameters
-   * @returns Promise that resolves with OrderAck on success or rejects with OrderReject/Error on failure
+   * Send order with one automatic retry on timeout, reusing the same client_order_id.
    */
-  function placeOrder(options: PlaceOrderOptions): Promise<OrderAck | { status: 'queued'; queuedOrder: QueuedOrder }> {
-    // If connected, send immediately
-    if (status.value === 'connected') {
-      return sendOrderRequest(options);
+  async function sendOrderRequest(
+    options: PlaceOrderOptions,
+    queuedOrderId?: string
+  ): Promise<OrderAck> {
+    const clientOrderId = options.clientOrderId || crypto.randomUUID();
+    const opts = { ...options, clientOrderId };
+
+    const existing = inFlightByClientOrderId.get(clientOrderId);
+    if (existing) {
+      return existing;
     }
 
-    // If queue is disabled, reject immediately
-    if (!enableOrderQueue) {
-      return Promise.reject(new Error('WebSocket not connected'));
+    const run = (async () => {
+      try {
+        return await sendOrderRequestOnce(opts, clientOrderId, queuedOrderId);
+      } catch (err) {
+        // Timeout / lost response: retry once with SAME client_order_id (server is idempotent)
+        if (err instanceof Error && err.message === 'Order request timed out' && status.value === 'connected') {
+          tradingLogger.warn('Order timed out — retrying with same client_order_id', { clientOrderId });
+          return await sendOrderRequestOnce(opts, clientOrderId, queuedOrderId);
+        }
+        throw err;
+      } finally {
+        inFlightByClientOrderId.delete(clientOrderId);
+      }
+    })();
+
+    inFlightByClientOrderId.set(clientOrderId, run);
+    return run;
+  }
+
+  /**
+   * Place an order via WebSocket.
+   * Uses client_order_id as durable identity (API/DB/engine); UI lock is extra protection.
+   */
+  async function placeOrder(
+    options: PlaceOrderOptions
+  ): Promise<OrderAck | { status: 'queued'; queuedOrder: QueuedOrder }> {
+    if (isSubmittingOrder.value && !options.clientOrderId) {
+      // Double-click without shared identity: ignore second intent while first is in flight
+      return Promise.reject(new Error('Order submission already in progress'));
     }
 
-    // Queue the order for later
-    const result = orderQueueComposable.queueOrder(options, contestId);
+    isSubmittingOrder.value = true;
+    try {
+      if (status.value === 'connected') {
+        return await sendOrderRequest(options);
+      }
 
-    if (!result.success) {
-      return Promise.reject(new Error(result.error || 'Failed to queue order'));
+      if (!enableOrderQueue) {
+        throw new Error('WebSocket not connected');
+      }
+
+      const result = orderQueueComposable.queueOrder(
+        { ...options, clientOrderId: options.clientOrderId || crypto.randomUUID() },
+        contestId
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to queue order');
+      }
+
+      tradingLogger.info(`Order queued for later submission: ${result.queuedOrder!.id}`);
+      return { status: 'queued' as const, queuedOrder: result.queuedOrder! };
+    } finally {
+      isSubmittingOrder.value = false;
     }
-
-    tradingLogger.info(`Order queued for later submission: ${result.queuedOrder!.id}`);
-
-    // Return a resolved promise indicating the order was queued (not an error)
-    return Promise.resolve({ status: 'queued' as const, queuedOrder: result.queuedOrder! });
   }
 
   /**
@@ -977,6 +1068,9 @@ export function useTradingWebSocket(
 
     // Raw message forwarding (for provide/inject to child components)
     lastMessage,
+
+    // Submit lock for UI (double-click / Enter)
+    isSubmittingOrder,
 
     // Trading data
     prices,

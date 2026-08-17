@@ -851,6 +851,8 @@ export default {
   // Dashboard keys
   dashboard: {
     welcome: 'Welcome back',
+    welcomeHero: 'Welcome to Tragge',
+    heroSub: 'Pick a contest, challenge your skills, and climb the ranks.',
     subtitle: 'Track your performance and join new tournaments',
     highlights: 'Highlights',
     totalContests: 'Tournaments Played',
@@ -860,6 +862,14 @@ export default {
     traggePoint: 'T-Point',
     globalRanking: 'Global Ranking',
     startingSoon: 'Starting Soon',
+    suggestedContests: 'Suggested contests',
+    totalAssets: 'Total assets',
+    prizesEarned: 'Prizes earned',
+    ultimateChallenge: 'Ultimate challenge',
+    ultimateChallengeSub: 'Join 7 contests and measure your skill',
+    ultimateChallengeSubProgress: 'Participation progress — based on your real contest count',
+    milestone: 'Milestone',
+    contestsShort: 'contests',
     seeAll: 'See All',
     viewAll: 'View All',
     helpSupport: 'Help & Support',

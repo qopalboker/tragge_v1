@@ -81,3 +81,21 @@ patches:
     target:
       kind: StatefulSet
       name: redis
+
+  # =============================================================================
+  # TRADING-CORE WAL PVC - Production durable storage (Phase 3)
+  # =============================================================================
+  # AccessMode: ReadWriteOnce (single-active owner)
+  # Size: 20Gi (JSONL WAL growth + headroom; compact periodically)
+  # StorageClass: premium-rwo (SSD). Override if cluster class differs.
+  # MUST NOT fall back to emptyDir.
+  - patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "20Gi"
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: "premium-rwo"
+    target:
+      kind: StatefulSet
+      name: trading-core

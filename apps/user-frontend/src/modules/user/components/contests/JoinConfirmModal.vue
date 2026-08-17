@@ -56,12 +56,7 @@ const duration = computed(() => {
 const participantCount = computed(() => props.contest.participant_count ?? 0);
 const maxParticipants = computed(() => props.contest.max_participants);
 
-const estimatedPrizePool = computed(() => {
-  if (props.contest.estimated_prize_pool_cents) {
-    return props.contest.estimated_prize_pool_cents;
-  }
-  return Math.round(participantCount.value * props.contest.entry_fee_cents * 0.83);
-});
+const estimatedPrizePool = computed(() => props.contest.estimated_prize_pool_cents ?? 0);
 
 const formattedPrizePool = computed(() => {
   if (estimatedPrizePool.value === 0 && props.contest.entry_fee_cents === 0) {
@@ -111,9 +106,8 @@ async function handleConfirmJoin(): Promise<void> {
         router.push(`/trade/${props.contest.id}`);
       }, 1000);
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : t('common.error');
-    toast.error(message);
+  } catch {
+    // Global API interceptor already surfaces a single user-friendly toast.
   } finally {
     isJoining.value = false;
   }

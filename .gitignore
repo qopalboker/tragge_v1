@@ -105,3 +105,7 @@ playwright-report/
 
 # Claude Code local config (per-developer; never ship)
 .claude/
+
+# Local build artifacts / session files
+var/
+
