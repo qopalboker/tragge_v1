@@ -121,7 +121,26 @@ See `var/public-tunnel-url.txt` when a session is running (gitignored).
 
 ## 4. Allowlist the tunnel origin (required for login)
 
-CSRF/CORS use `ALLOWED_ORIGINS`. After you have `https://….lhr.life`:
+CSRF/CORS use `ALLOWED_ORIGINS` / `USER_CORS_ALLOWED_ORIGINS` / `TRADE_CORS_ALLOWED_ORIGINS`
+(read by user-bff + trade-bff via `packages/validation` CSRF/CORS middleware).
+Gateway nginx does **not** invent browser CORS; BFFs enforce it.
+
+### One-command re-apply (preferred)
+
+When localhost.run reconnects and issues a **new** `*.lhr.life` host:
+
+```powershell
+# From repo root — tunnel must already forward to gateway :8080
+pwsh -File scripts/mvp/reapply-tunnel-cors.ps1
+
+# Or pin the current public URL explicitly:
+pwsh -File scripts/mvp/reapply-tunnel-cors.ps1 -PublicUrl https://YOUR.lhr.life
+```
+
+This only writes runtime `infra/docker/.env.tunnel` (gitignored) and recreates
+`api-server` + `trading-core`. It never sets `*` / arbitrary origins.
+
+### Manual equivalent
 
 ```powershell
 $public = "https://YOUR-subdomain.lhr.life"
