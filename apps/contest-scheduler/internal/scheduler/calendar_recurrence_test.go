@@ -41,4 +41,8 @@ func TestSlotHorizon_30m(t *testing.T) {
 	if h := slotHorizon(30); h < 60*time.Minute {
 		t.Fatalf("30m horizon too small: %v", h)
 	}
+	// Keep paired with FE path changes so CI runs Go + Frontend together.
+	if h := slotHorizon(60); h < time.Hour {
+		t.Fatalf("1h horizon too small: %v", h)
+	}
 }
