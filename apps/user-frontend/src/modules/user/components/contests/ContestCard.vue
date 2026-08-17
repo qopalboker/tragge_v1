@@ -39,7 +39,7 @@ const entryFee = computed(() => {
   return `$${(props.contest.entry_fee_cents / 100).toFixed(2)}`;
 });
 
-/** Product display timezone: Asia/Tehran (not browser local). */
+/** Product display timezone: Asia/Tehran (authoritative UI TZ; not browser local). */
 const TEHRAN_TZ = 'Asia/Tehran';
 
 function formatTehran(iso: string, opts: Intl.DateTimeFormatOptions): string {

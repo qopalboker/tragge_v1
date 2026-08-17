@@ -113,7 +113,9 @@ node scripts/mvp/contest-lifecycle-gate.mjs
 
 ## CI
 
-See commit SHA after push; Actions must include Go + Frontend when FE files change.
+- Substantive commits: `c1d98ee` (feature), `3cf8bbe` (type/lint fix).
+- Local: user-frontend `pnpm run build` green; Go lint/test green.
+- GitHub Actions: require **Go + Frontend** both non-skipped after FE changes (not empty-commit skip).
 
 ## Residual risks / ops
 
