@@ -138,7 +138,7 @@ export function useChartData(): UseChartDataReturn {
 
       if (response.data.noData || !response.data.bars) {
         candles.value = [];
-        error.value = 'Chart data unavailable';
+        error.value = 'دادهٔ نمودار در دسترس نیست';
         dataVersion.value++;
         return;
       }
@@ -172,7 +172,7 @@ export function useChartData(): UseChartDataReturn {
       console.warn('Chart history API not available:', err);
       candles.value = [];
       currentBar.value = null;
-      error.value = 'Chart data unavailable';
+      error.value = 'دادهٔ نمودار در دسترس نیست';
       dataVersion.value++;
     } finally {
       isLoading.value = false;

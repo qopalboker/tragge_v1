@@ -434,6 +434,17 @@ watch(contestId, (newId) => {
   connect();
 });
 
+// Keep order max = free remaining QTY once balance / positions update.
+watch(
+  () => tradingStore.availableQTY,
+  (free) => {
+    if (free > 0) {
+      maxQty.value = free;
+      if (quantity.value > free) quantity.value = free;
+    }
+  },
+);
+
 // Start leaderboard polling only when WebSocket is disconnected
 watch(wsStatus, (status) => {
   if (status !== 'connected') {
@@ -477,10 +488,36 @@ function handleSymbolSelect(symbol: string): void {
 /** Synchronous UI lock — set before any await so double-click cannot mint two client_order_ids. */
 const tradeClickLock = ref(false);
 
+/** Trading is only unlocked when backend status is running (never invent running). */
+const tradingUnlocked = computed(() => {
+  const st = (contestInfo.value?.status || '').toLowerCase();
+  return st === 'running';
+});
+
+const tradingLockedReason = computed(() => {
+  const st = (contestInfo.value?.status || '').toLowerCase();
+  if (!st) return t('trading.loadingContest') || 'در حال بارگذاری مسابقه…';
+  if (st === 'running') return '';
+  if (st === 'paused') return t('trading.contestPaused') || 'مسابقه موقتاً متوقف است';
+  if (st === 'completed' || st === 'settling' || st === 'cancelled') {
+    return t('trading.contestEnded') || 'مسابقه به پایان رسیده است';
+  }
+  return t('trading.contestNotRunning') || 'معامله فقط پس از شروع مسابقه فعال می‌شود';
+});
+
 async function handleTrade(side: 'buy' | 'sell', symbol: string, qty: number): Promise<void> {
+  if (!tradingUnlocked.value) {
+    showToast(tradingLockedReason.value || t('toast.error'), 'error');
+    void revalidateAndMaybeLeaveTrade();
+    return;
+  }
   if (!symbol || qty <= 0) {
     showToast(t('toast.error'), 'error');
     tradingLogger.warn('Invalid trade parameters', { side, symbol, qty });
+    return;
+  }
+  if (qty > maxQty.value) {
+    showToast(t('trading.insufficientQty') || 'موجودی QTY کافی نیست', 'error');
     return;
   }
   // UI guard: ignore double-click / Enter while a submission is in flight.
@@ -522,7 +559,8 @@ async function handleTrade(side: 'buy' | 'sell', symbol: string, qty: number): P
 }
 
 function handleUpdateQuantity(qty: number): void {
-  quantity.value = qty;
+  const cap = Math.max(1, maxQty.value);
+  quantity.value = Math.max(1, Math.min(cap, Math.floor(Number(qty) || 1)));
 }
 
 function handleToggleFavorite(symbol: string): void {
@@ -677,11 +715,24 @@ onMounted(async () => {
       };
     });
 
-    // Set initial selected symbol and max qty
+    // Set initial selected symbol and max qty from participant free QTY (not fake 100).
     if (symbols.length > 0) {
       selectedSymbol.value = symbols[0];
     }
-    maxQty.value = contestDetails.available_qty || 100;
+    const detailsAny = contestDetails as ContestDetailsResponse & { qty_total?: number };
+    const allocation = detailsAny.available_qty || detailsAny.qty_total || 0;
+    // Prefer free remaining from balance API; fallback to allocation only.
+    maxQty.value = Math.max(
+      1,
+      tradingStore.availableQTY > 0
+        ? tradingStore.availableQTY
+        : allocation > 0
+          ? allocation
+          : 1,
+    );
+    if (quantity.value > maxQty.value) {
+      quantity.value = maxQty.value;
+    }
 
     // Fetch initial leaderboard (polling starts only when WS is disconnected)
     await fetchLeaderboardData();
@@ -747,8 +798,13 @@ provide('wsStatus', wsStatus);
             :selected-symbol="selectedSymbol"
             :quantity="quantity"
             :max-qty="maxQty"
+            :available-qty="tradingStore.availableQTY"
+            :used-qty="tradingStore.usedQTY"
+            :total-qty="tradingStore.totalQTY"
             :favorites="favorites"
             :submitting="isSubmittingOrder || tradeClickLock"
+            :trading-enabled="tradingUnlocked"
+            :locked-reason="tradingLockedReason"
             @select-symbol="handleSymbolSelect"
             @trade="handleTrade"
             @update-quantity="handleUpdateQuantity"
@@ -820,8 +876,15 @@ provide('wsStatus', wsStatus);
           :symbols="watchlistSymbols"
           :selected-symbol="selectedSymbolData"
           :ticks="chartTicks"
+          :quantity="quantity"
           :max-qty="maxQty"
+          :available-qty="tradingStore.availableQTY"
+          :used-qty="tradingStore.usedQTY"
+          :total-qty="tradingStore.totalQTY"
           :contest-id="contestId"
+          :submitting="isSubmittingOrder || tradeClickLock"
+          :trading-enabled="tradingUnlocked"
+          :locked-reason="tradingLockedReason"
           @select-symbol="handleSymbolSelect"
           @trade="(side: 'buy' | 'sell') => handleTrade(side, selectedSymbol, quantity)"
           @update-quantity="handleUpdateQuantity"

@@ -110,11 +110,17 @@
 
         <!-- Quick trade panel (only for selected symbol) -->
         <div v-if="item.symbol === selectedSymbol" class="tp-qtp">
+          <div class="tp-qty-strip">
+            <span>{{ t('trading.totalQty') || 'Total' }}: <b class="ma-ltr-num">{{ totalQty }}</b></span>
+            <span>{{ t('trading.usedQty') || 'Used' }}: <b class="ma-ltr-num">{{ usedQty }}</b></span>
+            <span>{{ t('trading.availableQty') || 'Free' }}: <b class="ma-ltr-num">{{ availableQty }}</b></span>
+          </div>
+          <p v-if="!tradingEnabled && lockedReason" class="tp-trade-lock">{{ lockedReason }}</p>
           <div class="tp-qtrow">
             <button
               class="tp-qtsb"
               type="button"
-              :disabled="submitting"
+              :disabled="!canTrade"
               @click="placeTrade('sell', item)"
             >
               <span class="tp-qt-l">{{ t('order.sell') }}</span>
@@ -131,19 +137,19 @@
                 min="1"
                 :max="maxQty"
                 step="1"
-                :disabled="submitting"
+                :disabled="!canTrade"
               />
-              <div class="tp-qtlot-u">QTY: {{ quantity }} / {{ maxQty }}</div>
+              <div class="tp-qtlot-u">QTY: {{ quantity }} / {{ maxQty }} ({{ t('trading.availableQty') || 'free' }})</div>
               <div class="tp-qtlot-b">
-                <button class="tp-qtpm" type="button" :disabled="submitting" @click="adjustQty(-1)">−</button>
-                <button class="tp-qtpm" type="button" :disabled="submitting" @click="adjustQty(1)">+</button>
+                <button class="tp-qtpm" type="button" :disabled="!canTrade" @click="adjustQty(-1)">−</button>
+                <button class="tp-qtpm" type="button" :disabled="!canTrade" @click="adjustQty(1)">+</button>
               </div>
             </div>
 
             <button
               class="tp-qtbb"
               type="button"
-              :disabled="submitting"
+              :disabled="!canTrade"
               @click="placeTrade('buy', item)"
             >
               <span class="tp-qt-l">{{ t('order.buy') }}</span>
@@ -182,6 +188,8 @@ import { t } from '@/i18n'
 import { ref, computed, onUnmounted } from 'vue'
 import SymbolFlag from './SymbolFlag.vue'
 
+// withDefaults used below for optional trade lock props
+
 export interface WatchlistItem {
   symbol: string
   base: string
@@ -196,7 +204,7 @@ export interface WatchlistItem {
   openPrice?: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   symbols: WatchlistItem[]
   selectedSymbol: string
   quantity: number
@@ -204,7 +212,19 @@ const props = defineProps<{
   favorites: string[]
   /** True while an order submission is in flight (disables Buy/Sell). */
   submitting?: boolean
-}>()
+  availableQty?: number
+  usedQty?: number
+  totalQty?: number
+  tradingEnabled?: boolean
+  lockedReason?: string
+}>(), {
+  submitting: false,
+  availableQty: 0,
+  usedQty: 0,
+  totalQty: 0,
+  tradingEnabled: true,
+  lockedReason: '',
+})
 
 const emit = defineEmits<{
   (e: 'selectSymbol', symbol: string): void
@@ -253,8 +273,12 @@ function selectSymbol(symbol: string) {
   emit('selectSymbol', symbol)
 }
 
+const canTrade = computed(
+  () => props.tradingEnabled !== false && !props.submitting && props.maxQty > 0,
+)
+
 function placeTrade(side: 'buy' | 'sell', item: WatchlistItem) {
-  if (props.submitting) return
+  if (!canTrade.value) return
   emit('trade', side, item.symbol, props.quantity)
 }
 

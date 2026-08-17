@@ -709,4 +709,44 @@
   .tp-nav {
     display: none;
   }
+
+  .tp-root {
+    /* Telegram Mini App / iOS safe areas */
+    padding-top: env(safe-area-inset-top, 0px);
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  .tp-mobile-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Qty strip in desktop quick-trade */
+.tp-qty-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 11px;
+  color: var(--tp-t1, #94a3b8);
+  margin-bottom: 8px;
+}
+
+.tp-qty-strip b {
+  color: var(--tp-tw, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+}
+
+.tp-trade-lock {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #fbbf24;
 }

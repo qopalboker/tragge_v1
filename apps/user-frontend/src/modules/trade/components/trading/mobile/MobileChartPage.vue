@@ -17,6 +17,26 @@
       </svg>
     </div>
 
+    <!-- Authoritative QTY strip (allocation / used / free) -->
+    <div class="tp-mchart-qtybar" aria-label="QTY">
+      <span class="tp-mchart-qitem">
+        <em>{{ t('trading.totalQty') || 'کل' }}</em>
+        <strong class="ma-ltr-num">{{ totalQty }}</strong>
+      </span>
+      <span class="tp-mchart-qitem">
+        <em>{{ t('trading.usedQty') || 'مصرف‌شده' }}</em>
+        <strong class="ma-ltr-num">{{ usedQty }}</strong>
+      </span>
+      <span class="tp-mchart-qitem free">
+        <em>{{ t('trading.availableQty') || 'آزاد' }}</em>
+        <strong class="ma-ltr-num">{{ availableQty }}</strong>
+      </span>
+    </div>
+
+    <div v-if="!tradingEnabled && lockedReason" class="tp-mchart-lock">
+      {{ lockedReason }}
+    </div>
+
     <!-- Chart area using MarketChart -->
     <div class="tp-mchart-area">
       <MarketChart
@@ -27,26 +47,39 @@
       />
     </div>
 
-    <!-- Quick trade buttons -->
-    <div class="tp-mchart-trade">
-      <button class="tp-mchart-sell" @click="emit('trade', 'sell')">
+    <!-- Sticky quick trade bar (safe-area aware) -->
+    <div class="tp-mchart-trade" :class="{ locked: !tradingEnabled || submitting }">
+      <button
+        class="tp-mchart-sell"
+        type="button"
+        :disabled="!canTrade"
+        @click="emit('trade', 'sell')"
+      >
         <span class="tp-mchart-trade-l">{{ t('order.sell') }}</span>
         <span class="tp-mchart-trade-p">{{ formatPrice(selectedSymbol.bid, selectedSymbol.decimals) }}</span>
       </button>
 
       <div class="tp-mchart-qty">
-        <button class="tp-mchart-qty-btn" @click="adjustQty(-1)">−</button>
+        <button class="tp-mchart-qty-btn" type="button" :disabled="!canTrade" @click="adjustQty(-1)">−</button>
         <input
-          v-model.number="quantity"
+          :value="quantity"
           type="number"
           class="tp-mchart-qty-inp"
           min="1"
           :max="maxQty"
+          step="1"
+          :disabled="!canTrade"
+          @input="onQtyInput"
         />
-        <button class="tp-mchart-qty-btn" @click="adjustQty(1)">+</button>
+        <button class="tp-mchart-qty-btn" type="button" :disabled="!canTrade" @click="adjustQty(1)">+</button>
       </div>
 
-      <button class="tp-mchart-buy" @click="emit('trade', 'buy')">
+      <button
+        class="tp-mchart-buy"
+        type="button"
+        :disabled="!canTrade"
+        @click="emit('trade', 'buy')"
+      >
         <span class="tp-mchart-trade-l">{{ t('order.buy') }}</span>
         <span class="tp-mchart-trade-p">{{ formatPrice(selectedSymbol.ask, selectedSymbol.decimals) }}</span>
       </button>
@@ -58,7 +91,7 @@
         <div class="tp-mpicker" @click.stop>
           <div class="tp-mpicker-hdr">
             <h3>{{ t('mobile.selectSymbol') }}</h3>
-            <button class="tp-mpicker-close" @click="showSymbolPicker = false">
+            <button class="tp-mpicker-close" type="button" @click="showSymbolPicker = false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
@@ -111,8 +144,15 @@ const props = defineProps<{
   symbols: WatchlistItem[]
   selectedSymbol: WatchlistItem
   ticks: TickData[]
+  quantity: number
   maxQty: number
+  availableQty: number
+  usedQty: number
+  totalQty: number
   contestId: string
+  submitting?: boolean
+  tradingEnabled?: boolean
+  lockedReason?: string
 }>()
 
 const emit = defineEmits<{
@@ -123,7 +163,10 @@ const emit = defineEmits<{
 
 const showSymbolPicker = ref(false)
 const searchQuery = ref('')
-const quantity = ref(1)
+
+const canTrade = computed(
+  () => (props.tradingEnabled !== false) && !props.submitting && props.maxQty > 0,
+)
 
 const filteredSymbols = computed(() => {
   if (!searchQuery.value) return props.symbols
@@ -132,6 +175,7 @@ const filteredSymbols = computed(() => {
 })
 
 function formatPrice(price: number, decimals: number): string {
+  if (!price || price <= 0) return '—'
   return price.toFixed(decimals)
 }
 
@@ -141,9 +185,14 @@ function selectSymbol(item: WatchlistItem) {
 }
 
 function adjustQty(delta: number) {
-  const newQty = Math.max(1, Math.min(props.maxQty, quantity.value + delta))
-  quantity.value = newQty
-  emit('updateQuantity', newQty)
+  const next = Math.max(1, Math.min(props.maxQty, Math.floor(props.quantity) + delta))
+  emit('updateQuantity', next)
+}
+
+function onQtyInput(ev: Event) {
+  const raw = Number((ev.target as HTMLInputElement).value)
+  const next = Math.max(1, Math.min(props.maxQty, Math.floor(raw || 1)))
+  emit('updateQuantity', next)
 }
 </script>
 
@@ -152,147 +201,202 @@ function adjustQty(delta: number) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--tp-bg);
+  min-height: 0;
+  background: var(--tp-bg, #0f172a);
 }
 
 .tp-mchart-sym {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--tp-bd);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--tp-bd, #334155);
   cursor: pointer;
-}
-
-.tp-mchart-sym svg {
-  width: 20px;
-  height: 20px;
-  color: var(--tp-t2);
-  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .tp-mchart-sym-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .tp-mchart-sym-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tp-tw);
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .tp-mchart-sym-price {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.tp-mchart-sym-price.up {
-  color: var(--tp-gn);
-}
-
-.tp-mchart-sym-price.down {
-  color: var(--tp-rd);
-}
-
-.tp-mchart-sym-chg {
-  margin-left: 8px;
-  font-size: 12px;
-}
-
-.tp-mchart-area {
-  flex: 1;
-  position: relative;
-  min-height: 200px;
-  /* Chart must render LTR regardless of app direction */
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
   direction: ltr;
 }
 
-.tp-mchart-trade {
+.tp-mchart-sym-price.up { color: #22c55e; }
+.tp-mchart-sym-price.down { color: #ef4444; }
+.tp-mchart-sym-chg { font-size: 11px; opacity: 0.85; margin-inline-start: 4px; }
+
+.tp-mchart-qtybar {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--tp-bd);
-  background: var(--tp-bg);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-bd, #334155);
+  flex: 0 0 auto;
+}
+
+.tp-mchart-qitem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tp-mchart-qitem em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--tp-t1, #94a3b8);
+}
+
+.tp-mchart-qitem strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tp-mchart-qitem.free {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.tp-mchart-lock {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #fbbf24;
+  font-size: 12px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.tp-mchart-area {
+  flex: 1 1 auto;
+  min-height: 180px;
+  direction: ltr;
+  position: relative;
+}
+
+/* Sticky order bar — above bottom nav, respects Telegram/iOS safe area */
+.tp-mchart-trade {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--tp-bd, #334155);
+  background: color-mix(in srgb, var(--tp-bg-nav, #1e293b) 92%, transparent);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+
+.tp-mchart-trade.locked {
+  opacity: 0.72;
 }
 
 .tp-mchart-sell,
 .tp-mchart-buy {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  padding: 12px;
+  min-height: 48px;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
   cursor: pointer;
 }
 
-.tp-mchart-sell {
-  background: var(--tp-rd);
-  color: #fff;
+.tp-mchart-sell { background: #dc2626; }
+.tp-mchart-buy { background: #16a34a; }
+.tp-mchart-sell:disabled,
+.tp-mchart-buy:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-.tp-mchart-buy {
-  background: var(--tp-gn);
-  color: #fff;
-}
-
-.tp-mchart-trade-l {
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.tp-mchart-trade-p {
-  font-size: 16px;
-}
+.tp-mchart-trade-l { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tp-mchart-trade-p { font-size: 13px; font-variant-numeric: tabular-nums; direction: ltr; }
 
 .tp-mchart-qty {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 88px;
+}
+
+.tp-mchart-qty-inp {
+  width: 64px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px solid var(--tp-bd, #334155);
+  background: var(--tp-bg-inp, #1e293b);
+  color: var(--tp-tw, #f1f5f9);
+  padding: 6px 4px;
+  font-weight: 700;
+}
+
+.tp-mchart-qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--tp-bd, #334155);
+  background: var(--tp-bg-card, #1e293b);
+  color: var(--tp-tw, #f1f5f9);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tp-mchart-qty {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  grid-template-rows: auto;
   align-items: center;
   gap: 4px;
 }
 
-.tp-mchart-qty-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--tp-bd);
-  background: var(--tp-bg-2);
-  color: var(--tp-tw);
-  font-size: 18px;
-  border-radius: 6px;
-  cursor: pointer;
-}
+.tp-mchart-qty-inp { width: 100%; grid-column: 2; grid-row: 1; }
+.tp-mchart-qty-btn:first-child { grid-column: 1; }
+.tp-mchart-qty-btn:last-child { grid-column: 3; }
 
-.tp-mchart-qty-inp {
-  width: 48px;
-  padding: 8px;
-  text-align: center;
-  border: 1px solid var(--tp-bd);
-  background: var(--tp-bg-inp);
-  color: var(--tp-tw);
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 6px;
-}
-
-/* Symbol picker modal */
+/* Symbol picker */
 .tp-mpicker-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 80;
   display: flex;
   align-items: flex-end;
 }
 
 .tp-mpicker {
   width: 100%;
-  max-height: 80vh;
-  background: var(--tp-bg);
+  max-height: 72vh;
+  background: var(--tp-bg-card, #1e293b);
   border-radius: 16px 16px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   flex-direction: column;
 }
@@ -301,94 +405,46 @@ function adjustQty(delta: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--tp-bd);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--tp-bd, #334155);
 }
 
-.tp-mpicker-hdr h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--tp-tw);
-}
-
-.tp-mpicker-close {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--tp-bg-2);
-  border-radius: 8px;
-  color: var(--tp-tw);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tp-mpicker-close svg {
-  width: 20px;
-  height: 20px;
-}
-
-.tp-mpicker-search {
-  padding: 12px 16px;
-}
-
+.tp-mpicker-search { padding: 10px 16px; }
 .tp-mpicker-search input {
   width: 100%;
-  padding: 12px;
-  border: 1px solid var(--tp-bd);
-  background: var(--tp-bg-inp);
-  color: var(--tp-tw);
-  font-size: 14px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--tp-bd, #334155);
+  background: var(--tp-bg-inp, #0f172a);
+  color: var(--tp-tw, #f1f5f9);
 }
 
 .tp-mpicker-list {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: env(safe-area-inset-bottom, 16px);
+  overflow: auto;
+  padding: 0 8px 12px;
 }
 
 .tp-mpicker-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--tp-bd);
+  gap: 10px;
+  padding: 12px 10px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
-.tp-mpicker-item.selected {
-  background: var(--tp-bg-h);
+.tp-mpicker-item.selected { background: rgba(34, 197, 94, 0.12); }
+.tp-mpicker-item-info { flex: 1; display: flex; flex-direction: column; }
+.tp-mpicker-item-price { direction: ltr; font-variant-numeric: tabular-nums; font-size: 12px; opacity: 0.85; }
+.tp-mpicker-item-chg.up { color: #22c55e; }
+.tp-mpicker-item-chg.down { color: #ef4444; }
+
+@media (max-width: 430px) {
+  .tp-mchart-area { min-height: 160px; }
 }
 
-.tp-mpicker-item-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.tp-mpicker-item-sym {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tp-tw);
-}
-
-.tp-mpicker-item-price {
-  font-size: 12px;
-  color: var(--tp-t2);
-}
-
-.tp-mpicker-item-chg {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.tp-mpicker-item-chg.up {
-  color: var(--tp-gn);
-}
-
-.tp-mpicker-item-chg.down {
-  color: var(--tp-rd);
+@media (max-width: 360px) {
+  .tp-mchart-trade-p { font-size: 11px; }
+  .tp-mchart-qty { min-width: 72px; }
 }
 </style>
