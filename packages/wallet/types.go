@@ -53,14 +53,14 @@ const (
 type ReasonCode string
 
 const (
-	ReasonCodeContestEntry       ReasonCode = "CONTEST_ENTRY"
-	ReasonCodeContestEntryFree   ReasonCode = "CONTEST_ENTRY_FREE"
+	ReasonCodeContestEntry        ReasonCode = "CONTEST_ENTRY"
+	ReasonCodeContestEntryFree    ReasonCode = "CONTEST_ENTRY_FREE"
 	ReasonCodeContestRefundQuorum ReasonCode = "CONTEST_REFUND_QUORUM"
-	ReasonCodeContestRefundAdmin ReasonCode = "CONTEST_REFUND_ADMIN"
-	ReasonCodeContestRefundLeave ReasonCode = "CONTEST_REFUND_LEAVE"
-	ReasonCodeContestPrize       ReasonCode = "CONTEST_PRIZE"
-	ReasonCodeWalletTopup        ReasonCode = "WALLET_TOPUP"
-	ReasonCodeWalletWithdraw     ReasonCode = "WALLET_WITHDRAW"
+	ReasonCodeContestRefundAdmin  ReasonCode = "CONTEST_REFUND_ADMIN"
+	ReasonCodeContestRefundLeave  ReasonCode = "CONTEST_REFUND_LEAVE"
+	ReasonCodeContestPrize        ReasonCode = "CONTEST_PRIZE"
+	ReasonCodeWalletTopup         ReasonCode = "WALLET_TOPUP"
+	ReasonCodeWalletWithdraw      ReasonCode = "WALLET_WITHDRAW"
 )
 
 // LedgerRefType represents the reference type for a ledger entry.

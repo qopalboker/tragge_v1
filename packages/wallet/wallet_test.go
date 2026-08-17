@@ -597,8 +597,8 @@ func TestCheckWithdrawalLimits_MonthlyAmountExceeded(t *testing.T) {
 	userID := createTestUser(ctx, t, env.db, "limits-monthly-amt@example.com")
 
 	defaults := WithdrawalLimits{
-		DailyAmountCents:   5000000,  // $50,000 daily (high so it doesn't trigger)
-		MonthlyAmountCents: 1000000,  // $10,000 monthly
+		DailyAmountCents:   5000000, // $50,000 daily (high so it doesn't trigger)
+		MonthlyAmountCents: 1000000, // $10,000 monthly
 		DailyCount:         100,
 		MonthlyCount:       100,
 	}

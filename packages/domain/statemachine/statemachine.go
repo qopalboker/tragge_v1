@@ -166,7 +166,7 @@ type Contest struct {
 	PausedAt             *time.Time    // When contest was paused (nil if not paused)
 	TotalPausedDuration  time.Duration // Total accumulated pause duration
 	CommissionRate       float64       // Commission rate as percentage (e.g., 20.00 = 20%). Use prize.MustCommissionPercentToFraction() to convert to fraction for prize calculations.
-	RegistrationOpensAt  *time.Time   // When registration should auto-open (nil = manual)
+	RegistrationOpensAt  *time.Time    // When registration should auto-open (nil = manual)
 }
 
 // TransitionRequest contains the data needed to request a state transition.

@@ -9,10 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"go.uber.org/zap"
 
 	"github.com/Parsaeffatravesh/tragge/packages/config"
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
@@ -22,11 +29,6 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/observability"
 	pkgredis "github.com/Parsaeffatravesh/tragge/packages/redis"
 	"github.com/Parsaeffatravesh/tragge/packages/validation"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/twmb/franz-go/pkg/kgo"
-	"go.uber.org/zap"
 )
 
 // App holds application state and dependencies.
@@ -65,12 +67,12 @@ type App struct {
 	contestTradingMu sync.RWMutex
 
 	// State
-	ready            atomic.Bool
-	walRecoveryOK    atomic.Bool // true only after successful WAL load + replay
-	recoveryError    atomic.Value // string reason when recovery fails
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
+	ready         atomic.Bool
+	walRecoveryOK atomic.Bool  // true only after successful WAL load + replay
+	recoveryError atomic.Value // string reason when recovery fails
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 
 	// Shared resource flags - when true, these resources are shared and should not be closed by this service
 	sharedDB    bool
@@ -496,7 +498,7 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	// Wire contest trading gate (finalization boundary) into the engine hot path.
 	app.engine.SetContestTradingGate(app.IsContestTradingEnabled)
 	// Market data must be present for trading in production; dev may relax via env.
-	app.engine.SetRequireMarketDataReady(config.GetEnvBool("REQUIRE_MARKET_DATA_READY", cfg.Environment == "production" || cfg.Environment == "staging" || cfg.Environment == "prod"))
+	app.engine.SetRequireMarketDataReady(config.GetEnvBool("REQUIRE_MARKET_DATA_READY", isProdLikeEnv(strings.ToLower(strings.TrimSpace(cfg.Environment)))))
 	log.Info("Engine metrics initialized")
 
 	// Log cache configuration
@@ -1026,7 +1028,7 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		}
 		response["wal_recovery"] = a.walRecoveryOK.Load()
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -1046,7 +1048,7 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
 	response["wal_recovery"] = "ok"
@@ -1063,7 +1065,7 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 			response["status"] = "unavailable"
 			response["message"] = "market feed unavailable: " + mdReason
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 			return
 		}
 	}

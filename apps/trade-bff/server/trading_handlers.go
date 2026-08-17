@@ -18,6 +18,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	jsonKeyOrderID       = "order_id"
+	jsonKeyClientOrderID = "client_order_id"
+	jsonKeyMessage       = "message"
+)
+
 // MeResponse is the response for /me endpoint
 type MeResponse struct {
 	ID        string    `json:"id"`
@@ -140,18 +146,17 @@ func (a *App) validateContestRunning(w http.ResponseWriter, ctx context.Context,
 	return true
 }
 
-
 // OrderSubmitRequest represents the request body for order placement
 type OrderSubmitRequest struct {
-	ContestID      string              `json:"contest_id"`
-	Symbol         string              `json:"symbol"`
-	Side           contracts.OrderSide `json:"side"`
-	Type           contracts.OrderType `json:"type"`
-	Qty            int64               `json:"qty"`
-	LimitPrice     *float64            `json:"limit_price,omitempty"`
-	StopPrice      *float64            `json:"stop_price,omitempty"`
-	TakeProfit     *float64            `json:"take_profit,omitempty"`
-	StopLoss       *float64            `json:"stop_loss,omitempty"`
+	ContestID  string              `json:"contest_id"`
+	Symbol     string              `json:"symbol"`
+	Side       contracts.OrderSide `json:"side"`
+	Type       contracts.OrderType `json:"type"`
+	Qty        int64               `json:"qty"`
+	LimitPrice *float64            `json:"limit_price,omitempty"`
+	StopPrice  *float64            `json:"stop_price,omitempty"`
+	TakeProfit *float64            `json:"take_profit,omitempty"`
+	StopLoss   *float64            `json:"stop_loss,omitempty"`
 	// ClientOrderID is the durable logical submission identity (UUID).
 	// Retries of the same logical order MUST reuse the same value.
 	// Mapped 1:1 to engine order_id (PK idempotency).
@@ -245,13 +250,9 @@ func (a *App) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Idempotent replay: return existing order_id without re-publishing if already claimed
-	// and engine may already have the order. Still publish when isNew so first claim always reaches engine.
-	// Concurrent first claims both publish same order_id — engine PK is the financial gate.
-	if !isNew {
-		// Safe re-publish of same order_id (engine short-circuits) so lost Kafka still recovers.
-		// Response is the same logical order.
-	}
+	// Idempotent replay: always re-publish the same order_id so a lost Kafka delivery
+	// can recover. Engine PK short-circuits duplicate execution.
+	_ = isNew
 
 	// Build OrderRequest (order_id == client_order_id)
 	orderReq := contracts.OrderRequest{
@@ -307,10 +308,12 @@ func (a *App) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 	// Return 202 Accepted with order_id (== client_order_id)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
-		"order_id":        orderID,
-		"client_order_id": clientOrderID,
-	})
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		jsonKeyOrderID:       orderID,
+		jsonKeyClientOrderID: clientOrderID,
+	}); err != nil {
+		a.log().Error("Failed to encode order response", zap.Error(err))
+	}
 }
 
 // handleCancelOrder handles DELETE /api/trade/orders/{order_id}

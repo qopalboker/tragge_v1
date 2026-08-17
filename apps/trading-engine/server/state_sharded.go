@@ -8,12 +8,13 @@ import (
 	"sync"
 	"time"
 
-	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
-	"github.com/Parsaeffatravesh/tragge/packages/db"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/shopspring/decimal"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
+
+	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
+	"github.com/Parsaeffatravesh/tragge/packages/db"
 )
 
 // Common errors for shard management

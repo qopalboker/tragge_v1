@@ -263,11 +263,11 @@ func (m *PriceFreshnessMonitor) GetFreshnessStatus() *PriceFreshnessResponse {
 		var status string
 		switch {
 		case age > m.alertThreshold:
-			status = "stale"
+			status = priceAgeStale
 		case age > m.warningThreshold:
 			status = "warning"
 		default:
-			status = "fresh"
+			status = priceAgeFresh
 		}
 
 		statuses = append(statuses, SymbolFreshnessStatus{

@@ -55,9 +55,9 @@ type ContestInfo struct {
 	Status            string
 	// Economics lock (migration 0103). When EconomicsLocked is true, settlement
 	// MUST use LockedEntryFeeCents and LockedPlatformFeeBps exclusively.
-	EconomicsLocked       bool
-	LockedEntryFeeCents   int64
-	LockedPlatformFeeBps  int
+	EconomicsLocked      bool
+	LockedEntryFeeCents  int64
+	LockedPlatformFeeBps int
 }
 
 // Participant represents a contest participant with their final scores.
@@ -600,4 +600,3 @@ func (a *App) getTotalParticipants(ctx context.Context, contestID string) (int, 
 	).Scan(&count)
 	return count, err
 }
-

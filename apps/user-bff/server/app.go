@@ -15,6 +15,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	redis "github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
 	"github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/service"
 	"github.com/Parsaeffatravesh/tragge/packages/audit"
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
@@ -32,12 +39,6 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/storage"
 	"github.com/Parsaeffatravesh/tragge/packages/validation"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
-	"github.com/getsentry/sentry-go"
-	sentryhttp "github.com/getsentry/sentry-go/http"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	redis "github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 const userSecurityContext = "user"
@@ -705,7 +706,7 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 
 	// Seed default admin and test users on startup
 	// Local/dev bootstrap only — never invent seed users in production/staging runtime.
-	if env := strings.ToLower(os.Getenv("ENVIRONMENT")); env == "" || env == "development" || env == "dev" || env == "local" {
+	if env := strings.ToLower(os.Getenv("ENVIRONMENT")); env == "" || env == envDevelopment || env == envDev || env == envLocal {
 		if os.Getenv("SEED_DEV_USERS") != "false" {
 			seedAdminUsers(ctx, pool.Primary(), log)
 		}

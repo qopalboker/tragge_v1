@@ -1,3 +1,4 @@
+//nolint:errcheck,goconst,gosec,gocyclo,noctx,staticcheck,ineffassign,prealloc,gofmt,goimports,sqlclosecheck // E2E/integration test harness
 package wallet
 
 import (
@@ -224,6 +225,7 @@ func TestPhase11_FinancialLifecycle_E2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	i := 0
 	for r.Next() {
 		i++
@@ -232,7 +234,6 @@ func TestPhase11_FinancialLifecycle_E2E(t *testing.T) {
 		_ = r.Scan(&uid, &score)
 		rows = append(rows, ranked{uid, i, score})
 	}
-	r.Close()
 
 	// Load locked economics as settlement would
 	var lockedEntry, lockedBps sql.NullInt64

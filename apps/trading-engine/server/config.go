@@ -141,22 +141,22 @@ func loadConfig() *Config {
 		MarketHoursConfigPath: config.GetEnv("MARKET_HOURS_CONFIG_PATH", "market_hours.json"),
 		MarketHoursEnabled:    config.GetEnvBool("MARKET_HOURS_ENABLED", true),
 		ConsumerGroup:         config.GetEnv("CONSUMER_GROUP", "trading-engine"),
-		OrdersTopic:         config.GetEnv("ORDERS_TOPIC", "orders.v1"),
-		TicksTopic:          config.GetEnv("TICKS_TOPIC", "ticks.v1"),
-		FillsTopic:          config.GetEnv("FILLS_TOPIC", "fills.v1"),
-		PositionsTopic:      config.GetEnv("POSITIONS_TOPIC", "positions.v1"),
-		PnLDeltasTopic:      config.GetEnv("PNL_DELTAS_TOPIC", "pnl_deltas.v1"),
-		OrderAcksTopic:      config.GetEnv("ORDER_ACKS_TOPIC", "order_acks.v1"),
-		PositionClosedTopic: config.GetEnv("POSITION_CLOSED_TOPIC", "position_closed.v1"),
-		OrderCancelledTopic: config.GetEnv("ORDER_CANCELLED_TOPIC", "order_cancelled.v1"),
-		AlertsTopic:         config.GetEnv("ALERTS_TOPIC", "alerts.v1"),
-		ClosePositionsTopic: config.GetEnv("CLOSE_POSITIONS_TOPIC", "close_positions.v1"),
-		CancelOrdersTopic:   config.GetEnv("CANCEL_ORDERS_TOPIC", "cancel_orders.v1"),
-		ModifyTPSLTopic:     config.GetEnv("MODIFY_TPSL_TOPIC", "modify_tpsl.v1"),
-		ShardID:             shardID,
-		ShardCount:          config.GetEnvInt("SHARD_COUNT", 1),
-		ShardEnabled:        config.GetEnvBool("SHARD_ENABLED", false),
-		ShardAssignmentTTL:  getEnvDuration("SHARD_ASSIGNMENT_TTL", 1*time.Hour),
+		OrdersTopic:           config.GetEnv("ORDERS_TOPIC", "orders.v1"),
+		TicksTopic:            config.GetEnv("TICKS_TOPIC", "ticks.v1"),
+		FillsTopic:            config.GetEnv("FILLS_TOPIC", "fills.v1"),
+		PositionsTopic:        config.GetEnv("POSITIONS_TOPIC", "positions.v1"),
+		PnLDeltasTopic:        config.GetEnv("PNL_DELTAS_TOPIC", "pnl_deltas.v1"),
+		OrderAcksTopic:        config.GetEnv("ORDER_ACKS_TOPIC", "order_acks.v1"),
+		PositionClosedTopic:   config.GetEnv("POSITION_CLOSED_TOPIC", "position_closed.v1"),
+		OrderCancelledTopic:   config.GetEnv("ORDER_CANCELLED_TOPIC", "order_cancelled.v1"),
+		AlertsTopic:           config.GetEnv("ALERTS_TOPIC", "alerts.v1"),
+		ClosePositionsTopic:   config.GetEnv("CLOSE_POSITIONS_TOPIC", "close_positions.v1"),
+		CancelOrdersTopic:     config.GetEnv("CANCEL_ORDERS_TOPIC", "cancel_orders.v1"),
+		ModifyTPSLTopic:       config.GetEnv("MODIFY_TPSL_TOPIC", "modify_tpsl.v1"),
+		ShardID:               shardID,
+		ShardCount:            config.GetEnvInt("SHARD_COUNT", 1),
+		ShardEnabled:          config.GetEnvBool("SHARD_ENABLED", false),
+		ShardAssignmentTTL:    getEnvDuration("SHARD_ASSIGNMENT_TTL", 1*time.Hour),
 
 		// Partition-aware consumer configuration
 		PartitionAwareEnabled: config.GetEnvBool("PARTITION_AWARE_ENABLED", false),
@@ -231,14 +231,14 @@ func defaultWALRequirePersist(environment string) bool {
 		return config.GetEnvBool("WAL_REQUIRE_PERSIST", true)
 	}
 	env := strings.ToLower(strings.TrimSpace(environment))
-	return env == "production" || env == "staging" || env == "prod"
+	return isProdLikeEnv(env)
 }
 
 // Validate checks launch-critical configuration contracts.
 // Production/staging must not silently use an ephemeral in-memory WAL.
 func (c *Config) Validate() error {
 	env := strings.ToLower(strings.TrimSpace(c.Environment))
-	prodLike := env == "production" || env == "staging" || env == "prod"
+	prodLike := isProdLikeEnv(env)
 
 	if c.WALRequirePersist || prodLike {
 		if strings.TrimSpace(c.WALPersistPath) == "" {
@@ -258,7 +258,7 @@ func (c *Config) Validate() error {
 		}
 		// Prove the directory is writable without leaving a durable junk file.
 		probe := filepath.Join(dir, ".wal_write_probe")
-		if err := os.WriteFile(probe, []byte("ok"), 0o640); err != nil {
+		if err := os.WriteFile(probe, []byte("ok"), 0o600); err != nil {
 			return fmt.Errorf("WAL_PERSIST_PATH directory not writable (%s): %w", dir, err)
 		}
 		_ = os.Remove(probe)
@@ -296,4 +296,3 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
-

@@ -16,7 +16,7 @@ const (
 type Rate struct {
 	USDToIRR  float64   `json:"usd_to_irr"`
 	USDToIRT  float64   `json:"usd_to_irt"`
-	Source    string    `json:"source"`     // "nobitex", "static", "cached"
+	Source    string    `json:"source"` // "nobitex", "static", "cached"
 	FetchedAt time.Time `json:"fetched_at"`
 }
 

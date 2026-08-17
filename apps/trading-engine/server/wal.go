@@ -244,7 +244,7 @@ func NewWriteAheadLog(config WALConfig, logger *zap.Logger) (*WriteAheadLog, err
 		}
 
 		// Open file for appending — never silently disable persistence.
-		f, err := os.OpenFile(config.PersistPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
+		f, err := os.OpenFile(config.PersistPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			w.markUnhealthy(fmt.Sprintf("WAL open failed: %v", err))
 			return nil, fmt.Errorf("%w: open %s: %v", ErrWALNotDurable, config.PersistPath, err)
@@ -919,12 +919,12 @@ func (so *StateOperator) SetDivergenceCallback(callback func(ctx context.Context
 // ExecuteWithWAL executes a state change with WAL protection.
 // Durability ordering (launch contract):
 //
-//	1. validate/serialize
-//	2. append WAL entry + fsync (durable intent)
-//	3. execute DB transaction + commit
-//	4. mutate in-memory state
-//	5. mark WAL committed
-//	6. caller may acknowledge
+//  1. validate/serialize
+//  2. append WAL entry + fsync (durable intent)
+//  3. execute DB transaction + commit
+//  4. mutate in-memory state
+//  5. mark WAL committed
+//  6. caller may acknowledge
 //
 // Never acknowledge an economically meaningful event that cannot be recovered:
 // a durable Write failure aborts before DB mutation.

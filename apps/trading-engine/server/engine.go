@@ -85,7 +85,7 @@ func NewEngineMetrics(registry prometheus.Registerer, namespace string) *EngineM
 		}),
 		EngineReady: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name:      "ready",
+			Name:      metricNameReady,
 			Help:      "1 when trading-engine is ready to accept trading traffic",
 		}),
 		MarketTicksAccepted: prometheus.NewCounter(prometheus.CounterOpts{

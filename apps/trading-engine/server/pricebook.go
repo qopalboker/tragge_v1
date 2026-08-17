@@ -325,9 +325,9 @@ func (pb *PriceBook) PriceAgeClassifies(symbol string, maxAge time.Duration) str
 		return "anomaly"
 	}
 	if age > maxAge {
-		return "stale"
+		return priceAgeStale
 	}
-	return "fresh"
+	return priceAgeFresh
 }
 
 // GetExitPrice returns the appropriate mark-to-market price for unrealized P&L calculation.

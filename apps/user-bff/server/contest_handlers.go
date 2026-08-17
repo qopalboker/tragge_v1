@@ -12,6 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/db"
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
@@ -19,10 +24,6 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
 	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 // contestJoinAllowed implements product policy §5.6.
@@ -30,15 +31,15 @@ import (
 // Paid contests: registration_open, or running until late_join_cutoff when enabled.
 func contestJoinAllowed(status string, isFree, lateJoinEnabled bool, startsAt, endsAt, now time.Time) (ok bool, isLate bool, reason string) {
 	switch status {
-	case "registration_open", "scheduled":
+	case contestStatusRegistrationOpen, contestStatusScheduled:
 		// Scheduled+open registration are pre-start joins.
-		if status == "scheduled" {
+		if status == contestStatusScheduled {
 			// Prefer explicit registration_open; scheduled alone is not open unless product opens it.
 			// Keep compatibility: only registration_open for pre-start unless already open.
 			return false, false, "contest_not_open"
 		}
 		return true, false, ""
-	case "running":
+	case contestStatusRunning:
 		if isFree {
 			return false, false, "free_contest_no_late_join"
 		}
@@ -596,7 +597,7 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	isLate := false
 	joinOK, isLate, joinReason := contestJoinAllowed(status, isFree || entryFeeCents <= 0, lateJoinEnabled, startsAt, endsAt, now)
 	if !joinOK {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, "reason": joinReason})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, jsonKeyReason: joinReason})
 		return
 	}
 	_ = isLate // used inside transaction after re-check
@@ -692,7 +693,7 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	nowTx := time.Now().UTC()
 	ok, isLateJoin, reason := contestJoinAllowed(txStatus, txIsFree || txEntryFeeCents <= 0, txLateJoinEnabled, txStartsAt, txEndsAt, nowTx)
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, "reason": reason})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestNotOpen, jsonKeyReason: reason})
 		return
 	}
 	// Authoritative values from locked row.
@@ -922,7 +923,7 @@ func (a *App) handleLeaveContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only allow leaving during registration_open phase
-	if status != "registration_open" {
+	if status != contestStatusRegistrationOpen {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": msg.CannotLeaveRunning,
 		})
@@ -982,7 +983,7 @@ func (a *App) handleLeaveContest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 		return
 	}
-	if txStatus != "registration_open" {
+	if txStatus != contestStatusRegistrationOpen {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": msg.CannotLeaveRunning,
 		})

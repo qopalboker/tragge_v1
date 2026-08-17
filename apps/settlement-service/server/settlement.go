@@ -11,12 +11,12 @@ import (
 	"time"
 
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
+	"github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint"
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/notification"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
-	"github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/shopspring/decimal"
 	"github.com/twmb/franz-go/pkg/kgo"

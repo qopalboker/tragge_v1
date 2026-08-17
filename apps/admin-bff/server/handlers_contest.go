@@ -14,12 +14,13 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
+
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
 	"github.com/Parsaeffatravesh/tragge/packages/domain"
 	"github.com/Parsaeffatravesh/tragge/packages/validation"
-	"github.com/go-chi/chi/v5"
-	"go.uber.org/zap"
 )
 
 // getActiveSymbolsByAssetClass queries the symbols table for active symbols
@@ -726,8 +727,8 @@ func (a *App) handleUpdateContest(w http.ResponseWriter, r *http.Request) {
 	if economicsLocked.Valid {
 		if req.EntryFeeCents != nil || req.PlatformFeeBps != nil || req.StartsAt != nil || req.EndsAt != nil || req.CommissionRate != nil {
 			writeJSON(w, http.StatusConflict, map[string]string{
-				"error":   "economics_locked",
-				"message": "contest economics are immutable after the first participant join",
+				"error":              "economics_locked",
+				adminMFAPolicyMsgKey: "contest economics are immutable after the first participant join",
 			})
 			return
 		}

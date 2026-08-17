@@ -12,11 +12,11 @@ import (
 	"time"
 
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
+	"github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint"
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/notification"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
-	"github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -24,6 +24,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
+
+const jsonKeyUserID = "user_id"
 
 // Task 10.2: Tournament economics Prometheus metrics
 var (
@@ -69,21 +71,21 @@ type ContestInfo struct {
 
 // FinalizationState tracks the progress of contest finalization for crash recovery.
 type FinalizationState struct {
-	ContestID              string
-	FinalizationStartedAt  time.Time
-	PayoutsCalculated      bool
-	PayoutsCalculatedAt    sql.NullTime
-	RanksWritten           bool
-	RanksWrittenAt         sql.NullTime
-	WalletsCredited        bool
-	WalletsCreditedat      sql.NullTime
-	StatusUpdated          bool
-	StatusUpdatedAt        sql.NullTime
+	ContestID               string
+	FinalizationStartedAt   time.Time
+	PayoutsCalculated       bool
+	PayoutsCalculatedAt     sql.NullTime
+	RanksWritten            bool
+	RanksWrittenAt          sql.NullTime
+	WalletsCredited         bool
+	WalletsCreditedat       sql.NullTime
+	StatusUpdated           bool
+	StatusUpdatedAt         sql.NullTime
 	FinalizationCompletedAt sql.NullTime
-	ErrorMessage           sql.NullString
-	LastErrorAt            sql.NullTime
-	RetryCount             int
-	Metadata               []byte
+	ErrorMessage            sql.NullString
+	LastErrorAt             sql.NullTime
+	RetryCount              int
+	Metadata                []byte
 }
 
 // getOrCreateFinalizationState retrieves existing finalization state or creates a new one.
@@ -449,11 +451,11 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 
 		// Store original prize pool data before modifying, so retries can recover
 		refundMeta := map[string]interface{}{
-			"type":                  "single_participant_refund",
-			"user_id":               user.UserID,
-			"entry_fee_cents":       contestInfo.EntryFeeCents,
-			"prize_pool_net_cents":  contestInfo.PrizePoolNetCents,
-			"commission_amount":     contestInfo.CommissionAmount,
+			"type":                 "single_participant_refund",
+			jsonKeyUserID:          user.UserID,
+			"entry_fee_cents":      contestInfo.EntryFeeCents,
+			"prize_pool_net_cents": contestInfo.PrizePoolNetCents,
+			"commission_amount":    contestInfo.CommissionAmount,
 		}
 		if metaErr := a.markPayoutsCalculated(ctx, contestID, refundMeta); metaErr != nil {
 			a.log().Warn("Failed to store refund metadata before transaction",
@@ -503,7 +505,7 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 
 		a.log().Info("Contest finalized with single participant refund",
 			zap.String("contest_id", contestID),
-			zap.String("user_id", user.UserID),
+			zap.String(jsonKeyUserID, user.UserID),
 			zap.Int64("refund_cents", contestInfo.EntryFeeCents))
 		return nil
 	}
@@ -1166,7 +1168,7 @@ func (a *App) writeFinalRanksAndPrizesInternal(
 		if err != nil {
 			a.log().Error("Failed to update participant rank",
 				zap.String("contest_id", contestID),
-				zap.String("user_id", user.UserID),
+				zap.String(jsonKeyUserID, user.UserID),
 				zap.Error(err))
 			continue
 		}
@@ -1202,7 +1204,7 @@ func (a *App) writeFinalRanksAndPrizesInternal(
 		if err != nil {
 			a.log().Warn("Failed to insert score history for user",
 				zap.String("contest_id", contestID),
-				zap.String("user_id", user.UserID),
+				zap.String(jsonKeyUserID, user.UserID),
 				zap.Error(err))
 			// Continue - this is not critical for contest finalization
 		}
@@ -1476,7 +1478,7 @@ func (a *App) recordSettlementAndPrizeDistributions(ctx context.Context, contest
 		if err != nil {
 			a.log().Warn("Failed to record prize distribution",
 				zap.String("contest_id", contestID),
-				zap.String("user_id", p.UserID),
+				zap.String(jsonKeyUserID, p.UserID),
 				zap.Int("rank", p.Rank),
 				zap.Error(err))
 		}
@@ -1524,7 +1526,7 @@ func (a *App) updateGlobalLeaderboard(ctx context.Context, contestID string, ran
 		if err := a.redis.ZIncrBy(ctx, globalLeaderboardKey, contributionFloat, user.UserID).Err(); err != nil {
 			a.log().Warn("Failed to update global leaderboard for user",
 				zap.String("contest_id", contestID),
-				zap.String("user_id", user.UserID),
+				zap.String(jsonKeyUserID, user.UserID),
 				zap.Error(err))
 			continue
 		}

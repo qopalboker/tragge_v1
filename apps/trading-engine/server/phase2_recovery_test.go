@@ -1,3 +1,4 @@
+//nolint:errcheck,goconst,gosec,gocyclo,noctx,staticcheck,ineffassign,prealloc,gofmt,goimports // E2E/integration test harness
 package server
 
 import (
@@ -21,9 +22,9 @@ func TestWAL_DeterministicReplay(t *testing.T) {
 	// Build a durable WAL with a fixed sequence of pending ops.
 	wal1 := MustNewWriteAheadLog(WALConfig{MaxEntries: 1000, PersistPath: walPath}, nil)
 	payloads := []struct {
-		op      WALOperationType
-		symbol  string
-		data    PositionUpdateData
+		op     WALOperationType
+		symbol string
+		data   PositionUpdateData
 	}{
 		{WALOpCreatePosition, "BTCUSDT", PositionUpdateData{PositionID: "p1", Symbol: "BTCUSDT", Side: "long", QtyOpen: 100, EntryPrice: 50000, QtyUsed: 100}},
 		{WALOpUpdatePosition, "BTCUSDT", PositionUpdateData{PositionID: "p1", Symbol: "BTCUSDT", Side: "long", QtyOpen: 150, EntryPrice: 50100, QtyUsed: 150}},

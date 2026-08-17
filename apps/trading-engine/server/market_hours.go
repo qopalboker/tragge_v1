@@ -46,7 +46,7 @@ type MarketOverride struct {
 type MarketStatus struct {
 	AssetClass string     `json:"asset_class"`
 	IsOpen     bool       `json:"is_open"`
-	Reason     string     `json:"reason,omitempty"`   // Why it's closed (holiday, weekend, override, etc.)
+	Reason     string     `json:"reason,omitempty"` // Why it's closed (holiday, weekend, override, etc.)
 	NextOpen   *time.Time `json:"next_open,omitempty"`
 	NextClose  *time.Time `json:"next_close,omitempty"`
 	Override   *string    `json:"override,omitempty"` // If there's an active override

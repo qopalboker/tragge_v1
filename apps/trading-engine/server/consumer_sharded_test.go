@@ -264,4 +264,3 @@ func TestGetShardIDFromPodName(t *testing.T) {
 		})
 	}
 }
-

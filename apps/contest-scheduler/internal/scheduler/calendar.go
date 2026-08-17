@@ -103,8 +103,8 @@ type CalendarProcessor struct {
 	redis        redis.UniversalClient
 	stateMachine *statemachine.StateMachine
 	config       CalendarConfig
-	logger        *zap.Logger
-	lock          *DistributedLock
+	logger       *zap.Logger
+	lock         *DistributedLock
 
 	running atomic.Bool
 	stop    chan struct{}

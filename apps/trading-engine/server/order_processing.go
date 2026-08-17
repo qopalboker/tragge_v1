@@ -83,7 +83,7 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 			return e.rejectOrder(ctx, order, "order_id conflict with different user/contest")
 		}
 		switch existing.Status {
-		case "filled", "accepted", "open", "pending", "partially_filled":
+		case orderStatusFilled, orderStatusAccepted, orderStatusOpen, orderStatusPending, orderStatusPartiallyFilled:
 			e.logger.Info("Duplicate order request — returning existing state (idempotent)",
 				zap.String("order_id", order.OrderID),
 				zap.String("status", existing.Status))
@@ -104,7 +104,7 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 	}
 	// Finalization statuses must never accept new trades (Race A/B/C).
 	switch contest.Status {
-	case "running":
+	case contestStatusRunning:
 		// ok
 	case "settling", "completed", "cancelled", "canceled", "paused":
 		return e.rejectOrder(ctx, order, fmt.Sprintf("contest is not running (status: %s)", contest.Status))
@@ -204,7 +204,7 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 					// If already filled, do not re-execute; if pending, continue may double-fill —
 					// only short-circuit when already terminal/progressed.
 					switch existing.Status {
-					case "filled", "accepted", "open", "pending", "partially_filled":
+					case orderStatusFilled, orderStatusAccepted, orderStatusOpen, orderStatusPending, orderStatusPartiallyFilled:
 						return e.acknowledgeOrder(ctx, order, contracts.OrderStatusAccepted, nil)
 					}
 				}
@@ -220,7 +220,7 @@ func (e *Engine) ProcessOrder(ctx context.Context, order *contracts.OrderRequest
 		if err != nil {
 			recordOrderMetric("error")
 		} else {
-			recordOrderMetric("filled")
+			recordOrderMetric(orderStatusFilled)
 		}
 		return err
 
@@ -488,7 +488,7 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 	// 5. P2-1: Re-check contest status from DB before committing fill
 	// This prevents fills after contest ends (cache may be stale)
 	freshContest, err := GetContest(ctx, e.db, order.ContestID)
-	if err != nil || freshContest == nil || freshContest.Status != "running" {
+	if err != nil || freshContest == nil || freshContest.Status != contestStatusRunning {
 		if freeRequired > 0 {
 			userState.ReleaseQty(freeRequired)
 		}
@@ -523,7 +523,7 @@ func (e *Engine) executeMarketOrder(ctx context.Context, order *contracts.OrderR
 		}
 
 		// 6b. Update order status to filled
-		if err := UpdateOrderStatusTx(ctx, tx, order.OrderID, "filled", fillQty); err != nil {
+		if err := UpdateOrderStatusTx(ctx, tx, order.OrderID, orderStatusFilled, fillQty); err != nil {
 			return fmt.Errorf("update order status: %w", err)
 		}
 
@@ -735,7 +735,7 @@ func (e *Engine) executePendingOrder(ctx context.Context, triggered *TriggeredOr
 	// from "running" to "settling"/"completed" could still have its pending orders trigger.
 	// This mirrors the fresh check done for market orders.
 	freshContest, freshErr := GetContest(ctx, e.db, order.ContestID)
-	if freshErr != nil || freshContest == nil || freshContest.Status != "running" {
+	if freshErr != nil || freshContest == nil || freshContest.Status != contestStatusRunning {
 		// Safe to remove now: order will be marked "rejected" in DB, preventing re-execution
 		e.pendingBook.RemovePendingOrder(order.Symbol, order.OrderID)
 		userState.RemovePendingOrder(order.OrderID)
@@ -791,7 +791,7 @@ func (e *Engine) executePendingOrder(ctx context.Context, triggered *TriggeredOr
 		}
 
 		// Update order status to filled
-		if err := UpdateOrderStatusTx(ctx, tx, order.OrderID, "filled", fillQty); err != nil {
+		if err := UpdateOrderStatusTx(ctx, tx, order.OrderID, orderStatusFilled, fillQty); err != nil {
 			return fmt.Errorf("update order status: %w", err)
 		}
 
@@ -970,7 +970,7 @@ func (e *Engine) executeTPSL(ctx context.Context, triggered *TriggeredTPSL) {
 		}
 
 		// Update order status to filled
-		if err := updateOrderStatusTx(ctx, tx, closeOrderID, "filled", fillQty); err != nil {
+		if err := updateOrderStatusTx(ctx, tx, closeOrderID, orderStatusFilled, fillQty); err != nil {
 			return fmt.Errorf("update order status: %w", err)
 		}
 
@@ -1063,7 +1063,7 @@ func (e *Engine) ProcessClosePosition(ctx context.Context, req *contracts.CloseP
 			zap.String("contest_id", req.ContestID))
 		return fmt.Errorf("contest not found")
 	}
-	if contest.Status != "running" {
+	if contest.Status != contestStatusRunning {
 		e.logger.Warn("Close position failed - contest not running",
 			zap.String("contest_id", req.ContestID),
 			zap.String("status", contest.Status))
@@ -1243,7 +1243,7 @@ func (e *Engine) ProcessClosePosition(ctx context.Context, req *contracts.CloseP
 			}
 
 			// Update order status to filled
-			if err := updateOrderStatusTx(ctx, tx, closeOrderID, "filled", qtyToClose); err != nil {
+			if err := updateOrderStatusTx(ctx, tx, closeOrderID, orderStatusFilled, qtyToClose); err != nil {
 				return fmt.Errorf("update order status: %w", err)
 			}
 
@@ -1317,7 +1317,7 @@ func (e *Engine) ProcessClosePosition(ctx context.Context, req *contracts.CloseP
 			}
 
 			// Update order status to filled
-			if err := updateOrderStatusTx(ctx, tx, closeOrderID, "filled", qtyToClose); err != nil {
+			if err := updateOrderStatusTx(ctx, tx, closeOrderID, orderStatusFilled, qtyToClose); err != nil {
 				return fmt.Errorf("update order status: %w", err)
 			}
 
@@ -1567,7 +1567,7 @@ func (e *Engine) ProcessModifyTPSL(ctx context.Context, req *contracts.ModifyTPS
 			zap.String("contest_id", req.ContestID))
 		return fmt.Errorf("contest not found")
 	}
-	if contest.Status != "running" {
+	if contest.Status != contestStatusRunning {
 		e.logger.Warn("Modify TP/SL failed - contest not running",
 			zap.String("contest_id", req.ContestID),
 			zap.String("status", contest.Status))

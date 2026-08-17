@@ -430,7 +430,7 @@ func TestWAL_CorruptLineFailClosed(t *testing.T) {
 	// Fail-closed: corrupt WAL must refuse to open (never silently trade).
 	wal2, err := NewWriteAheadLog(WALConfig{MaxEntries: 100, PersistPath: walPath}, nil)
 	if err == nil {
-		wal2.Close()
+		_ = wal2.Close()
 		t.Fatal("expected NewWriteAheadLog to fail closed on corrupt WAL line")
 	}
 	if !isWALReplayError(err) && err == nil {

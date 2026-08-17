@@ -7,11 +7,21 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"go.uber.org/zap"
+
+	"github.com/Parsaeffatravesh/tragge/packages/auth"
 )
 
-const adminMFAPolicyKey = "admin_mfa_enabled"
+const (
+	adminMFAPolicyKey          = "admin_mfa_enabled"
+	adminMFAPolicyResourceID   = "admin_mfa_policy"
+	adminMFAPolicyMsgKey       = "message"
+	adminMFAPolicyBoolTrue     = "true"
+	adminMFAPolicyBoolFalse    = "false"
+	adminMFASensitiveDeniedMsg = "sensitive action denied"
+	adminMFAUnauthorizedMsg    = "unauthorized"
+	adminMFAForbiddenMsg       = "forbidden"
+)
 
 // isAdminMFAEnabled returns the persistent global Super Admin MFA policy.
 // Missing row defaults to false (MVP: MFA off).
@@ -34,32 +44,36 @@ func (a *App) isAdminMFAEnabled(ctx context.Context) (bool, error) {
 }
 
 type adminMFAPolicyResponse struct {
-	Enabled           bool       `json:"admin_mfa_enabled"`
-	ActorEnrolled     bool       `json:"actor_enrolled"`
-	UpdatedAt         *time.Time `json:"updated_at,omitempty"`
-	CanToggle         bool       `json:"can_toggle"`
-	RequiresEnrollment bool      `json:"requires_enrollment_to_enable"`
+	Enabled            bool       `json:"admin_mfa_enabled"`
+	ActorEnrolled      bool       `json:"actor_enrolled"`
+	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
+	CanToggle          bool       `json:"can_toggle"`
+	RequiresEnrollment bool       `json:"requires_enrollment_to_enable"`
 }
 
 func (a *App) handleGetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := auth.GetUserID(ctx)
 	if userID == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{adminMFAErrorKey: adminMFAUnauthorizedMsg})
 		return
 	}
 
 	enabled, err := a.isAdminMFAEnabled(ctx)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{adminMFAErrorKey: adminMsg.InternalError})
 		return
 	}
 
 	var enrolled bool
-	_ = a.pool.Primary().QueryRowContext(ctx,
+	if err := a.pool.Primary().QueryRowContext(ctx,
 		`SELECT EXISTS (SELECT 1 FROM admin_mfa_credentials WHERE user_id=$1)`,
 		userID,
-	).Scan(&enrolled)
+	).Scan(&enrolled); err != nil {
+		// Enrollment lookup failure must not block policy read.
+		a.log().Warn("admin MFA enrollment lookup failed", zap.Error(err))
+		enrolled = false
+	}
 
 	var updatedAt *time.Time
 	var ts time.Time
@@ -94,7 +108,7 @@ func (a *App) handleSetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := auth.GetUserID(ctx)
 	if userID == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{adminMFAErrorKey: adminMFAUnauthorizedMsg})
 		return
 	}
 
@@ -107,13 +121,13 @@ func (a *App) handleSetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !isSuper {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+		writeJSON(w, http.StatusForbidden, map[string]string{adminMFAErrorKey: adminMFAForbiddenMsg})
 		return
 	}
 
 	var req setAdminMFAPolicyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": adminMsg.InvalidBody})
+		writeJSON(w, http.StatusBadRequest, map[string]string{adminMFAErrorKey: adminMsg.InvalidBody})
 		return
 	}
 
@@ -129,13 +143,13 @@ func (a *App) handleSetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 			`SELECT EXISTS (SELECT 1 FROM admin_mfa_credentials WHERE user_id=$1)`,
 			userID,
 		).Scan(&enrolled); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{adminMFAErrorKey: adminMsg.InternalError})
 			return
 		}
 		if !enrolled {
 			writeJSON(w, http.StatusConflict, map[string]interface{}{
-				"error":               "mfa_enrollment_required",
-				"message":             "Enable MFA only after completing authenticator enrollment for this Super Admin.",
+				adminMFAErrorKey:      "mfa_enrollment_required",
+				adminMFAPolicyMsgKey:  "Enable MFA only after completing authenticator enrollment for this Super Admin.",
 				"enrollment_required": true,
 			})
 			return
@@ -152,7 +166,7 @@ func (a *App) handleSetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 	`, adminMFAPolicyKey, req.Enabled, userID)
 	if err != nil {
 		a.log().Error("failed to update admin MFA policy", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{adminMFAErrorKey: adminMsg.InternalError})
 		return
 	}
 
@@ -168,19 +182,17 @@ func (a *App) handleSetAdminMFAPolicy(w http.ResponseWriter, r *http.Request) {
 
 func boolString(v bool) string {
 	if v {
-		return "true"
+		return adminMFAPolicyBoolTrue
 	}
-	return "false"
+	return adminMFAPolicyBoolFalse
 }
-
-const adminMFAPolicyResourceID = "admin_mfa_policy"
 
 // requireAdminMFAPolicySensitive binds reauth grants to a fixed global resource id.
 func (a *App) requireAdminMFAPolicySensitive() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := a.consumeSensitiveGrant(r, actionAdminMFAPolicy, adminMFAPolicyResourceID, "settings.manage"); err != nil {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "sensitive action denied"})
+				writeJSON(w, http.StatusForbidden, map[string]string{adminMFAErrorKey: adminMFASensitiveDeniedMsg})
 				return
 			}
 			next.ServeHTTP(w, r)

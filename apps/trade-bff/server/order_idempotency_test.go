@@ -1,3 +1,4 @@
+//nolint:errcheck,gosec,goconst // E2E harness against local Postgres; credentials from env/files.
 package server
 
 import (
@@ -5,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,8 +21,12 @@ func idempotencyDSN(t *testing.T) string {
 	if v := os.Getenv("TRAGGE_E2E_DATABASE_URL"); v != "" {
 		return v
 	}
-	passPath := `D:\Grok\tragge_v0-main\tragge_v0-main\infra\docker\secrets\postgres_admin_password.txt`
-	b, err := os.ReadFile(passPath)
+	// Prefer env path; fall back to monorepo secrets file for local Compose.
+	passPath := os.Getenv("TRAGGE_E2E_PG_PASS_FILE")
+	if passPath == "" {
+		passPath = filepath.Join("..", "..", "infra", "docker", "secrets", "postgres_admin_password.txt")
+	}
+	b, err := os.ReadFile(passPath) //nolint:gosec // local e2e password file path
 	if err != nil {
 		t.Skipf("no db credentials: %v", err)
 	}

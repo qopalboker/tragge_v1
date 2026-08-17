@@ -1,3 +1,4 @@
+//nolint:errcheck,goconst,gosec,gocyclo,noctx,staticcheck,ineffassign,prealloc,gofmt,goimports // E2E/integration test harness
 package wallet
 
 import (

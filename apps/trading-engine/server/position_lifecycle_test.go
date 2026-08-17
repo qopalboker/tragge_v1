@@ -51,8 +51,8 @@ func TestQtyInvariant_CloseViaOppositeMarketOrder(t *testing.T) {
 	// closePortion = 100 - 0 = 100 (because preReserved=true)
 	// newQtyAvailable = 800 + 100(QtyUsed) + 100(closePortion) = 1000
 	fillQty := int64(100)
-	overflowQty := fillQty - int64(100) // dbPos.QtyOpen=100
-	closePortion := fillQty - overflowQty // preReserved=true
+	overflowQty := fillQty - int64(100)      // dbPos.QtyOpen=100
+	closePortion := fillQty - overflowQty    // preReserved=true
 	qtyReleased := int64(100) + closePortion // dbPos.QtyUsed + closePortion
 
 	// Step 3: Simulate applyPositionResultToMemory close branch
@@ -101,7 +101,7 @@ func TestQtyInvariant_TPSLClose_NoReservation(t *testing.T) {
 	// Step 2: Simulate updatePositionTx close branch with preReserved=false
 	// closePortion = 0 (because preReserved=false)
 	// newQtyAvailable = 900 + 100(QtyUsed) + 0(closePortion) = 1000
-	closePortion := int64(0) // preReserved=false
+	closePortion := int64(0)                 // preReserved=false
 	qtyReleased := int64(100) + closePortion // dbPos.QtyUsed + closePortion
 
 	// Step 3: Simulate applyPositionResultToMemory close branch
@@ -142,8 +142,8 @@ func TestQtyInvariant_PartialClose_ThenTPSL(t *testing.T) {
 	dbQtyUsed := int64(100)
 	dbQtyOpen := int64(100)
 	qtyUsedForClose := int64(math.Round(float64(dbQtyUsed) * float64(closingQty) / float64(dbQtyOpen))) // = 30
-	remainingQty := dbQtyOpen - closingQty                                                                // = 70
-	newQtyUsed := dbQtyUsed - qtyUsedForClose                                                             // = 70
+	remainingQty := dbQtyOpen - closingQty                                                              // = 70
+	newQtyUsed := dbQtyUsed - qtyUsedForClose                                                           // = 70
 
 	tradeScore1 := calculateTradeScoreDecimal("long", 50000.0, 52000.0, qtyUsedForClose)
 	us.AddRealizedScoreDecimal(tradeScore1.Decimal)
@@ -168,7 +168,7 @@ func TestQtyInvariant_PartialClose_ThenTPSL(t *testing.T) {
 	// The fix ensures executeTPSL re-reads from DB and gets QtyOpen=70 (not stale 100)
 	freshQtyOpen := remainingQty // = 70 (simulates fresh DB read)
 	_ = freshQtyOpen
-	tpslClosePortion := int64(0) // preReserved=false
+	tpslClosePortion := int64(0)                     // preReserved=false
 	tpslQtyReleased := newQtyUsed + tpslClosePortion // 70 + 0 = 70
 
 	tradeScore2 := calculateTradeScoreDecimal("long", 50000.0, 55000.0, newQtyUsed)
@@ -212,8 +212,8 @@ func TestQtyInvariant_OverflowFlip(t *testing.T) {
 	// QtyAvailable = 750
 
 	// close branch: overflowQty=50, closePortion=100 (preReserved=true)
-	overflowQty := fillQty - int64(100) // 150 - 100 = 50
-	closePortion := fillQty - overflowQty // 100
+	overflowQty := fillQty - int64(100)      // 150 - 100 = 50
+	closePortion := fillQty - overflowQty    // 100
 	qtyReleased := int64(100) + closePortion // 100 + 100 = 200
 
 	tradeScore := calculateTradeScoreDecimal("long", 50000.0, 48000.0, 100)
@@ -249,10 +249,10 @@ func TestPartialCloseRounding_Consistency(t *testing.T) {
 		closeQty      int64
 		expectedRound int64
 	}{
-		{"100/7 close 3", 100, 7, 3, 43},  // Round(42.857)
-		{"100/3 close 1", 100, 3, 1, 33},  // Round(33.333)
-		{"7/3 close 1", 7, 3, 1, 2},       // Round(2.333)
-		{"1/3 close 1", 1, 3, 1, 1},       // Round(0.333) = 0, clamped to 1
+		{"100/7 close 3", 100, 7, 3, 43}, // Round(42.857)
+		{"100/3 close 1", 100, 3, 1, 33}, // Round(33.333)
+		{"7/3 close 1", 7, 3, 1, 2},      // Round(2.333)
+		{"1/3 close 1", 1, 3, 1, 1},      // Round(0.333) = 0, clamped to 1
 	}
 
 	for _, tc := range tests {

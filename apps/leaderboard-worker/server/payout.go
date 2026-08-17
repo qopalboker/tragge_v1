@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 )
 
 // PayoutResult is a PREVIEW allocation for ranking/notification metadata.

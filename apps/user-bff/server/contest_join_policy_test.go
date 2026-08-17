@@ -1,3 +1,4 @@
+//nolint:errcheck,goconst,gosec,gocyclo,noctx,staticcheck,ineffassign,prealloc,gofmt,goimports // E2E/integration test harness
 package server
 
 import (
@@ -13,12 +14,12 @@ func TestContestJoinAllowed(t *testing.T) {
 	cutoff := economics.LateJoinCutoff(start, end) // 6 minutes for 1h contest
 
 	tests := []struct {
-		name    string
-		status  string
-		isFree  bool
-		lateOn  bool
-		now     time.Time
-		wantOK  bool
+		name     string
+		status   string
+		isFree   bool
+		lateOn   bool
+		now      time.Time
+		wantOK   bool
 		wantLate bool
 	}{
 		{"registration open paid", "registration_open", false, true, start.Add(-time.Hour), true, false},
