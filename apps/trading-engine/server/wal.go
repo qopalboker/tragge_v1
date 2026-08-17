@@ -456,11 +456,15 @@ func (w *WriteAheadLog) syncWriteRecord(record WALFileRecord) error {
 
 // flusherLoop is the async batch flusher goroutine.
 // It drains the flush channel, batches writes, and does a single fsync per batch.
-// Captures the channel locally so Close can nil w.flushCh without hanging the select.
+// Captures channel handles under fileMu so Close can nil w.flushCh without a data race.
 func (w *WriteAheadLog) flusherLoop() {
-	defer close(w.flushDone)
-
+	w.fileMu.Lock()
 	ch := w.flushCh
+	done := w.flushDone
+	w.fileMu.Unlock()
+	if done != nil {
+		defer close(done)
+	}
 	if ch == nil {
 		return
 	}
@@ -872,14 +876,18 @@ func (w *WriteAheadLog) Compact() error {
 // Safe to call multiple times.
 func (w *WriteAheadLog) Close() error {
 	// Stop the flusher goroutine and wait for it to drain (once).
+	// Capture both channel handles under the same lock as flusherLoop startup.
 	w.fileMu.Lock()
 	ch := w.flushCh
+	done := w.flushDone
 	w.flushCh = nil
 	w.fileMu.Unlock()
 
 	if ch != nil {
 		close(ch)
-		<-w.flushDone
+		if done != nil {
+			<-done
+		}
 	}
 
 	w.fileMu.Lock()
