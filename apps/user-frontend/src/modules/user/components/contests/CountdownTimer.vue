@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Tehran countdown uses starts_at/ends_at timestamps only.
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { t } from '@/i18n';
 
