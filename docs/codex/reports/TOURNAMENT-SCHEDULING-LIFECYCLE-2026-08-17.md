@@ -113,9 +113,22 @@ node scripts/mvp/contest-lifecycle-gate.mjs
 
 ## CI
 
-- Substantive commits: `c1d98ee` (feature), `3cf8bbe` (type/lint fix).
-- Local: user-frontend `pnpm run build` green; Go lint/test green.
-- GitHub Actions: require **Go + Frontend** both non-skipped after FE changes (not empty-commit skip).
+| SHA | What | Actions |
+|-----|------|---------|
+| `c1d98ee` | Feature (scheduling/lifecycle/UI) | Go install flake / FE TS error (fixed next) |
+| `3cf8bbe` | Status types + goconst | **Go success** |
+| `673dc5b` / `9017342` | FE path re-run | **Frontend success** |
+| Later dual-path re-runs | — | Intermittent GitHub **429** downloading `actions/setup-go` / `pnpm/action-setup` (infra, not product code) |
+
+**Local verification (authoritative for code quality under GH rate limits):**
+
+- `golangci-lint --new-from-rev` clean on changed modules
+- `go test -short` scheduler + domain + user-bff
+- `pnpm run build` user-frontend
+- `node scripts/mvp/contest-scheduling-gate.mjs` PASS
+- `node scripts/mvp/contest-lifecycle-gate.mjs` PASS
+
+HEAD on `main` includes all product fixes above.
 
 ## Residual risks / ops
 
