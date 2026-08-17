@@ -279,7 +279,7 @@ defineExpose({ handleJoin });
       {{ contest.description }}
     </p>
 
-    <!-- Main Info Row: participants LEFT, entry fee where duration box was (no timeframe box). -->
+    <!-- Main Info Row (layout: participants left): participants LEFT, entry fee where duration box was (no timeframe box). -->
     <div class="info-row">
       <div class="info-item">
         <span class="info-icon">
