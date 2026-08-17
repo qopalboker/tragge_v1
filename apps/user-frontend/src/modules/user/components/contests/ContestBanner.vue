@@ -6,7 +6,15 @@ const props = defineProps<{
   prizePoolCents: number;
   startsAt: string;
   endsAt: string;
-  status: 'registration_open' | 'scheduled' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  status:
+    | 'registration_open'
+    | 'registration_closed'
+    | 'scheduled'
+    | 'running'
+    | 'paused'
+    | 'settling'
+    | 'completed'
+    | 'cancelled';
   entryFeeCents: number;
 }>();
 

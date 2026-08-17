@@ -25,6 +25,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const templateTypeStandard = "standard"
+
 // Calendar-specific Prometheus metrics
 var (
 	calendarContestsCreatedTotal = promauto.NewCounter(prometheus.CounterOpts{
@@ -432,7 +434,7 @@ func (cp *CalendarProcessor) processCalendarEntry(ctx context.Context, entry Cal
 					totalCreated++
 					calendarContestsCreatedTotal.Inc()
 
-					templateType := "standard"
+					templateType := templateTypeStandard
 					if entry.Type.Valid && entry.Type.String != "" {
 						templateType = entry.Type.String
 					}
@@ -517,7 +519,7 @@ func (cp *CalendarProcessor) processLegacyEntry(ctx context.Context, entry Calen
 
 	calendarContestsCreatedTotal.Inc()
 
-	templateType := "standard"
+	templateType := templateTypeStandard
 	if entry.Type.Valid && entry.Type.String != "" {
 		templateType = entry.Type.String
 	}

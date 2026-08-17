@@ -5,7 +5,16 @@ import { t } from '@/i18n';
 const props = defineProps<{
   startsAt: string;
   endsAt: string;
-  status: 'registration_open' | 'scheduled' | 'registration_closed' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  status:
+    | 'registration_open'
+    | 'registration_closed'
+    | 'scheduled'
+    | 'running'
+    | 'paused'
+    | 'settling'
+    | 'completed'
+    | 'cancelled'
+    | string;
   compact?: boolean;
   /** server_time - client_time (ms); from contest details when available */
   serverTimeDeltaMs?: number;

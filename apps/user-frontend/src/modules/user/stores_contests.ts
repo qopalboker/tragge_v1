@@ -17,7 +17,15 @@ export interface Contest {
   description?: string;
   starts_at: string;
   ends_at: string;
-  status: 'registration_open' | 'scheduled' | 'running' | 'paused' | 'settling' | 'completed' | 'cancelled';
+  status:
+    | 'registration_open'
+    | 'registration_closed'
+    | 'scheduled'
+    | 'running'
+    | 'paused'
+    | 'settling'
+    | 'completed'
+    | 'cancelled';
   entry_fee_cents: number;
   qty_total: number;
   duration_type?: DurationType;
