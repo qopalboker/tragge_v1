@@ -46,14 +46,16 @@ gate("ROUTES", "trade route", /trade\/:contestId/.test(read("apps/user-frontend/
 gate("ROUTES", "wallet page", exists("apps/user-frontend/src/modules/user/views/WalletPage.vue"));
 gate("ROUTES", "tickets page", exists("apps/user-frontend/src/modules/user/views/TicketsPage.vue"));
 
-gate("USER HOME", "mobile header", exists("apps/user-frontend/src/modules/user/components/dashboard/MobileHomeHeader.vue"));
+gate("USER HOME", "canonical UserNavbar", exists("apps/user-frontend/src/modules/user/components/layout/UserNavbar.vue"));
 gate("USER HOME", "featured contest", exists("apps/user-frontend/src/modules/user/components/dashboard/FeaturedContestCard.vue"));
 gate("USER HOME", "challenge rail", exists("apps/user-frontend/src/modules/user/components/dashboard/ChallengeRail.vue"));
 gate("USER HOME", "support card below challenges", exists("apps/user-frontend/src/modules/user/components/dashboard/SupportTicketCard.vue"));
 gate("USER HOME", "bottom nav", exists("apps/user-frontend/src/modules/user/components/layout/BottomNav.vue"));
 
 const dash = read("apps/user-frontend/src/modules/user/views/DashboardPage.vue");
-gate("USER HOME", "dashboard uses MobileHomeHeader", /MobileHomeHeader/.test(dash));
+const layout = read("apps/user-frontend/src/modules/user/components/layout/UserLayout.vue");
+gate("USER HOME", "layout mounts UserNavbar", /UserNavbar/.test(layout));
+gate("USER HOME", "dashboard no duplicate MobileHomeHeader", !/MobileHomeHeader/.test(dash));
 gate("USER HOME", "dashboard uses FeaturedContestCard", /FeaturedContestCard/.test(dash));
 gate("USER HOME", "dashboard uses ChallengeRail", /ChallengeRail/.test(dash));
 gate("USER HOME", "dashboard uses SupportTicketCard", /SupportTicketCard/.test(dash));
@@ -69,6 +71,29 @@ gate("RTL", "design tokens", exists("apps/user-frontend/src/styles/mvp-design-to
 gate("RTL", "tokens imported in main", /mvp-design-tokens/.test(read("apps/user-frontend/src/main.ts")));
 gate("RESPONSIVE", "safe-area bottom nav", /safe-area-inset-bottom/.test(read("apps/user-frontend/src/modules/user/components/layout/BottomNav.vue")));
 gate("RESPONSIVE", "mobile content padding for nav", /mvp-bottom-nav-h|bottom-nav-height/.test(read("apps/user-frontend/src/modules/user/components/layout/UserLayout.vue")));
+
+// Single canonical User UI — legacy Mini App shell must not exist
+const miniRoutes = read("apps/user-frontend/src/modules/miniapp/routes.ts");
+gate(
+  "CANONICAL UI",
+  "miniapp routes use UserLayout + DashboardPage",
+  /UserLayout\.vue/.test(miniRoutes) && /DashboardPage\.vue/.test(miniRoutes) && !/MiniAppLayout/.test(miniRoutes),
+);
+gate(
+  "CANONICAL UI",
+  "legacy MiniAppLayout removed",
+  !exists("apps/user-frontend/src/modules/miniapp/components/MiniAppLayout.vue"),
+);
+gate(
+  "CANONICAL UI",
+  "legacy miniapp HomePage removed",
+  !exists("apps/user-frontend/src/modules/miniapp/views/HomePage.vue"),
+);
+gate(
+  "CANONICAL UI",
+  "legacy --ma-* tokens file removed",
+  !exists("apps/user-frontend/src/modules/miniapp/styles/tokens.css"),
+);
 
 // Build / typecheck
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";

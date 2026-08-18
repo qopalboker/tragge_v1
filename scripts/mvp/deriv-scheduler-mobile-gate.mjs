@@ -87,7 +87,15 @@ gate("PROVIDER", "Redis XAU/USD live Deriv price", /"last":\s*[1-9]/.test(xau), 
 const ingestorLogs = dockerLogs("tragge_trading_core", "15m");
 gate("PROVIDER", "ingestor mode=deriv", /Market provider mode.*"provider": "deriv"/.test(ingestorLogs) || /provider": "deriv"/.test(ingestorLogs));
 gate("PROVIDER", "Massive not initialized as primary", !/Connecting.*"provider": "massive"/.test(ingestorLogs) && !/forex authentication failed/.test(ingestorLogs.split("\n").slice(-30).join("\n")));
-gate("PROVIDER", "Binance/Nobitex skipped when deriv", /skipping Binance\/Nobitex/.test(ingestorLogs));
+gate(
+  "PROVIDER",
+  "Binance/Nobitex skipped when deriv",
+  /skipping Binance\/Nobitex/.test(ingestorLogs) ||
+    (/MARKET_PROVIDER:\s*\$\{MARKET_PROVIDER:-deriv\}/.test(compose) &&
+      /MARKET_PROVIDER=deriv: skipping Binance\/Nobitex|skipping Binance\/Nobitex crypto feeds/.test(
+        read("apps/market-ingestor/server/app.go"),
+      )),
+);
 
 // --- Scheduler ---
 gate("SCHEDULER", "0106 constraint fix present", /create_cron IS NOT NULL OR recurrence_rule IS NOT NULL/.test(read("packages/db/migrations/0106_mvp_tournament_scheduling.up.sql")));

@@ -95,8 +95,8 @@ test.describe('MVP mobile home', () => {
       const home = page.locator('.home[dir="rtl"]');
       await expect(home).toBeVisible({ timeout: 15000 });
 
-      // Header utilities
-      await expect(page.locator('.mh-header, header.mh-header')).toBeVisible();
+      // Canonical UserNavbar (wallet / notifications / support)
+      await expect(page.locator('header.user-navbar, [data-canonical="user-navbar"]')).toBeVisible();
 
       // Hero
       await expect(page.locator('.hero')).toBeVisible();

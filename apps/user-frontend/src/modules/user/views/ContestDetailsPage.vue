@@ -71,32 +71,74 @@ function navigateToResults(): void {
   });
 }
 
-// Fetch contest details
-async function fetchContestDetails(): Promise<void> {
-  loading.value = true;
-  error.value = null;
+/**
+ * Fetch contest details.
+ * @param opts.background - when true, keep current UI mounted (no loading flash / no destructive remount).
+ */
+async function fetchContestDetails(opts: { background?: boolean } = {}): Promise<void> {
+  const background = Boolean(opts.background && contest.value);
+  if (!background) {
+    loading.value = true;
+    error.value = null;
+  }
 
   try {
-    const response = await api.get<
-      Contest & {
-        user_joined?: boolean;
-        server_time?: string;
-        min_participants?: number;
-        current_participants?: number;
-        start_time?: string;
-        end_time?: string;
-        prize_pool_cents?: number;
-      }
-    >(`/api/user/contests/${contestId.value}`);
+    const response = await api.get<{
+      id: string;
+      name: string;
+      description?: string;
+      status: Contest['status'];
+      market_type?: Contest['market_type'];
+      duration_type?: Contest['duration_type'];
+      entry_fee_cents: number;
+      is_free?: boolean;
+      max_participants?: number;
+      user_joined?: boolean;
+      server_time?: string;
+      min_participants?: number;
+      current_participants?: number;
+      participant_count?: number;
+      start_time?: string;
+      end_time?: string;
+      starts_at?: string;
+      ends_at?: string;
+      prize_pool_cents?: number;
+      estimated_prize_pool_cents?: number;
+      available_qty?: number;
+      qty_total?: number;
+      symbols?: Array<string | { symbol: string; enabled?: boolean }>;
+    }>(`/api/user/contests/${contestId.value}`);
     const data = response.data;
-    // Normalize details API (start_time) → store shape (starts_at)
+    // Normalize details API → store shape. qty_total is authoritative; available_qty is legacy alias.
+    const qty =
+      typeof data.qty_total === 'number'
+        ? data.qty_total
+        : typeof data.available_qty === 'number'
+          ? data.available_qty
+          : 0;
+    const symbols = Array.isArray(data.symbols)
+      ? data.symbols.map((s) =>
+          typeof s === 'string' ? { symbol: s, enabled: true } : { symbol: s.symbol, enabled: s.enabled !== false },
+        )
+      : [];
     contest.value = {
-      ...data,
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      status: data.status,
+      market_type: data.market_type,
+      duration_type: data.duration_type,
+      entry_fee_cents: data.entry_fee_cents ?? 0,
+      is_free: data.is_free,
+      max_participants: data.max_participants,
       starts_at: data.starts_at || data.start_time || '',
       ends_at: data.ends_at || data.end_time || '',
       participant_count: data.participant_count ?? data.current_participants ?? 0,
       min_participants: data.min_participants ?? 2,
+      qty_total: qty,
       estimated_prize_pool_cents: data.estimated_prize_pool_cents ?? data.prize_pool_cents ?? 0,
+      symbols,
+      server_time: data.server_time,
     };
     if (data.server_time) {
       const serverMs = new Date(data.server_time).getTime();
@@ -116,15 +158,20 @@ async function fetchContestDetails(): Promise<void> {
       return;
     }
 
-    // Fetch user's history to populate join status for other contests
-    if (contest.value) {
+    // Fetch user's history to populate join status for other contests (initial load only)
+    if (!background && contest.value) {
       await contestsStore.fetchUserHistory();
     }
   } catch (err) {
     console.error('Failed to fetch contest details:', err);
-    error.value = t('contestDetails.loadError');
+    // Background revalidation must not tear down a valid page on transient errors.
+    if (!background) {
+      error.value = t('contestDetails.loadError');
+    }
   } finally {
-    loading.value = false;
+    if (!background) {
+      loading.value = false;
+    }
   }
 }
 
@@ -231,13 +278,14 @@ onMounted(async () => {
   await fetchContestDetails();
   await fetchParticipants();
 
+  // Reactive revalidation only — never window.location.reload / router.go(0).
   refreshTimer = setInterval(() => {
     if (
       document.visibilityState === 'visible' &&
       contest.value &&
       ['registration_open', 'scheduled', 'registration_closed', 'running'].includes(contest.value.status)
     ) {
-      void fetchContestDetails();
+      void fetchContestDetails({ background: true });
     }
   }, 15_000);
 });
@@ -267,7 +315,7 @@ onUnmounted(() => {
       </svg>
       <h2>{{ t('contestDetails.errorTitle') }}</h2>
       <p>{{ error }}</p>
-      <button class="btn btn-primary" @click="fetchContestDetails">
+      <button class="btn btn-primary" type="button" @click="() => fetchContestDetails()">
         {{ t('common.retry') }}
       </button>
     </div>
@@ -358,8 +406,8 @@ onUnmounted(() => {
             :participant-count="contest.participant_count ?? 0"
             :max-participants="contest.max_participants"
             :min-participants="contest.min_participants ?? 2"
-            :qty-total="contest.qty_total"
-            :entry-fee-cents="contest.entry_fee_cents"
+            :qty-total="contest.qty_total ?? 0"
+            :entry-fee-cents="contest.entry_fee_cents ?? 0"
             :is-joined="isJoined"
             :is-joining="isJoining"
             :can-join="canJoin"
@@ -387,8 +435,12 @@ onUnmounted(() => {
 <style scoped>
 .contest-details-page {
   padding: var(--spacing-lg);
-  max-width: 1200px;
+  max-width: min(1200px, 100%);
+  width: 100%;
   margin: 0 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
 .loading-container {
@@ -466,15 +518,20 @@ onUnmounted(() => {
 
 .content-grid {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
   gap: var(--spacing-lg);
   margin-top: var(--spacing-lg);
+  min-width: 0;
+  width: 100%;
 }
 
-.left-column {
+.left-column,
+.right-column {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .right-column {
@@ -553,12 +610,13 @@ onUnmounted(() => {
 
 @media (max-width: 767px) {
   .contest-details-page {
-    padding: var(--spacing-md);
+    padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 12px);
   }
 
   .content-grid {
     gap: var(--spacing-md);
     margin-top: var(--spacing-md);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .section-header {
@@ -567,6 +625,7 @@ onUnmounted(() => {
 
   .introduction-content {
     padding: var(--spacing-md);
+    overflow-wrap: anywhere;
   }
 }
 </style>

@@ -87,7 +87,7 @@ test.describe('RC User — mobile home hierarchy', () => {
       await page.goto('/user/dashboard', { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await expect(page.locator('.home[dir="rtl"]')).toBeVisible({ timeout: 30000 });
 
-      await expect(page.locator('.mh-header, header.mh-header')).toBeVisible();
+      await expect(page.locator('header.user-navbar, [data-canonical="user-navbar"]')).toBeVisible();
       await expect(page.locator('.hero')).toBeVisible();
       await expect(page.locator('.metrics')).toBeVisible();
 

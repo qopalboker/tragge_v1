@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { t, setLocale } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import BottomNav from './BottomNav.vue';
+import UserNavbar from './UserNavbar.vue';
 import VerificationFlow from '@/components/auth/VerificationFlow.vue';
 import IconDashboard from '@/components/icons/IconDashboard.vue';
 import IconTournaments from '@/components/icons/IconTournaments.vue';
@@ -291,6 +292,9 @@ function handleLogout(): void {
           {{ t('verification.verifyNow') }}
         </button>
       </div>
+      <div class="layout-topbar">
+        <UserNavbar />
+      </div>
       <main class="layout-content">
         <RouterView />
       </main>
@@ -469,13 +473,22 @@ function handleLogout(): void {
   margin-inline-start: var(--sidebar-width, 240px);
 }
 
+.layout-topbar {
+  width: 100%;
+  max-width: min(var(--max-content-width, 1200px), 100%);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 8px 32px 0;
+  box-sizing: border-box;
+}
+
 .layout-content {
   flex: 1;
   width: 100%;
   max-width: min(var(--max-content-width, 1200px), 100%);
   min-width: 0;
   margin: 0 auto;
-  padding: 32px;
+  padding: 12px 32px 32px;
   box-sizing: border-box;
 }
 
@@ -523,6 +536,10 @@ function handleLogout(): void {
 /* Mobile */
 @media (max-width: 767px) {
   .layout-main { margin-inline-start: 0; }
+  .layout-topbar {
+    padding: 4px var(--mvp-page-pad, 16px) 0;
+    max-width: none;
+  }
   .layout-content {
     padding: 8px 0 0;
     padding-bottom: calc(var(--mvp-bottom-nav-h, 72px) + env(safe-area-inset-bottom, 0px) + 12px);

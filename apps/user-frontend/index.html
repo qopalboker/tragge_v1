@@ -6,7 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#050b18" />
     <title>Tralent — Trading Competition</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Soft-load Telegram WebApp bridge: must not crash normal browser if unreachable. -->
+    <script
+      src="https://telegram.org/js/telegram-web-app.js"
+      async
+      onload="this.setAttribute('data-tg-load-state','loaded')"
+      onerror="this.setAttribute('data-tg-load-state','error')"
+    ></script>
   </head>
   <body>
     <div id="app"></div>

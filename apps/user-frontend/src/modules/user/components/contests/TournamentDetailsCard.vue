@@ -11,7 +11,8 @@ const props = defineProps<{
   participantCount: number;
   maxParticipants?: number;
   minParticipants?: number;
-  qtyTotal: number;
+  /** Trading allocation; may be absent on transitional payloads — display falls back to em dash. */
+  qtyTotal?: number | null;
   entryFeeCents: number;
   isJoined: boolean;
   isJoining: boolean;
@@ -48,32 +49,29 @@ const { compactDisplay, timeRemaining } = useCountdown({
   serverTimeDelta: serverDelta,
 });
 
-// Format date/time
-const formattedStartTime = computed(() => {
-  const date = new Date(props.startsAt);
+function formatContestInstant(iso: string | undefined | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString([], {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
   });
-});
+}
 
-const formattedEndTime = computed(() => {
-  const date = new Date(props.endsAt);
-  return date.toLocaleString([], {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-});
+// Format date/time
+const formattedStartTime = computed(() => formatContestInstant(props.startsAt));
+const formattedEndTime = computed(() => formatContestInstant(props.endsAt));
 
 // Calculate duration
 const duration = computed(() => {
   const start = new Date(props.startsAt);
   const end = new Date(props.endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '—';
   const diffMs = end.getTime() - start.getTime();
+  if (diffMs <= 0) return '—';
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
   const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -108,9 +106,13 @@ const entryFee = computed(() => {
 // Entry fee badge style
 const entryFeeIsFree = computed(() => props.entryFeeCents === 0);
 
-// Available quantity display
+// Available quantity display — qty_total is intentional contract; guard transitional nulls.
 const availableQty = computed(() => {
-  return `$${props.qtyTotal.toLocaleString()}`;
+  const qty = props.qtyTotal;
+  if (typeof qty !== 'number' || !Number.isFinite(qty)) {
+    return '—';
+  }
+  return `$${qty.toLocaleString()}`;
 });
 
 // Participant display (real users only from API)
@@ -292,6 +294,10 @@ function handleViewResults(): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .countdown-block {

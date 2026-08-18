@@ -331,7 +331,7 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 		WHERE c.id = $1
 	`, contestID).Scan(
 		&resp.ID, &resp.Name, &resp.Description, &resp.Status, &resp.MarketType, &resp.DurationType,
-		&startsAt, &endsAt, &resp.EntryFeeCents, &resp.IsFree, &resp.AvailableQty,
+		&startsAt, &endsAt, &resp.EntryFeeCents, &resp.IsFree, &resp.QtyTotal,
 		&resp.MaxParticipants, &resp.MinParticipants, &commissionRate, &platformFeeBps, &resp.CurrentParticipants,
 	)
 	if err != nil {
@@ -346,6 +346,8 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 
 	// Expose asset_class alongside legacy market_type
 	resp.AssetClass = resp.MarketType
+	// Legacy alias: older clients still read available_qty for the trading allocation.
+	resp.AvailableQty = resp.QtyTotal
 
 	// Format timestamps as ISO8601 (+ aliases used by FE store)
 	resp.StartTime = startsAt.Format(time.RFC3339)

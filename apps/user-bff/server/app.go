@@ -1882,6 +1882,9 @@ type ContestDetailsResponse struct {
 	EntryFeeCents       int      `json:"entry_fee_cents"`
 	IsFree              bool     `json:"is_free"`
 	PrizePoolCents      int      `json:"prize_pool_cents"`
+	// QtyTotal is the contest trading allocation (authoritative). Required by Contest Info UI.
+	QtyTotal int64 `json:"qty_total"`
+	// AvailableQty mirrors QtyTotal for legacy clients that still read available_qty.
 	AvailableQty        int64    `json:"available_qty"`
 	MaxParticipants     *int     `json:"max_participants,omitempty"`
 	MinParticipants     int      `json:"min_participants"`

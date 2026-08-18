@@ -9,7 +9,6 @@ import { type Contest } from '@/stores/contests';
 import { userStatsApi, type UserStats, type GlobalLeaderboardEntry, api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useWalletStore } from '@/modules/user/stores_wallet';
-import MobileHomeHeader from '@/modules/user/components/dashboard/MobileHomeHeader.vue';
 import FeaturedContestCard from '@/modules/user/components/dashboard/FeaturedContestCard.vue';
 import ChallengeRail from '@/modules/user/components/dashboard/ChallengeRail.vue';
 import SupportTicketCard from '@/modules/user/components/dashboard/SupportTicketCard.vue';
@@ -130,9 +129,7 @@ onMounted(() => {
 
 <template>
   <div class="home" dir="rtl">
-    <MobileHomeHeader />
-
-    <!-- Hero -->
+    <!-- Hero — Wallet/Notifications/Support shortcuts live in canonical UserNavbar -->
     <section class="hero mvp-glass-strong">
       <div class="hero-copy">
         <h1 class="hero-title">
