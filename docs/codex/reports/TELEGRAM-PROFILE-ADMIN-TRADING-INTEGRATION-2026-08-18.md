@@ -130,4 +130,12 @@ docker compose --env-file infra/docker/.env.tunnel up -d --force-recreate --no-d
 
 ## CI
 
-Push includes migration, auth sync, Admin API/UI, tests, and this report. Confirm Actions on the final SHA after push.
+```text
+SHA: 2a71e8c28e3f3acc417673035b146a8c81411663
+Workflow: https://github.com/qopalboker/tragge_v1/actions/runs/32091886188
+Conclusion: success
+Jobs:
+  detect-changes — success
+  Go (lint, test, build) — success
+  Frontend (lint, test, build) — success
+```
