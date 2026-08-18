@@ -319,7 +319,7 @@ export function getTelegramDiagnostics(): {
   const scriptEl = getTelegramWebAppScriptEl();
   const telegramScriptInDom = scriptEl != null;
   const loadState = scriptEl?.getAttribute('data-tg-load-state');
-  let telegramObjectPresent = false;
+  let telegramObjectPresent: boolean;
   try {
     telegramObjectPresent = Boolean(
       (window as Window & { Telegram?: unknown }).Telegram,

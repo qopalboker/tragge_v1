@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
-import { ticketsApi, type TicketDetail, type TicketMessage, type TicketAttachment } from '../api/tickets';
+import { ticketsApi, type TicketDetail, type TicketAttachment } from '../api/tickets';
 import { useToast } from '@/composables/useToast';
 import { api } from '../api';
 import { userShellPaths } from '@/utils/userShellPaths';

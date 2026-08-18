@@ -124,9 +124,24 @@ Evidence under `docs/codex/reports/evidence/mvp-rc-browser/unify2-*.png`.
 
 ## 7. CI
 
-Working tree includes this migration plus prior Telegram/CSP/Admin CORS work against `origin/main`.
+Pushed to `origin/main`:
 
-Local gates executed in this session (see gate section below). Push/Actions verification of the exact final SHA should follow the commit created from these changes.
+```text
+SHA: 51d3c53d494db2ac89a1266a6190397a3bd145c3
+https://github.com/qopalboker/tragge_v1/commit/51d3c53d494db2ac89a1266a6190397a3bd145c3
+```
+
+Local gates on this change set:
+
+| Gate | Result |
+|------|--------|
+| `frontend-gate.mjs` | PASS (incl. vue-tsc + vite build) |
+| `mvp-gate.mjs` | PASS |
+| `acceptance-gate.mjs` | PASS |
+| `trading-mobile-gate.mjs` | PASS |
+| `trading-certification-gate.mjs` | BLOCKED (env: trade-bff/localhost Playwright not reachable — not a UI unification regression) |
+
+`gh` CLI was unavailable in this environment; confirm Actions on the SHA above in GitHub UI.
 
 ---
 
