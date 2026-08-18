@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { t } from '@/i18n';
+import { t, setLocale } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import BottomNav from './BottomNav.vue';
 import VerificationFlow from '@/components/auth/VerificationFlow.vue';
@@ -15,6 +15,10 @@ import IconSettings from '@/components/icons/IconSettings.vue';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
 import { ticketsApi } from '../../api/tickets';
+import {
+  isTelegramMiniApp,
+  prepareTelegramViewport,
+} from '@/modules/miniapp/telegram';
 
 const route = useRoute();
 const router = useRouter();
@@ -29,25 +33,54 @@ function toggleLanguage() {
 // Responsive
 const isMobile = ref(window.innerWidth < 768);
 const isTablet = ref(window.innerWidth >= 768 && window.innerWidth < 1024);
+/** Mini App path or Telegram WebApp — same User UI, environment chrome only. */
+const isMiniShell = computed(
+  () =>
+    route.matched.some((r) => r.meta.miniapp) ||
+    route.path.startsWith('/miniapp') ||
+    authStore.isTelegramSession ||
+    isTelegramMiniApp(),
+);
+const homePath = computed(() => (isMiniShell.value ? '/miniapp/home' : '/user/dashboard'));
+const contestsPath = computed(() => (isMiniShell.value ? '/miniapp/competitions' : '/user/contests'));
+const walletPath = computed(() => (isMiniShell.value ? '/miniapp/wallet' : '/user/wallet'));
+const profilePath = computed(() => (isMiniShell.value ? '/miniapp/profile' : '/user/profile'));
+const supportPath = computed(() => (isMiniShell.value ? '/miniapp/tickets' : '/user/tickets'));
+const settingsPath = computed(() => (isMiniShell.value ? '/miniapp/settings' : '/user/settings'));
+const myTournamentsPath = computed(() =>
+  isMiniShell.value ? '/user/my-tournaments' : '/user/my-tournaments',
+);
 
 function handleResize() {
   isMobile.value = window.innerWidth < 768;
   isTablet.value = window.innerWidth >= 768 && window.innerWidth < 1024;
 }
 
-onMounted(() => window.addEventListener('resize', handleResize));
-onUnmounted(() => window.removeEventListener('resize', handleResize));
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+  if (isMiniShell.value || isTelegramMiniApp()) {
+    setLocale('fa');
+    document.documentElement.setAttribute('dir', 'rtl');
+    document.documentElement.lang = 'fa';
+    prepareTelegramViewport();
+    document.documentElement.classList.add('is-telegram-shell');
+  }
+});
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+  document.documentElement.classList.remove('is-telegram-shell');
+});
 
-// Sidebar nav items
-const navItems = [
-  { name: 'dashboard', path: '/user/dashboard', icon: IconDashboard, label: () => t('nav.dashboard') },
-  { name: 'contests', path: '/user/contests', icon: IconTournaments, label: () => t('nav.contests') },
-  { name: 'my-tournaments', path: '/user/my-tournaments', icon: IconMyTournaments, label: () => t('nav.myTournaments') },
-  { name: 'wallet', path: '/user/wallet', icon: IconWallet, label: () => t('nav.wallet') },
-  { name: 'support', path: '/user/tickets', icon: IconSupport, label: () => t('nav.support') },
-  { name: 'profile', path: '/user/profile', icon: IconProfile, label: () => t('nav.profile') },
-  { name: 'settings', path: '/user/settings', icon: IconSettings, label: () => t('nav.settings') },
-];
+// Sidebar nav items (desktop) — same product surface for web + Mini App.
+const navItems = computed(() => [
+  { name: 'dashboard', path: homePath.value, icon: IconDashboard, label: () => t('nav.dashboard') },
+  { name: 'contests', path: contestsPath.value, icon: IconTournaments, label: () => t('nav.contests') },
+  { name: 'my-tournaments', path: myTournamentsPath.value, icon: IconMyTournaments, label: () => t('nav.myTournaments') },
+  { name: 'wallet', path: walletPath.value, icon: IconWallet, label: () => t('nav.wallet') },
+  { name: 'support', path: supportPath.value, icon: IconSupport, label: () => t('nav.support') },
+  { name: 'profile', path: profilePath.value, icon: IconProfile, label: () => t('nav.profile') },
+  { name: 'settings', path: settingsPath.value, icon: IconSettings, label: () => t('nav.settings') },
+]);
 
 // Unread ticket badge
 const unreadTicketCount = ref(0);
@@ -67,6 +100,21 @@ onMounted(() => {
 onUnmounted(() => { if (badgeTimer) clearInterval(badgeTimer); });
 
 function isActive(path: string): boolean {
+  if (path === '/user/dashboard' || path === '/miniapp/home') {
+    return (
+      route.path === '/user/dashboard' ||
+      route.path === '/user' ||
+      route.path === '/miniapp/home' ||
+      route.path === '/miniapp'
+    );
+  }
+  if (path === '/user/contests' || path === '/miniapp/competitions') {
+    return (
+      route.path.startsWith('/user/contests') ||
+      route.path.startsWith('/miniapp/competitions') ||
+      route.path.startsWith('/miniapp/categories')
+    );
+  }
   return route.path === path || route.path.startsWith(path + '/');
 }
 
@@ -160,7 +208,7 @@ function handleLogout(): void {
 </script>
 
 <template>
-  <div class="user-layout">
+  <div class="user-layout" data-canonical-shell="user" data-design="mvp">
     <!-- Desktop/Tablet Sidebar -->
     <aside v-if="!isMobile" :class="['sidebar', { 'sidebar-collapsed': isTablet }]">
       <!-- Logo -->

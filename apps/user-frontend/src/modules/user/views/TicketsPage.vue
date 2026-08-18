@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
 import { ticketsApi, type Ticket } from '../api/tickets';
+import { userShellPaths } from '@/utils/userShellPaths';
+import { useAuthStore } from '@/stores/auth';
 
+const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+const paths = computed(() =>
+  userShellPaths(route, { telegramSession: auth.isTelegramSession }),
+);
 
 const tickets = ref<Ticket[]>([]);
 const total = ref(0);
@@ -40,11 +47,11 @@ function selectTab(key: string) {
 }
 
 function openTicket(id: string) {
-  router.push(`/user/tickets/${id}`);
+  router.push(paths.value.ticket(id));
 }
 
 function createTicket() {
-  router.push('/user/tickets/new');
+  router.push(paths.value.ticketNew);
 }
 
 function getStatusClass(status: string) {
@@ -147,9 +154,10 @@ onMounted(loadTickets);
 
 <style scoped>
 .tickets-page {
-  max-width: 700px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
+  padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 16px);
+  color: var(--mvp-text, #f2f5fa);
 }
 
 .tickets-header {
@@ -171,8 +179,8 @@ onMounted(loadTickets);
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.2rem;
-  background: var(--theme-accent, #6366f1);
-  color: #fff;
+  background: var(--theme-accent, var(--mvp-emerald, #00d4a0));
+  color: #04120e;
   border: none;
   border-radius: 0.75rem;
   font-size: 0.875rem;
@@ -201,8 +209,9 @@ onMounted(loadTickets);
   transition: all 0.2s;
 }
 .tab.active {
-  background: var(--theme-accent, #6366f1);
-  color: #fff;
+  background: var(--mvp-emerald-soft, rgba(0, 212, 160, 0.12));
+  color: var(--theme-accent, var(--mvp-emerald, #00d4a0));
+  border: 1px solid var(--mvp-border-strong, rgba(0, 212, 160, 0.35));
 }
 
 .loading { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -238,7 +247,7 @@ onMounted(loadTickets);
   transform: translateY(-1px);
 }
 .ticket-card.unread {
-  border-inline-start: 3px solid var(--theme-accent, #6366f1);
+  border-inline-start: 3px solid var(--theme-accent, var(--mvp-emerald, #00d4a0));
 }
 
 .ticket-card-top {
@@ -271,12 +280,12 @@ onMounted(loadTickets);
   background: var(--theme-glass, rgba(255,255,255,0.1));
   color: var(--theme-text-secondary, #999);
 }
-.category-badge { background: rgba(99, 102, 241, 0.15); color: var(--theme-accent, #6366f1); }
-.status-open { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.status-answered { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
-.status-waiting { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+.category-badge { background: var(--mvp-emerald-soft, rgba(0, 212, 160, 0.12)); color: var(--theme-accent, var(--mvp-emerald, #00d4a0)); }
+.status-open { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; }
+.status-answered { background: rgba(0, 212, 160, 0.15); color: var(--mvp-emerald, #00d4a0); }
+.status-waiting { background: rgba(251, 191, 36, 0.15); color: #facc15; }
 .status-closed { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
-.status-resolved { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.status-resolved { background: rgba(0, 212, 160, 0.15); color: var(--mvp-emerald, #00d4a0); }
 
 .ticket-preview {
   font-size: 0.8125rem;
@@ -302,7 +311,7 @@ onMounted(loadTickets);
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--theme-accent, #6366f1);
+  background: var(--theme-accent, var(--mvp-emerald, #00d4a0));
 }
 
 </style>

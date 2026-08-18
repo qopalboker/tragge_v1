@@ -185,6 +185,39 @@ func TestCSRFBrowserAndBearerContexts(t *testing.T) {
 	}
 }
 
+func TestAdminCORSAllowsCanonicalManageOriginWhenConfigured(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "development")
+	t.Setenv("ADMIN_CORS_ALLOWED_ORIGINS", "http://127.0.0.1:8081,https://manage.tragge.com")
+	t.Setenv("USER_CORS_ALLOWED_ORIGINS", "http://127.0.0.1:8080,https://panel.tragge.com")
+	admin := AdminBFFCORSConfig()
+	user := UserBFFCORSConfig()
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	run := func(config CORSConfig, origin string) (int, string) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+		CORSMiddleware(config)(next).ServeHTTP(rec, req)
+		return rec.Code, rec.Header().Get("Access-Control-Allow-Origin")
+	}
+	code, acao := run(admin, "https://manage.tragge.com")
+	if code != http.StatusNoContent || acao != "https://manage.tragge.com" {
+		t.Fatalf("manage.tragge.com admin CORS status=%d acao=%q", code, acao)
+	}
+	code, acao = run(admin, "https://evil.example")
+	if code != http.StatusForbidden || acao != "" {
+		t.Fatalf("evil admin origin status=%d acao=%q", code, acao)
+	}
+	code, _ = run(user, "https://manage.tragge.com")
+	if code != http.StatusForbidden {
+		t.Fatalf("admin origin must not be accepted on user CORS surface: %d", code)
+	}
+	for _, o := range append(admin.AllowedOrigins, user.AllowedOrigins...) {
+		if o == "*" {
+			t.Fatal("wildcard CORS must never be configured")
+		}
+	}
+}
+
 func TestUserAndAdminCORSContextsAreExactAndDistinct(t *testing.T) {
 	t.Setenv("ENVIRONMENT", environmentProduction)
 	t.Setenv("USER_CORS_ALLOWED_ORIGINS", testUserOrigin)

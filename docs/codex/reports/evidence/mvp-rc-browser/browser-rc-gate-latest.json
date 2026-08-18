@@ -1,9 +1,212 @@
-﻿{
-    "mvp_gate":  0,
-    "ts":  "2026-08-16T22:27:29.5460070Z",
-    "admin_browser":  "5/5",
-    "admin_mfa_enabled":  false,
-    "frontend_gate":  0,
-    "decision":  "RC BROWSER — PASS",
-    "production_go":  false
+{
+  "ts": "2026-08-17T18:09:47.788Z",
+  "decision": "RC BROWSER — BLOCKED",
+  "failed": 11,
+  "results": [
+    {
+      "cat": "MFA-OFF MVP MODE",
+      "name": "admin MFA policy handler present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "MFA-OFF MVP MODE",
+      "name": "migration 0104 seeds false with ON CONFLICT DO NOTHING",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "MFA-OFF MVP MODE",
+      "name": "login gates MFA via isAdminMFAEnabled (not hardcoded)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN LOGIN WITHOUT MFA",
+      "name": "security settings page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "MFA-OFF MVP MODE",
+      "name": "migration 0104",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "dashboard hierarchy components",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "support card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CHALLENGES",
+      "name": "challenge rail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RTL",
+      "name": "mvp tokens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "rc user spec",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "rc admin spec",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "compose postgres",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "compose api-server",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ENVIRONMENT",
+      "name": "compose trading-core",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "USER LOGIN",
+      "name": "user-bff healthz",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN LOGIN",
+      "name": "admin-bff healthz",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "TRADING",
+      "name": "trade-bff healthz",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "USER HOME",
+      "name": "user frontend reachable",
+      "ok": false,
+      "detail": "http://127.0.0.1:5173"
+    },
+    {
+      "cat": "ADMIN LOGIN",
+      "name": "admin frontend reachable",
+      "ok": false,
+      "detail": "http://127.0.0.1:5174"
+    },
+    {
+      "cat": "RESPONSIVE",
+      "name": "frontend-gate",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "FINANCIAL RECONCILIATION",
+      "name": "mvp-gate",
+      "ok": true,
+      "detail": "exit=0"
+    },
+    {
+      "cat": "ADMIN LOGIN",
+      "name": "mfa secret available",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "BROWSER E2E",
+      "name": "playwright rc-user + rc-admin",
+      "ok": false,
+      "detail": "frontends or BFFs unreachable"
+    },
+    {
+      "cat": "WALLET",
+      "name": "wallet surface + domain financial E2E",
+      "ok": true,
+      "detail": "mvp-gate financial"
+    },
+    {
+      "cat": "CONTEST DISCOVERY",
+      "name": "contest pages in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "JOIN",
+      "name": "join free contest in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "MOBILE",
+      "name": "viewport hierarchy matrix in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN WALLET CREDIT",
+      "name": "admin users flow in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "ADMIN CONTEST MANAGEMENT",
+      "name": "admin contests in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "AUTHORIZATION",
+      "name": "admin isolation API check in RC suite",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "cat": "FINALIZATION",
+      "name": "domain E2E via mvp-gate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "RESULT",
+      "name": "domain E2E via mvp-gate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "SUPPORT",
+      "name": "support section in dashboard hierarchy",
+      "ok": true,
+      "detail": "component + browser hierarchy"
+    },
+    {
+      "cat": "CHALLENGES",
+      "name": "challenge rail hierarchy",
+      "ok": true,
+      "detail": "component + browser hierarchy"
+    }
+  ],
+  "production_go": false
 }

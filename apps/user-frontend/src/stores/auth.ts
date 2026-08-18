@@ -149,6 +149,14 @@ function isTokenExpired(token: string, bufferSeconds = 300): boolean {
   return decoded.exp < now + bufferSeconds;
 }
 
+/** Deterministic session bootstrap phases for router + Mini App. */
+export type AuthBootstrapPhase =
+  | 'initializing'
+  | 'telegram_authenticating'
+  | 'authenticated'
+  | 'unauthenticated'
+  | 'error';
+
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null);
   const user = ref<User | null>(null);
@@ -159,6 +167,47 @@ export const useAuthStore = defineStore('auth', () => {
   // Router guards rely on this to avoid redirecting to /login while the
   // silent refresh from the httpOnly cookie is still in flight.
   const ready = ref(false);
+  /** Full startup phase including optional Telegram initData exchange. */
+  const bootstrapPhase = ref<AuthBootstrapPhase>('initializing');
+  const bootstrapError = ref<string | null>(null);
+  /** True when this tab established (or restored) a Telegram Mini App session. */
+  const isTelegramSession = ref(false);
+  /** Safe diagnostics for Mini App UI/E2E (never includes initData payload). */
+  const telegramDiagnostics = ref<{
+    telegramScriptInDom: boolean;
+    telegramScriptLoaded: boolean;
+    telegramObjectPresent: boolean;
+    webAppObjectPresent: boolean;
+    webAppVersion: string | null;
+    platform: string | null;
+    isExpanded: boolean | null;
+    bridgePresent: boolean;
+    initDataPresent: boolean;
+    initDataLength: number;
+    likelyTelegramClient: boolean;
+    authRequestStatus: number | null;
+    authResponseCode: string | null;
+    retryCount: number;
+    lastError: string | null;
+  }>({
+    telegramScriptInDom: false,
+    telegramScriptLoaded: false,
+    telegramObjectPresent: false,
+    webAppObjectPresent: false,
+    webAppVersion: null,
+    platform: null,
+    isExpanded: null,
+    bridgePresent: false,
+    initDataPresent: false,
+    initDataLength: 0,
+    likelyTelegramClient: false,
+    authRequestStatus: null,
+    authResponseCode: null,
+    retryCount: 0,
+    lastError: null,
+  });
+  /** In-flight Telegram exchange (bootstrap + Retry share this). */
+  let telegramAuthInflight: Promise<boolean> | null = null;
 
   const lastAuthResponse = ref<{
     requires_verification?: boolean;
@@ -191,6 +240,7 @@ export const useAuthStore = defineStore('auth', () => {
     } else {
       clearSessionHintCookie(SESSION_HINT);
       clearLegacySessionHint(SESSION_HINT);
+      isTelegramSession.value = false;
       crossTab.broadcastLogout();
     }
   }
@@ -388,26 +438,139 @@ export const useAuthStore = defineStore('auth', () => {
    * Sends only signed initData — never client-supplied telegram_id.
    */
   async function loginWithTelegram(initData: string): Promise<boolean> {
+    const trimmed = initData.trim();
+    if (!trimmed) {
+      error.value = 'telegram_initdata_missing';
+      telegramDiagnostics.value = {
+        ...telegramDiagnostics.value,
+        lastError: 'telegram_initdata_missing',
+        authRequestStatus: null,
+        authResponseCode: 'telegram_initdata_missing',
+      };
+      return false;
+    }
+    // Dedup concurrent exchanges (bootstrap + Retry / double-tap).
+    if (telegramAuthInflight) {
+      return telegramAuthInflight;
+    }
     loading.value = true;
     error.value = null;
-    try {
-      const response = await api.post<{
-        access_token: string;
-        user_id?: string;
-        roles?: string[];
-      }>('/api/user/auth/telegram', {
-        init_data: initData,
-      });
-      setTokens(response.data.access_token);
-      await fetchUser(true);
-      return true;
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, t('auth.loginError'));
-      error.value = message;
+    telegramDiagnostics.value = {
+      ...telegramDiagnostics.value,
+      initDataPresent: true,
+      initDataLength: trimmed.length,
+      lastError: null,
+      authRequestStatus: null,
+      authResponseCode: null,
+    };
+    telegramAuthInflight = (async () => {
+      try {
+        const response = await api.post<{
+          access_token: string;
+          user_id?: string;
+          roles?: string[];
+          code?: string;
+        }>('/api/user/auth/telegram', {
+          init_data: trimmed,
+        });
+        telegramDiagnostics.value = {
+          ...telegramDiagnostics.value,
+          authRequestStatus: 200,
+          authResponseCode: null,
+        };
+        setTokens(response.data.access_token);
+        await fetchUser(true);
+        isTelegramSession.value = true;
+        bootstrapPhase.value = 'authenticated';
+        bootstrapError.value = null;
+        return true;
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, t('auth.loginError'));
+        error.value = message;
+        let status: number | null = null;
+        let code: string | null = null;
+        if (err && typeof err === 'object' && 'response' in err) {
+          const ax = err as { response?: { status?: number; data?: { code?: string; error?: string } } };
+          status = ax.response?.status ?? null;
+          code = ax.response?.data?.code ?? ax.response?.data?.error ?? null;
+        }
+        telegramDiagnostics.value = {
+          ...telegramDiagnostics.value,
+          authRequestStatus: status,
+          authResponseCode: code,
+          lastError: code || message,
+        };
+        bootstrapError.value = code || message;
+        return false;
+      } finally {
+        loading.value = false;
+        telegramAuthInflight = null;
+      }
+    })();
+    return telegramAuthInflight;
+  }
+
+  /**
+   * Explicit Retry path — not memoized by createBootstrap.
+   * Re-reads Telegram.WebApp.initData and re-posts /auth/telegram.
+   */
+  async function retryTelegramAuth(): Promise<boolean> {
+    telegramDiagnostics.value = {
+      ...telegramDiagnostics.value,
+      retryCount: telegramDiagnostics.value.retryCount + 1,
+      lastError: null,
+    };
+    bootstrapPhase.value = 'telegram_authenticating';
+    bootstrapError.value = null;
+    error.value = null;
+
+    const {
+      waitForSignedInitData,
+      prepareTelegramViewport,
+      getTelegramDiagnostics,
+    } = await import('@/modules/miniapp/telegram');
+    const { setLocale } = await import('@/i18n');
+
+    setLocale('fa');
+    document.documentElement.setAttribute('dir', 'rtl');
+    document.documentElement.lang = 'fa';
+    prepareTelegramViewport();
+
+    const waited = await waitForSignedInitData();
+    const diag = getTelegramDiagnostics();
+    telegramDiagnostics.value = {
+      ...telegramDiagnostics.value,
+      ...diag,
+    };
+
+    if (waited.phase !== 'init_data_available' || !waited.initData) {
+      bootstrapPhase.value = 'error';
+      bootstrapError.value =
+        waited.phase === 'bridge_absent'
+          ? 'telegram_bridge_absent'
+          : 'telegram_initdata_missing';
+      telegramDiagnostics.value = {
+        ...telegramDiagnostics.value,
+        lastError: bootstrapError.value,
+      };
+      ready.value = true;
       return false;
-    } finally {
-      loading.value = false;
     }
+
+    const ok = await loginWithTelegram(waited.initData);
+    if (ok && accessToken.value) {
+      isTelegramSession.value = true;
+      bootstrapPhase.value = 'authenticated';
+      bootstrapError.value = null;
+      ready.value = true;
+      return true;
+    }
+    bootstrapPhase.value = 'error';
+    if (!bootstrapError.value) {
+      bootstrapError.value = error.value || 'telegram_auth_failed';
+    }
+    ready.value = true;
+    return false;
   }
 
   async function loginWithGoogle(
@@ -565,6 +728,105 @@ export const useAuthStore = defineStore('auth', () => {
     }
   });
 
+  /**
+   * Full app-entry bootstrap: cookie session first, then Telegram Mini App
+   * initData exchange when present. Must finish before the router is
+   * installed so `/miniapp/*` guards never race ahead of Telegram auth.
+   *
+   * Memoized via createBootstrap (cold start once). Use retryTelegramAuth()
+   * for explicit Retry — that path is not memoized.
+   */
+  const bootstrapFull = createBootstrap(async () => {
+    bootstrapPhase.value = 'initializing';
+    bootstrapError.value = null;
+    try {
+      await bootstrap();
+      if (accessToken.value) {
+        bootstrapPhase.value = 'authenticated';
+        return;
+      }
+
+      const {
+        isTelegramWebAppBridgePresent,
+        isLikelyTelegramClient,
+        waitForSignedInitData,
+        prepareTelegramViewport,
+        getTelegramDiagnostics,
+      } = await import('@/modules/miniapp/telegram');
+      const { setLocale } = await import('@/i18n');
+
+      // Only enter Telegram auth when the WebApp bridge or Telegram client
+      // is actually present. Merely visiting /miniapp/* in a normal browser
+      // must stay on the normal web auth path (not the TG error page).
+      const wantTelegram =
+        isTelegramWebAppBridgePresent() || isLikelyTelegramClient();
+
+      if (!wantTelegram) {
+        bootstrapPhase.value = 'unauthenticated';
+        telegramDiagnostics.value = {
+          ...telegramDiagnostics.value,
+          ...getTelegramDiagnostics(),
+        };
+        return;
+      }
+
+      setLocale('fa');
+      document.documentElement.setAttribute('dir', 'rtl');
+      document.documentElement.lang = 'fa';
+      prepareTelegramViewport();
+
+      // Wait for signed initData if the bridge is (or will be) present.
+      // Empty initData on the first tick is not a terminal failure.
+      bootstrapPhase.value = 'telegram_authenticating';
+      const waited = await waitForSignedInitData();
+      telegramDiagnostics.value = {
+        ...telegramDiagnostics.value,
+        ...getTelegramDiagnostics(),
+      };
+
+      if (waited.phase !== 'init_data_available' || !waited.initData) {
+        bootstrapPhase.value = 'error';
+        bootstrapError.value =
+          waited.phase === 'bridge_absent'
+            ? 'telegram_bridge_absent'
+            : 'telegram_initdata_missing';
+        telegramDiagnostics.value = {
+          ...telegramDiagnostics.value,
+          lastError: bootstrapError.value,
+        };
+        return;
+      }
+
+      const ok = await loginWithTelegram(waited.initData);
+      if (ok && accessToken.value) {
+        isTelegramSession.value = true;
+        bootstrapPhase.value = 'authenticated';
+        return;
+      }
+      bootstrapPhase.value = 'error';
+      bootstrapError.value =
+        bootstrapError.value || error.value || 'telegram_auth_failed';
+    } catch (err) {
+      bootstrapPhase.value = 'error';
+      bootstrapError.value =
+        err instanceof Error ? err.message : 'telegram_auth_failed';
+      telegramDiagnostics.value = {
+        ...telegramDiagnostics.value,
+        lastError: bootstrapError.value,
+      };
+    } finally {
+      ready.value = true;
+      if (accessToken.value) {
+        bootstrapPhase.value = 'authenticated';
+      } else if (
+        bootstrapPhase.value === 'initializing' ||
+        bootstrapPhase.value === 'telegram_authenticating'
+      ) {
+        bootstrapPhase.value = 'unauthenticated';
+      }
+    }
+  });
+
   return {
     accessToken,
     user,
@@ -574,10 +836,15 @@ export const useAuthStore = defineStore('auth', () => {
     lastAuthResponse,
     oauthLoginResult,
     ready,
+    bootstrapPhase,
+    bootstrapError,
+    isTelegramSession,
+    telegramDiagnostics,
     isAuthenticated,
     setTokens,
     login,
     loginWithTelegram,
+    retryTelegramAuth,
     register,
     loginWithGoogle,
     logout,
@@ -586,6 +853,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshAccessToken,
     ensureValidToken,
     bootstrap,
+    bootstrapFull,
     hasRole,
   };
 });

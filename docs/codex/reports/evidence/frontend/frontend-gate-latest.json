@@ -1,5 +1,5 @@
 {
-  "ts": "2026-08-17T01:27:55.322Z",
+  "ts": "2026-08-18T00:53:43.771Z",
   "decision": "FRONTEND — PASS",
   "failed": 0,
   "results": [
@@ -144,6 +144,30 @@
     {
       "cat": "RESPONSIVE",
       "name": "mobile content padding for nav",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CANONICAL UI",
+      "name": "miniapp routes use UserLayout + DashboardPage",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CANONICAL UI",
+      "name": "legacy MiniAppLayout removed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CANONICAL UI",
+      "name": "legacy miniapp HomePage removed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "cat": "CANONICAL UI",
+      "name": "legacy --ma-* tokens file removed",
       "ok": true,
       "detail": ""
     },

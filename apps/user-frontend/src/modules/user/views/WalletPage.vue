@@ -465,16 +465,22 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 16px);
+  color: var(--mvp-text, var(--color-text-primary));
 }
 
 /* Balance Card */
 .balance-card {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #1D4ED8 100%);
+  background: linear-gradient(145deg, rgba(0, 212, 160, 0.22) 0%, rgba(8, 24, 40, 0.95) 55%, #050b18 100%);
+  border: 1px solid var(--mvp-border-strong, rgba(0, 212, 160, 0.35));
   border-radius: var(--radius-xl);
   padding: var(--spacing-xl);
-  color: white;
+  color: var(--mvp-text, #f2f5fa);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 40px rgba(0, 212, 160, 0.08);
 }
 
 .balance-content {
@@ -634,28 +640,28 @@ onMounted(async () => {
 }
 
 .transaction-icon.deposit {
-  background-color: #DBEAFE;
-  color: #2563EB;
+  background-color: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
 }
 
 .transaction-icon.withdrawal {
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
 }
 
 .transaction-icon.prize {
-  background-color: #D1FAE5;
-  color: #059669;
+  background-color: var(--mvp-emerald-soft, rgba(0, 212, 160, 0.12));
+  color: var(--mvp-emerald, #00d4a0);
 }
 
 .transaction-icon.entry {
-  background-color: #FEF3C7;
-  color: #D97706;
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
 .transaction-icon.refund {
-  background-color: #E0E7FF;
-  color: #4F46E5;
+  background-color: rgba(0, 212, 160, 0.1);
+  color: #5eead4;
 }
 
 .transaction-info {
@@ -714,18 +720,18 @@ onMounted(async () => {
 }
 
 .transaction-status.pending {
-  background-color: #FEF3C7;
-  color: #D97706;
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
 .transaction-status.completed {
-  background-color: #D1FAE5;
-  color: #059669;
+  background-color: var(--mvp-emerald-soft, rgba(0, 212, 160, 0.12));
+  color: var(--mvp-emerald, #00d4a0);
 }
 
 .transaction-status.failed {
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
 }
 
 .transaction-status.cancelled {
@@ -734,13 +740,13 @@ onMounted(async () => {
 }
 
 .transaction-status.processing {
-  background-color: #DBEAFE;
-  color: #2563EB;
+  background-color: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
 }
 
 .transaction-status.rejected {
-  background-color: #FEE2E2;
-  color: #DC2626;
+  background-color: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
 }
 
 /* Transaction wrapper for withdrawals with notices */
@@ -757,16 +763,16 @@ onMounted(async () => {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   padding-left: calc(40px + var(--spacing-md) + var(--spacing-md));
-  background-color: #FEF9E7;
+  background-color: rgba(251, 191, 36, 0.12);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   margin-top: -1px;
   font-size: var(--font-size-xs);
-  color: #92400E;
+  color: #fbbf24;
 }
 
 .withdrawal-pending-notice svg {
   flex-shrink: 0;
-  color: #D97706;
+  color: #fbbf24;
 }
 
 [dir="rtl"] .withdrawal-pending-notice {
@@ -781,17 +787,17 @@ onMounted(async () => {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   padding-left: calc(40px + var(--spacing-md) + var(--spacing-md));
-  background-color: #FEF2F2;
+  background-color: rgba(248, 113, 113, 0.12);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   margin-top: -1px;
   font-size: var(--font-size-xs);
-  color: #991B1B;
+  color: #fca5a5;
 }
 
 .withdrawal-reason svg {
   flex-shrink: 0;
   margin-top: 1px;
-  color: #DC2626;
+  color: #f87171;
 }
 
 [dir="rtl"] .withdrawal-reason {

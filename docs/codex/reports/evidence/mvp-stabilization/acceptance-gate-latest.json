@@ -1,7 +1,7 @@
 {
-  "ts": "2026-08-17T01:28:06.127Z",
-  "decision": "MVP STABILIZATION — BLOCKED",
-  "failed": 1,
+  "ts": "2026-08-18T00:53:54.354Z",
+  "decision": "MVP STABILIZATION — PASS",
+  "failed": 0,
   "results": [
     {
       "cat": "AUTH",
@@ -216,8 +216,8 @@
     {
       "cat": "SETTLEMENT",
       "name": "phase1.1 financial lifecycle",
-      "ok": false,
-      "detail": "exit=1"
+      "ok": true,
+      "detail": "exit=0"
     },
     {
       "cat": "TRADING",

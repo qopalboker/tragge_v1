@@ -402,9 +402,10 @@ watch(activeTab, (newTab) => {
 
 <style scoped>
 .notifications-page {
-  max-width: 800px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: var(--spacing-lg);
+  padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 16px);
+  color: var(--mvp-text, var(--color-text-primary));
 }
 
 /* Header */
@@ -618,21 +619,22 @@ watch(activeTab, (newTab) => {
 
 .notification-card {
   display: flex;
-  background-color: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: var(--mvp-bg-card, var(--color-bg-secondary));
+  border: 1px solid var(--mvp-border, var(--color-border));
+  border-radius: var(--mvp-radius-md, var(--radius-lg));
   overflow: hidden;
   transition: all var(--transition-fast);
+  backdrop-filter: blur(18px) saturate(1.3);
 }
 
 .notification-card:hover {
-  border-color: var(--color-primary);
+  border-color: var(--mvp-border-strong, var(--color-primary));
   box-shadow: var(--shadow-md);
 }
 
 .notification-card.unread {
-  background-color: var(--color-primary-light);
-  border-color: var(--color-primary);
+  background: var(--mvp-emerald-soft, var(--color-primary-light));
+  border-color: var(--mvp-border-strong, var(--color-primary));
 }
 
 .notification-main {

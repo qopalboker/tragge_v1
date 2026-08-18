@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
 import { useWalletStore } from '@/modules/user/stores_wallet';
 import { ticketsApi } from '@/modules/user/api/tickets';
 import { notificationsApi } from '@/modules/user/api/notifications';
+import { userShellPaths } from '@/utils/userShellPaths';
+import { useAuthStore } from '@/stores/auth';
 
+const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const walletStore = useWalletStore();
+const paths = computed(() =>
+  userShellPaths(route, { telegramSession: auth.isTelegramSession }),
+);
 
 const unreadTickets = ref(0);
 const unreadNotifs = ref(0);
@@ -41,13 +48,13 @@ onUnmounted(() => {
 });
 
 function goWallet() {
-  router.push('/user/wallet');
+  router.push(paths.value.wallet);
 }
 function goSupport() {
-  router.push('/user/tickets');
+  router.push(paths.value.tickets);
 }
 function goNotifications() {
-  router.push('/user/notifications');
+  router.push(paths.value.notifications);
 }
 </script>
 

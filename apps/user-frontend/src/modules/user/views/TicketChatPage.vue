@@ -5,10 +5,16 @@ import { t } from '@/i18n';
 import { ticketsApi, type TicketDetail, type TicketMessage, type TicketAttachment } from '../api/tickets';
 import { useToast } from '@/composables/useToast';
 import { api } from '../api';
+import { userShellPaths } from '@/utils/userShellPaths';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const toast = useToast();
+const paths = computed(() =>
+  userShellPaths(route, { telegramSession: auth.isTelegramSession }),
+);
 
 const ticketId = computed(() => route.params.ticketId as string);
 const ticketDetail = ref<TicketDetail | null>(null);
@@ -106,7 +112,7 @@ async function closeTicket() {
 }
 
 function goBack() {
-  router.push('/user/tickets');
+  router.push(paths.value.tickets);
 }
 
 function getStatusLabel(status: string) {
@@ -385,7 +391,7 @@ onUnmounted(() => {
   width: 32px;
   height: 32px;
   border: 3px solid rgba(255,255,255,0.1);
-  border-top-color: var(--theme-accent, #6366f1);
+  border-top-color: var(--theme-accent, var(--mvp-emerald, #00d4a0));
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -436,8 +442,8 @@ onUnmounted(() => {
   position: relative;
 }
 .message.own .message-bubble {
-  background: var(--theme-accent, #6366f1);
-  color: #fff;
+  background: var(--theme-accent, var(--mvp-emerald, #00d4a0));
+  color: #04120e;
   border-bottom-right-radius: 0.25rem;
 }
 .message.admin .message-bubble {
@@ -571,7 +577,7 @@ onUnmounted(() => {
   display: flex;
   transition: color 0.2s;
 }
-.attach-btn:hover, .send-btn:hover:not(:disabled) { color: var(--theme-accent, #6366f1); }
+.attach-btn:hover, .send-btn:hover:not(:disabled) { color: var(--theme-accent, var(--mvp-emerald, #00d4a0)); }
 .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .message-input {
@@ -588,7 +594,7 @@ onUnmounted(() => {
   min-height: 40px;
   max-height: 120px;
 }
-.message-input:focus { border-color: var(--theme-accent, #6366f1); }
+.message-input:focus { border-color: var(--theme-accent, var(--mvp-emerald, #00d4a0)); }
 
 /* RTL overrides */
 [dir="rtl"] .back-btn svg {

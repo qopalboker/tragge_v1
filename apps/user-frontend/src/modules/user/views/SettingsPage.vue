@@ -369,8 +369,10 @@ onMounted(() => {
 
 <style scoped>
 .settings-page {
-  padding: var(--spacing-lg);
-  max-width: 800px;
+  padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 16px);
+  max-width: 880px;
+  margin: 0 auto;
+  color: var(--mvp-text, var(--color-text-primary));
   margin: 0 auto;
 }
 

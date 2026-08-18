@@ -22,6 +22,10 @@ PASS  [RTL] design tokens
 PASS  [RTL] tokens imported in main
 PASS  [RESPONSIVE] safe-area bottom nav
 PASS  [RESPONSIVE] mobile content padding for nav
+PASS  [CANONICAL UI] miniapp routes use UserLayout + DashboardPage
+PASS  [CANONICAL UI] legacy MiniAppLayout removed
+PASS  [CANONICAL UI] legacy miniapp HomePage removed
+PASS  [CANONICAL UI] legacy --ma-* tokens file removed
 PASS  [TYPECHECK] vue-tsc — exit=0
 PASS  [BUILD] vite production build — exit=0
 PASS  [E2E] reference image archived

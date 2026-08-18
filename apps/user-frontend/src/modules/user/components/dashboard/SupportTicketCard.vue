@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
 import { ticketsApi, type Ticket } from '@/modules/user/api/tickets';
+import { userShellPaths } from '@/utils/userShellPaths';
+import { useAuthStore } from '@/stores/auth';
 
+const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+const paths = computed(() =>
+  userShellPaths(route, { telegramSession: auth.isTelegramSession }),
+);
 const loading = ref(true);
 const tickets = ref<Ticket[]>([]);
 const error = ref(false);
@@ -24,13 +31,13 @@ onMounted(async () => {
 });
 
 function openList() {
-  router.push('/user/tickets');
+  router.push(paths.value.tickets);
 }
 function openNew() {
-  router.push('/user/tickets/new');
+  router.push(paths.value.ticketNew);
 }
 function openTicket(id: string) {
-  router.push(`/user/tickets/${id}`);
+  router.push(paths.value.ticket(id));
 }
 
 function statusLabel(s: string) {

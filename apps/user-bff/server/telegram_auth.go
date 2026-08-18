@@ -153,11 +153,14 @@ func (a *App) findOrCreateTelegramUser(ctx context.Context, tg auth.TelegramUser
 	}
 
 	email := auth.SyntheticTelegramEmail(tg.ID)
-	username := strings.TrimSpace(tg.Username)
-	if username == "" {
-		username = fmt.Sprintf("tg_%d", tg.ID)
-	}
+	// Username must be unique platform-wide. Telegram @handles can collide with
+	// existing TRAGGE usernames — always use a deterministic tg_<id> key.
+	// Human-readable TG username still appears in display_name when present.
+	username := fmt.Sprintf("tg_%d", tg.ID)
 	displayName := strings.TrimSpace(strings.TrimSpace(tg.FirstName) + " " + strings.TrimSpace(tg.LastName))
+	if uname := strings.TrimSpace(tg.Username); uname != "" && displayName == "" {
+		displayName = uname
+	}
 	if displayName == "" {
 		displayName = username
 	}
@@ -207,9 +210,28 @@ func (a *App) findOrCreateTelegramUser(ctx context.Context, tg auth.TelegramUser
 	return userID, nil
 }
 
+func isPlaceholderTelegramBotToken(token string) bool {
+	lower := strings.ToLower(token)
+	// Never accept lab fixtures as production verification keys.
+	// Real BotFather tokens are numeric:secret without these markers.
+	markers := []string{
+		"not-prod", "not_production", "e2e-bot-token", "tragge-live-e2e",
+		"placeholder", "changeme", "your-bot-token", "test-bot-token",
+	}
+	for _, m := range markers {
+		if strings.Contains(lower, m) {
+			return true
+		}
+	}
+	return false
+}
+
 func loadTelegramWebAppVerifier() (*auth.TelegramWebAppVerifier, error) {
 	token := strings.TrimSpace(secrets.Load("TELEGRAM_BOT_TOKEN"))
-	if token == "" {
+	if token == "" || isPlaceholderTelegramBotToken(token) {
+		// Placeholder / missing token: leave verifier nil so the endpoint
+		// returns telegram_auth_unavailable instead of silently rejecting
+		// every real Mini App HMAC with telegram_auth_invalid.
 		env := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
 		switch env {
 		case "development", "local", "test":

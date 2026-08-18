@@ -403,7 +403,7 @@ onMounted(() => {
 
 /* User Stats Card */
 .user-stats-card {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #7C3AED 100%);
+  background: linear-gradient(145deg, rgba(0, 212, 160, 0.25) 0%, #0a1628 55%, #050b18 100%);
   color: white;
 }
 

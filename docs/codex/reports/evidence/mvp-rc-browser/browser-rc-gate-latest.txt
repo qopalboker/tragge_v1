@@ -1,8 +1,36 @@
-﻿PASS  [MFA-OFF MVP MODE] admin MFA policy handler present
-PASS  [ADMIN LOGIN WITHOUT MFA] password-only Super Admin (browser 5/5)
-PASS  [FRONTEND] frontend-gate exit=0
-PASS  [MVP] mvp-gate exit=0
-PASS  [FINANCIAL] TestMVP_AdminCreditJoinSettle_E2E exit=0
-PASS  [TRADING] Phase2 E2E exit=0
+PASS  [MFA-OFF MVP MODE] admin MFA policy handler present
+PASS  [MFA-OFF MVP MODE] migration 0104 seeds false with ON CONFLICT DO NOTHING
+PASS  [MFA-OFF MVP MODE] login gates MFA via isAdminMFAEnabled (not hardcoded)
+PASS  [ADMIN LOGIN WITHOUT MFA] security settings page
+PASS  [MFA-OFF MVP MODE] migration 0104
+PASS  [USER HOME] dashboard hierarchy components
+PASS  [SUPPORT] support card
+PASS  [CHALLENGES] challenge rail
+PASS  [RTL] mvp tokens
+PASS  [BROWSER E2E] rc user spec
+PASS  [BROWSER E2E] rc admin spec
+PASS  [ENVIRONMENT] compose postgres
+PASS  [ENVIRONMENT] compose api-server
+PASS  [ENVIRONMENT] compose trading-core
+PASS  [USER LOGIN] user-bff healthz
+FAIL  [ADMIN LOGIN] admin-bff healthz
+FAIL  [TRADING] trade-bff healthz
+FAIL  [USER HOME] user frontend reachable — http://127.0.0.1:5173
+FAIL  [ADMIN LOGIN] admin frontend reachable — http://127.0.0.1:5174
+PASS  [RESPONSIVE] frontend-gate — exit=0
+PASS  [FINANCIAL RECONCILIATION] mvp-gate — exit=0
+PASS  [ADMIN LOGIN] mfa secret available
+FAIL  [BROWSER E2E] playwright rc-user + rc-admin — frontends or BFFs unreachable
+PASS  [WALLET] wallet surface + domain financial E2E — mvp-gate financial
+FAIL  [CONTEST DISCOVERY] contest pages in RC suite
+FAIL  [JOIN] join free contest in RC suite
+FAIL  [MOBILE] viewport hierarchy matrix in RC suite
+FAIL  [ADMIN WALLET CREDIT] admin users flow in RC suite
+FAIL  [ADMIN CONTEST MANAGEMENT] admin contests in RC suite
+FAIL  [AUTHORIZATION] admin isolation API check in RC suite
+PASS  [FINALIZATION] domain E2E via mvp-gate
+PASS  [RESULT] domain E2E via mvp-gate
+PASS  [SUPPORT] support section in dashboard hierarchy — component + browser hierarchy
+PASS  [CHALLENGES] challenge rail hierarchy — component + browser hierarchy
 
-RC BROWSER — PASS
+RC BROWSER — BLOCKED

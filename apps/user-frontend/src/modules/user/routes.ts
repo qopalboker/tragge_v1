@@ -10,6 +10,11 @@ export const userRoutes: RouteRecordRaw[] = [
   { path: '/user/invite', name: 'invite', component: () => import('./views/ReferralLandingPage.vue'), meta: { isAuthPage: true } },
   { path: '/payment/result', name: 'payment-result', component: () => import('./views/PaymentResultPage.vue') },
   { path: '/user/error', name: 'user-error', component: () => import('./views/ErrorPage.vue') },
+  // Canonical contest deep-link alias (never a separate design).
+  {
+    path: '/contest/:contestId',
+    redirect: (to) => `/user/contests/${to.params.contestId}`,
+  },
 
   // Protected pages — wrapped in UserLayout (sidebar + bottom nav)
   {

@@ -736,6 +736,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px var(--mvp-page-pad, 16px) calc(var(--mvp-bottom-nav-h, 72px) + var(--mvp-safe-bottom, 0px) + 16px);
+  color: var(--mvp-text, var(--color-text-primary));
 }
 
 .profile-header {
@@ -1216,7 +1220,7 @@ onMounted(() => {
   display: block;
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-lg);
-  background: linear-gradient(135deg, var(--color-primary) 0%, #7C3AED 100%);
+  background: linear-gradient(145deg, rgba(0, 212, 160, 0.28) 0%, #0a1628 55%, #050b18 100%);
   border-radius: var(--radius-md);
   text-align: center;
   color: white;

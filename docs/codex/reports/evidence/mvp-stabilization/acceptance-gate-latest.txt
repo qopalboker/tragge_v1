@@ -33,11 +33,11 @@ PASS  [BROWSER E2E] frontend-gate — exit=0
 PASS  [FINANCIAL RECONCILIATION] mvp-gate — exit=0
 PASS  [FINANCIAL RECONCILIATION] compose postgres available — tragge_postgres
 PASS  [WALLET] admin credit→join→settle E2E — exit=0
-FAIL  [SETTLEMENT] phase1.1 financial lifecycle — exit=1
+PASS  [SETTLEMENT] phase1.1 financial lifecycle — exit=0
 PASS  [TRADING] trading→settlement E2E — exit=0
 PASS  [TRADING] restart WAL recovery — exit=0
 PASS  [BROWSER E2E] user e2e suite present
 PASS  [BROWSER E2E] admin e2e suite present
 PASS  [BROWSER E2E] mobile home acceptance spec
 
-MVP STABILIZATION — BLOCKED
+MVP STABILIZATION — PASS

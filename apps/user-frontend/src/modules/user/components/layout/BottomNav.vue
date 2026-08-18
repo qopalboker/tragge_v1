@@ -7,19 +7,51 @@ import IconTournaments from '@/components/icons/IconTournaments.vue';
 import IconSupport from '@/components/icons/IconSupport.vue';
 import IconProfile from '@/components/icons/IconProfile.vue';
 import { ticketsApi } from '../../api/tickets';
+import { useAuthStore } from '@/stores/auth';
+import { isTelegramMiniApp } from '@/modules/miniapp/telegram';
 
 const route = useRoute();
+const auth = useAuthStore();
 
-const navItems = computed(() => [
-  { name: 'profile', path: '/user/profile', icon: IconProfile, label: t('nav.profile'), center: false },
-  { name: 'contests', path: '/user/contests', icon: IconTournaments, label: t('contests.title').split(' ')[0], center: false },
-  { name: 'home', path: '/user/dashboard', icon: IconDashboard, label: t('nav.dashboard').split(' ')[0], center: true },
-  { name: 'leaderboard', path: '/user/leaderboard', icon: IconTournaments, label: t('nav.leaderboard') || 'رده‌بندی', center: false },
-  { name: 'support', path: '/user/tickets', icon: IconSupport, label: t('nav.support'), center: false },
-]);
+const mini = computed(
+  () =>
+    route.matched.some((r) => r.meta.miniapp) ||
+    route.path.startsWith('/miniapp') ||
+    auth.isTelegramSession ||
+    isTelegramMiniApp(),
+);
+
+const navItems = computed(() => {
+  const home = mini.value ? '/miniapp/home' : '/user/dashboard';
+  const contests = mini.value ? '/miniapp/competitions' : '/user/contests';
+  const profile = mini.value ? '/miniapp/profile' : '/user/profile';
+  const leaderboard = mini.value ? '/miniapp/leaderboard' : '/user/leaderboard';
+  const support = mini.value ? '/miniapp/tickets' : '/user/tickets';
+  return [
+    { name: 'profile', path: profile, icon: IconProfile, label: t('nav.profile'), center: false },
+    { name: 'contests', path: contests, icon: IconTournaments, label: t('contests.title').split(' ')[0], center: false },
+    { name: 'home', path: home, icon: IconDashboard, label: t('nav.dashboard').split(' ')[0], center: true },
+    { name: 'leaderboard', path: leaderboard, icon: IconTournaments, label: t('nav.leaderboard') || 'رده‌بندی', center: false },
+    { name: 'support', path: support, icon: IconSupport, label: t('nav.support'), center: false },
+  ];
+});
 
 function isActive(path: string): boolean {
-  if (path === '/user/dashboard') return route.path === path || route.path === '/user';
+  if (path === '/user/dashboard' || path === '/miniapp/home') {
+    return (
+      route.path === '/user/dashboard' ||
+      route.path === '/user' ||
+      route.path === '/miniapp/home' ||
+      route.path === '/miniapp'
+    );
+  }
+  if (path === '/user/contests' || path === '/miniapp/competitions') {
+    return (
+      route.path.startsWith('/user/contests') ||
+      route.path.startsWith('/miniapp/competitions') ||
+      route.path.startsWith('/miniapp/categories')
+    );
+  }
   return route.path === path || route.path.startsWith(path + '/');
 }
 

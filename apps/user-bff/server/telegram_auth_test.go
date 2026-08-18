@@ -44,6 +44,19 @@ func signInitDataForHandler(t *testing.T, botToken string, fields map[string]str
 	return values.Encode()
 }
 
+func TestIsPlaceholderTelegramBotToken(t *testing.T) {
+	if !isPlaceholderTelegramBotToken("123456:TRAGGE-LIVE-E2E-BOT-TOKEN-NOT-PROD") {
+		t.Fatal("lab fixture token must be treated as placeholder")
+	}
+	if !isPlaceholderTelegramBotToken("changeme:placeholder") {
+		t.Fatal("explicit placeholder must be rejected")
+	}
+	// Shape of a real BotFather token (numeric id : secret) — not a placeholder marker.
+	if isPlaceholderTelegramBotToken("7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw") {
+		t.Fatal("real-looking bot token must not be classified as placeholder")
+	}
+}
+
 func TestHandleTelegramMiniAppAuthRejectsUntrustedIdentityAndInvalidInitData(t *testing.T) {
 	verifier, err := auth.NewTelegramWebAppVerifier(telegramAuthTestToken, time.Minute)
 	if err != nil {

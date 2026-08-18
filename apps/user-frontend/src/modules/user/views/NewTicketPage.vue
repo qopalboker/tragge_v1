@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { t } from '@/i18n';
 import { ticketsApi } from '../api/tickets';
 import { useToast } from '@/composables/useToast';
+import { userShellPaths } from '@/utils/userShellPaths';
+import { useAuthStore } from '@/stores/auth';
 
+const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const toast = useToast();
+const paths = computed(() =>
+  userShellPaths(route, { telegramSession: auth.isTelegramSession }),
+);
 
 const subject = ref('');
 const category = ref('other');
@@ -82,7 +89,7 @@ async function handleSubmit() {
 
     const result = await ticketsApi.create(formData);
     toast.success(t('tickets.sent'));
-    router.push(`/user/tickets/${result.id}`);
+    router.push(paths.value.ticket(result.id));
   } catch {
     // Error handled by interceptor
   } finally {
@@ -91,7 +98,7 @@ async function handleSubmit() {
 }
 
 function goBack() {
-  router.push('/user/tickets');
+  router.push(paths.value.tickets);
 }
 </script>
 
@@ -220,7 +227,7 @@ function goBack() {
   outline: none;
   transition: border-color 0.2s;
 }
-.input:focus { border-color: var(--theme-accent, #6366f1); }
+.input:focus { border-color: var(--theme-accent, var(--mvp-emerald, #00d4a0)); }
 .input.error { border-color: #ef4444; }
 
 select.input {
@@ -259,7 +266,7 @@ select.input {
   color: var(--theme-text-secondary, #999);
   transition: border-color 0.2s;
 }
-.file-drop:hover { border-color: var(--theme-accent, #6366f1); }
+.file-drop:hover { border-color: var(--theme-accent, var(--mvp-emerald, #00d4a0)); }
 
 .file-preview {
   display: flex;
@@ -298,7 +305,8 @@ select.input {
 
 .btn-primary {
   padding: 0.75rem 1.5rem;
-  background: var(--theme-accent, #6366f1);
+  background: var(--theme-accent, var(--mvp-emerald, #00d4a0));
+  color: #04120e;
   color: #fff;
   border: none;
   border-radius: 0.75rem;

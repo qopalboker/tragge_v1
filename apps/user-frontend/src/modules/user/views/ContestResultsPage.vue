@@ -654,11 +654,12 @@ onMounted(async () => {
 /* Results Banner */
 .results-banner {
   position: relative;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 70%, #06b6d4 100%);
+  background: linear-gradient(145deg, rgba(0, 212, 160, 0.2) 0%, #0a1628 45%, #050b18 100%);
+  border: 1px solid var(--mvp-border-strong, rgba(0, 212, 160, 0.35));
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
   overflow: hidden;
-  color: white;
+  color: var(--mvp-text, #f2f5fa);
   margin-top: var(--spacing-lg);
 }
 
@@ -679,7 +680,7 @@ onMounted(async () => {
 .decoration-1 {
   width: 300px;
   height: 300px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(0, 212, 160, 0.28) 0%, rgba(0, 212, 160, 0.06) 100%);
   top: -100px;
   right: 20%;
   border-radius: 50%;
@@ -689,7 +690,7 @@ onMounted(async () => {
 .decoration-2 {
   width: 200px;
   height: 200px;
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(168, 85, 247, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(0, 212, 160, 0.06) 100%);
   bottom: -50px;
   left: 10%;
   border-radius: 50%;
@@ -699,7 +700,7 @@ onMounted(async () => {
 .decoration-3 {
   width: 150px;
   height: 150px;
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(59, 130, 246, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(0, 212, 160, 0.35) 0%, rgba(13, 31, 46, 0.2) 100%);
   top: 20%;
   right: 5%;
   border-radius: 50%;
@@ -784,8 +785,8 @@ onMounted(async () => {
 
 /* User Summary Banner */
 .user-summary-banner {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: linear-gradient(135deg, rgba(0, 212, 160, 0.12) 0%, rgba(13, 31, 46, 0.35) 100%);
+  border: 1px solid var(--mvp-border, rgba(0, 212, 160, 0.14));
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   margin-top: var(--spacing-lg);
@@ -992,7 +993,7 @@ onMounted(async () => {
 }
 
 .action-btn.trades:hover {
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--mvp-emerald-soft, rgba(0, 212, 160, 0.12));
 }
 
 .action-btn.similar {

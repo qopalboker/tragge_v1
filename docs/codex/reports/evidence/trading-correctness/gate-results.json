@@ -1,5 +1,5 @@
 {
-  "decision": "TRADING — PASS",
+  "decision": "TRADING — BLOCKED",
   "results": [
     {
       "cat": "QUANTITY",
@@ -214,7 +214,7 @@
     {
       "cat": "ENVIRONMENT",
       "name": "trade-bff healthz",
-      "ok": true,
+      "ok": false,
       "detail": ""
     },
     {
@@ -292,20 +292,14 @@
     {
       "cat": "BROWSER TRADING",
       "name": "user frontend reachable",
-      "ok": true,
+      "ok": false,
       "detail": ""
     },
     {
       "cat": "BROWSER TRADING",
       "name": "playwright buy+double-click",
-      "ok": true,
-      "detail": "ok"
-    },
-    {
-      "cat": "DUPLICATE ORDER",
-      "name": "browser double-click / API retry evidence",
-      "ok": true,
-      "detail": "ok"
+      "ok": false,
+      "detail": "frontend or trade-bff not reachable"
     },
     {
       "cat": "NO MOCK TRADING DATA",
@@ -314,5 +308,5 @@
       "detail": ""
     }
   ],
-  "ts": "2026-08-17T01:26:52.377Z"
+  "ts": "2026-08-18T00:53:57.126Z"
 }

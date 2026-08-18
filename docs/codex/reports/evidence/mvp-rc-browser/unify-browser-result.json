@@ -1,0 +1,10 @@
+{
+  "failures": [
+    "/user/tickets: missing canonical shell",
+    "/user/settings: missing canonical shell",
+    "/user/profile: missing canonical shell",
+    "/user/wallet: missing canonical shell",
+    "/user/contests: missing canonical shell",
+    "/user/notifications: missing canonical shell"
+  ]
+}
