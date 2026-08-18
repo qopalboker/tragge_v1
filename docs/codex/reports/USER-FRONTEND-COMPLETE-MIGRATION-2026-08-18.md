@@ -127,9 +127,20 @@ Evidence under `docs/codex/reports/evidence/mvp-rc-browser/unify2-*.png`.
 Pushed to `origin/main`:
 
 ```text
-SHA: 51d3c53d494db2ac89a1266a6190397a3bd145c3
-https://github.com/qopalboker/tragge_v1/commit/51d3c53d494db2ac89a1266a6190397a3bd145c3
+Unification: 51d3c53d494db2ac89a1266a6190397a3bd145c3
+Lint fix:    748c8f688bcad46c8738a8e2058830b6b70f0c50  (authoritative final SHA)
+https://github.com/qopalboker/tragge_v1/commit/748c8f688bcad46c8738a8e2058830b6b70f0c50
+CI:          https://github.com/qopalboker/tragge_v1/actions?query=sha%3A748c8f688bcad46c8738a8e2058830b6b70f0c50
 ```
+
+First CI on `51d3c53` ran Frontend jobs (path filter OK) but failed ESLint `no-useless-assignment` in `telegram.ts`. Fixed and pushed as `748c8f6`.
+
+**Final CI (`748c8f6`): SUCCESS**
+
+- Workflow: https://github.com/qopalboker/tragge_v1/actions/runs/32086611589
+- `detect-changes`: success
+- `Frontend (lint, test, build)`: **success** (actually ran — not skipped)
+- `Go (lint, test, build)`: skipped on lint-fix-only diff (expected path filter)
 
 Local gates on this change set:
 
@@ -139,9 +150,8 @@ Local gates on this change set:
 | `mvp-gate.mjs` | PASS |
 | `acceptance-gate.mjs` | PASS |
 | `trading-mobile-gate.mjs` | PASS |
+| `eslint src --quiet` | PASS (0 errors) |
 | `trading-certification-gate.mjs` | BLOCKED (env: trade-bff/localhost Playwright not reachable — not a UI unification regression) |
-
-`gh` CLI was unavailable in this environment; confirm Actions on the SHA above in GitHub UI.
 
 ---
 
