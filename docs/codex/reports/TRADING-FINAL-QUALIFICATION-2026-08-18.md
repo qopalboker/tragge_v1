@@ -120,14 +120,24 @@ Engine suite + financial regression PASS. Live free-contest Buy deferred to regi
 
 ## 16. CI
 
-Pending push of this qualification fix set. Local:
+```text
+Feature SHA: a5c03d6994b6e287545c9e16457f6f5ad1e7de59
+Lint fix:    2b087c455f4d034d86401177a2ea56b81408271e  (authoritative final)
+Workflow:    https://github.com/qopalboker/tragge_v1/actions/runs/32096224437
+Conclusion:  success
+Jobs:
+  detect-changes — success
+  Go (lint, test, build) — success (executed)
+  Frontend — skipped (no FE diff on lint-fix commit; expected)
+```
+
+Local gates:
 
 | Gate | Result |
 |------|--------|
 | trading-certification-gate | **PASS 52/52** |
-| contest-lifecycle-gate | PASS (prior) |
-| trading-mobile-gate | PASS |
-| mvp / frontend / acceptance | PASS (prior session) |
+| contest-lifecycle-gate | **PASS** |
+| trading-mobile-gate | **PASS** |
 
 ---
 
