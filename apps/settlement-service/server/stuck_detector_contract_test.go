@@ -12,6 +12,7 @@ import (
 func TestOrphanedSettlingDetectorUsesEndsAtNotUpdatedAt(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join("stuck_detector.go")
+	// #nosec G304 -- fixed package-local source file for contract assertion
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
