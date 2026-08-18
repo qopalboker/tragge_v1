@@ -704,6 +704,28 @@ func (g *FreeContestGenerator) cleanupOldContests() {
 	// Use a longer retention for stuck contests (3x normal) that have no ended_at
 	stuckRetentionInterval := fmt.Sprintf("%d hours", g.config.CleanupRetentionHours*3)
 
+	// Delete dependent settlement rows first — contests FK from contest_settlements
+	// otherwise blocks cleanup of completed/cancelled free contests.
+	if _, err := g.db.Primary().ExecContext(ctx,
+		`DELETE FROM contest_settlements
+		 WHERE contest_id IN (
+			SELECT id FROM contests
+			WHERE is_free = true
+			  AND auto_generated = true
+			  AND status IN ('completed', 'cancelled')
+			  AND (
+			      (ended_at IS NOT NULL AND ended_at < NOW() - $1::interval)
+			      OR
+			      (ended_at IS NULL AND starts_at < NOW() - $2::interval)
+			  )
+		 )`,
+		retentionInterval,
+		stuckRetentionInterval,
+	); err != nil {
+		logger.Error("Failed to cleanup settlements for old free contests", zap.Error(err))
+		return
+	}
+
 	result, err := g.db.Primary().ExecContext(ctx,
 		`DELETE FROM contests
 		 WHERE is_free = true

@@ -252,9 +252,21 @@ async function httpOk(url) {
   }
 }
 
-const tradeBff = await httpOk("http://127.0.0.1:8082/healthz");
-const userBff = await httpOk("http://127.0.0.1:8081/healthz");
-gate("ENVIRONMENT", "trade-bff healthz", tradeBff);
+// trading-core / api-server ports are not published to the host in lite Compose.
+// Probe through the public gateway: trade /me returns 401 when trade-bff is up;
+// user healthz returns 200 when user-bff is up.
+async function httpStatus(url) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    return res.status;
+  } catch {
+    return 0;
+  }
+}
+const tradeStatus = await httpStatus("http://127.0.0.1:8080/api/trade/me");
+const tradeBff = tradeStatus === 401 || tradeStatus === 200;
+const userBff = await httpOk("http://127.0.0.1:8080/api/user/healthz");
+gate("ENVIRONMENT", "trade-bff healthz", tradeBff, `gateway /api/trade/me status=${tradeStatus}`);
 gate("ENVIRONMENT", "user-bff healthz", userBff);
 
 // ---------------------------------------------------------------------------
@@ -318,8 +330,25 @@ gate(
 // Browser trading (optional but required for PASS when env available)
 // ---------------------------------------------------------------------------
 console.log("\n--- Browser trading Playwright ---\n");
-const userFe = await httpOk(process.env.E2E_USER_URL || "http://127.0.0.1:5173/user/login");
-gate("BROWSER TRADING", "user frontend reachable", userFe);
+// Prefer explicit E2E_USER_URL; else Vite (:5173) or gateway-served panel (:8080).
+const userFeCandidates = [
+  process.env.E2E_USER_URL,
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:8080",
+].filter(Boolean);
+let userFeBase = "";
+let userFe = false;
+for (const base of userFeCandidates) {
+  const loginURL = /\/user\/login\/?$/.test(base)
+    ? base
+    : `${String(base).replace(/\/$/, "")}/user/login`;
+  if (await httpOk(loginURL)) {
+    userFeBase = String(base).replace(/\/user\/login\/?$/, "");
+    userFe = true;
+    break;
+  }
+}
+gate("BROWSER TRADING", "user frontend reachable", userFe, userFeBase || "no login URL reachable");
 
 let browserOk = false;
 if (userFe && tradeBff) {
@@ -349,7 +378,7 @@ if (userFe && tradeBff) {
       shell: false,
       env: {
         E2E_INTEGRATION: "1",
-        E2E_USER_URL: process.env.E2E_USER_URL || "http://127.0.0.1:5173",
+        E2E_USER_URL: process.env.E2E_USER_URL || userFeBase || "http://127.0.0.1:8080",
         ...(chrome && fs.existsSync(chrome) ? { E2E_CHROME_PATH: chrome } : {}),
       },
     }

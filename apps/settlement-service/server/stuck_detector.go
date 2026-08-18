@@ -109,13 +109,19 @@ func (a *App) detectAndRecoverStuckSettlements(ctx context.Context) {
 // message from the scheduler is lost (consumer lag, restart, crash) and
 // settlement-service never receives the trigger.
 func (a *App) detectOrphanedSettlingContests(ctx context.Context) {
+	// contests has no updated_at column — use ends_at (contest already past end
+	// when status becomes settling) as the orphan age signal.
+	// Cap batch size: recovering hundreds of orphans concurrently caused
+	// context deadline stampede (observed live after the SQL fix).
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT c.id
 		FROM contests c
 		LEFT JOIN contest_settlements cs ON cs.contest_id = c.id
 		WHERE c.status = 'settling'
 		  AND cs.id IS NULL
-		  AND c.updated_at < NOW() - $1::interval`,
+		  AND c.ends_at < NOW() - $1::interval
+		ORDER BY c.ends_at ASC
+		LIMIT 5`,
 		fmt.Sprintf("%d seconds", int(a.config.OrphanedSettlingThreshold.Seconds())))
 	if err != nil {
 		a.log().Error("Failed to query orphaned settling contests", zap.Error(err))
