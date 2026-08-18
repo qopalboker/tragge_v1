@@ -37,6 +37,11 @@ type SymbolRegistry struct {
 	// FromFinnhub maps Finnhub provider symbol → canonical symbol.
 	FromFinnhub map[string]string
 
+	// ToDeriv maps canonical symbol → Deriv provider symbol (e.g., "EUR/USD" → "frxEURUSD").
+	ToDeriv map[string]string
+	// FromDeriv maps Deriv provider symbol → canonical symbol (e.g., "frxEURUSD" → "EUR/USD").
+	FromDeriv map[string]string
+
 	// AssetTypes maps canonical symbol → asset type (e.g., "EUR/USD" → "forex").
 	AssetTypes map[string]string
 
@@ -51,7 +56,7 @@ func loadSymbolsFromDB(db *sql.DB) (*SymbolRegistry, error) {
 	rows, err := db.Query(`
 		SELECT symbol, provider_symbol_massive, provider_symbol_twelvedata,
 		       provider_symbol_nobitex, provider_symbol_binance,
-		       provider_symbol_finnhub, asset_type, is_active
+		       provider_symbol_finnhub, provider_symbol_deriv, asset_type, is_active
 		FROM symbols
 		WHERE is_active = TRUE
 	`)
@@ -71,6 +76,8 @@ func loadSymbolsFromDB(db *sql.DB) (*SymbolRegistry, error) {
 		FromBinance:    make(map[string]string),
 		ToFinnhub:      make(map[string]string),
 		FromFinnhub:    make(map[string]string),
+		ToDeriv:        make(map[string]string),
+		FromDeriv:      make(map[string]string),
 		AssetTypes:     make(map[string]string),
 	}
 
@@ -82,10 +89,11 @@ func loadSymbolsFromDB(db *sql.DB) (*SymbolRegistry, error) {
 			nobitexSym    sql.NullString
 			binanceSym    sql.NullString
 			finnhubSym    sql.NullString
+			derivSym      sql.NullString
 			assetType     string
 			isActive      bool
 		)
-		if err := rows.Scan(&symbol, &massiveSym, &twelveDataSym, &nobitexSym, &binanceSym, &finnhubSym, &assetType, &isActive); err != nil {
+		if err := rows.Scan(&symbol, &massiveSym, &twelveDataSym, &nobitexSym, &binanceSym, &finnhubSym, &derivSym, &assetType, &isActive); err != nil {
 			return nil, fmt.Errorf("scan symbol row: %w", err)
 		}
 
@@ -120,6 +128,15 @@ func loadSymbolsFromDB(db *sql.DB) (*SymbolRegistry, error) {
 		if finnhubSym.Valid && finnhubSym.String != "" {
 			reg.ToFinnhub[symbol] = finnhubSym.String
 			reg.FromFinnhub[finnhubSym.String] = symbol
+		}
+
+		// Build Deriv mappings (DB value wins; heuristic fills gaps)
+		if derivSym.Valid && derivSym.String != "" {
+			reg.ToDeriv[symbol] = derivSym.String
+			reg.FromDeriv[derivSym.String] = symbol
+		} else if h := CanonicalToDeriv(symbol); h != "" {
+			reg.ToDeriv[symbol] = h
+			reg.FromDeriv[h] = symbol
 		}
 
 		// Classify for Massive WS routing
@@ -160,6 +177,8 @@ func buildRegistryFromEnv(symbols []string) *SymbolRegistry {
 		FromBinance:    make(map[string]string),
 		ToFinnhub:      make(map[string]string),
 		FromFinnhub:    make(map[string]string),
+		ToDeriv:        make(map[string]string),
+		FromDeriv:      make(map[string]string),
 		AssetTypes:     make(map[string]string),
 	}
 
@@ -193,6 +212,10 @@ func buildRegistryFromEnv(symbols []string) *SymbolRegistry {
 					reg.ToFinnhub[sym] = finnhubSym
 					reg.FromFinnhub[finnhubSym] = sym
 				}
+				if h := CanonicalToDeriv(sym); h != "" {
+					reg.ToDeriv[sym] = h
+					reg.FromDeriv[h] = sym
+				}
 			} else {
 				reg.AssetTypes[sym] = "crypto"
 				reg.CryptoSymbols = append(reg.CryptoSymbols, sym)
@@ -214,6 +237,10 @@ func buildRegistryFromEnv(symbols []string) *SymbolRegistry {
 							reg.FromBinance[pairSym] = sym
 						}
 					}
+				}
+				if h := CanonicalToDeriv(sym); h != "" {
+					reg.ToDeriv[sym] = h
+					reg.FromDeriv[h] = sym
 				}
 			}
 		} else {
@@ -253,6 +280,8 @@ func filterRegistry(reg *SymbolRegistry, filter []string) *SymbolRegistry {
 		FromBinance:    make(map[string]string),
 		ToFinnhub:      make(map[string]string),
 		FromFinnhub:    make(map[string]string),
+		ToDeriv:        make(map[string]string),
+		FromDeriv:      make(map[string]string),
 		AssetTypes:     make(map[string]string),
 	}
 
@@ -282,6 +311,10 @@ func filterRegistry(reg *SymbolRegistry, filter []string) *SymbolRegistry {
 		if v, ok := reg.ToFinnhub[sym]; ok {
 			filtered.ToFinnhub[sym] = v
 			filtered.FromFinnhub[v] = sym
+		}
+		if v, ok := reg.ToDeriv[sym]; ok {
+			filtered.ToDeriv[sym] = v
+			filtered.FromDeriv[v] = sym
 		}
 
 		switch reg.AssetTypes[sym] {
@@ -436,4 +469,25 @@ func (r *SymbolRegistry) FinnhubToCanonical(finnhubSymbol string) string {
 		s = strings.TrimPrefix(s, "OANDA:")
 	}
 	return strings.ReplaceAll(s, "_", "/")
+}
+
+// DerivSubscriptions returns Deriv v3 symbols for every mapped canonical symbol.
+func (r *SymbolRegistry) DerivSubscriptions() []string {
+	var subs []string
+	for _, sym := range r.CanonicalSymbols {
+		if d, ok := r.ToDeriv[sym]; ok && d != "" {
+			subs = append(subs, d)
+		}
+	}
+	return subs
+}
+
+// DerivToCanonical converts a Deriv symbol (e.g. "frxEURUSD") back to canonical format.
+func (r *SymbolRegistry) DerivToCanonical(derivSymbol string) string {
+	if r != nil {
+		if canonical, ok := r.FromDeriv[derivSymbol]; ok {
+			return canonical
+		}
+	}
+	return DerivToCanonicalHeuristic(derivSymbol)
 }

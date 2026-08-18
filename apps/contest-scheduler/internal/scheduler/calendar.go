@@ -283,19 +283,20 @@ func (cp *CalendarProcessor) processCalendarEvents(ctx context.Context) {
 	calendarEntriesDue.Set(float64(len(entries)))
 
 	// Update active schedules gauge
-	var activeCount int64
+	var templatesScanned int64
 	if countErr := cp.pool.Replica().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tournament_templates WHERE is_active = TRUE AND auto_create = TRUE AND recurrence_rule IS NOT NULL`,
-	).Scan(&activeCount); countErr == nil {
-		traggeSchedulerActiveSchedules.Set(float64(activeCount))
+	).Scan(&templatesScanned); countErr == nil {
+		traggeSchedulerActiveSchedules.Set(float64(templatesScanned))
 	}
 
-	if len(entries) == 0 {
-		cp.logger.Debug("No calendar entries due")
-		return
-	}
+	cp.mu.RLock()
+	createdBefore := cp.contestsCreated
+	cp.mu.RUnlock()
 
-	cp.logger.Info("Found due calendar entries", zap.Int("count", len(entries)))
+	if len(entries) > 0 {
+		cp.logger.Info("Found due calendar entries", zap.Int("count", len(entries)))
+	}
 
 	// Process each entry
 	for _, entry := range entries {
@@ -313,6 +314,16 @@ func (cp *CalendarProcessor) processCalendarEvents(ctx context.Context) {
 			// Continue processing other entries - don't skip permanently
 		}
 	}
+
+	cp.mu.RLock()
+	materialized := cp.contestsCreated - createdBefore
+	cp.mu.RUnlock()
+
+	cp.logger.Info("Calendar processor cycle complete",
+		zap.Int64("templates_scanned", templatesScanned),
+		zap.Int64("contests_materialized", materialized),
+		zap.Int("due_count", len(entries)),
+	)
 
 	duration := time.Since(startTime)
 	calendarProcessingDuration.Observe(duration.Seconds())

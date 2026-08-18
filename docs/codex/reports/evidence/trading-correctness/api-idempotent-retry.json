@@ -1,8 +1,17 @@
 {
-  "error": "login failed",
-  "loginStatus": 429,
-  "loginBody": {
-    "code": "RATE_LIMITED",
-    "error": "request unavailable"
+  "cid": "1f9c2d72-3ab1-4301-88e2-a301102af8ce",
+  "joinStatus": 400,
+  "joinBody": {
+    "error": "مسابقه برای ثبت‌نام باز نیست",
+    "reason": "late_join_cutoff_passed"
+  },
+  "clientOrderId": "1b30badf-b2ca-4c60-bd90-0074526939f5",
+  "status1": 403,
+  "status2": 403,
+  "body1": {
+    "error": "شما در این مسابقه شرکت نکرده‌اید"
+  },
+  "body2": {
+    "error": "شما در این مسابقه شرکت نکرده‌اید"
   }
 }

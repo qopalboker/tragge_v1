@@ -46,8 +46,9 @@ type ProviderType string
 
 const (
 	ProviderTwelveData ProviderType = "twelvedata"
-	ProviderMassive    ProviderType = "massive"
+	ProviderMassive    ProviderType = "massive" // LEGACY/UNUSED when MARKET_PROVIDER is not "massive"
 	ProviderFinnhub    ProviderType = "finnhub"
+	ProviderDeriv      ProviderType = "deriv"
 	ProviderAuto       ProviderType = "auto"
 )
 
@@ -79,6 +80,7 @@ type Config struct {
 
 	// Provider configuration
 	MarketProvider    ProviderType
+	DerivAppID        string        // Deriv WS app_id (DERIV_APP_ID, default 1089)
 	FailoverTimeout   time.Duration // Time before switching to fallback provider
 	AutoSwitchback    bool          // Whether to switch back to primary when it recovers
 	SwitchbackDelay   time.Duration // Delay before attempting to switch back to primary
@@ -525,6 +527,8 @@ func massivePairToCanonical(pair string) string {
 }
 
 // MassiveProvider implements MarketProvider for the Massive.com WebSocket API.
+// LEGACY/UNUSED when MARKET_PROVIDER is not "massive". Type kept for switch-provider
+// and failover; do not construct unless Massive is the selected provider.
 // It maintains separate connections for forex and crypto asset classes.
 type MassiveProvider struct {
 	keyRotator    *KeyRotator
@@ -1036,19 +1040,22 @@ func NewProviderManager(config *Config, tickHandler TickHandler, registry *Symbo
 		pm.primary = NewTwelveDataProvider(config.TwelveDataAPIKeys, logger.Named("twelvedata"))
 		pm.fallback = nil
 	case ProviderMassive:
+		// LEGACY: only constructed when MARKET_PROVIDER=massive
 		pm.primary = NewMassiveProvider(config.MassiveAPIKeys, logger.Named("massive"))
 		pm.fallback = nil
 	case ProviderFinnhub:
 		pm.primary = NewFinnhubProvider(config.FinnhubAPIKeys, logger.Named("finnhub"))
+		pm.fallback = nil
+	case ProviderDeriv:
+		pm.primary = NewDerivProvider(config.DerivAppID, logger.Named("deriv"))
 		pm.fallback = nil
 	case ProviderAuto:
 		// Finnhub is primary, TwelveData is fallback
 		pm.primary = NewFinnhubProvider(config.FinnhubAPIKeys, logger.Named("finnhub"))
 		pm.fallback = NewTwelveDataProvider(config.TwelveDataAPIKeys, logger.Named("twelvedata"))
 	default:
-		// Default to auto mode
-		pm.primary = NewFinnhubProvider(config.FinnhubAPIKeys, logger.Named("finnhub"))
-		pm.fallback = NewTwelveDataProvider(config.TwelveDataAPIKeys, logger.Named("twelvedata"))
+		pm.primary = NewDerivProvider(config.DerivAppID, logger.Named("deriv"))
+		pm.fallback = nil
 	}
 
 	pm.current = pm.primary
@@ -1168,6 +1175,18 @@ func (pm *ProviderManager) CurrentProvider() ProviderType {
 // UsingFallback returns whether we're currently using the fallback provider.
 func (pm *ProviderManager) UsingFallback() bool {
 	return pm.usingFallback.Load()
+}
+
+// DerivHealth exposes DerivProvider readiness fields for /readyz.
+// ok is false when the current provider is not Deriv.
+func (pm *ProviderManager) DerivHealth() (ok bool, connected bool, lastTickAt int64, symbolsLoaded int, candleReady bool, pollFallback bool) {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	dp, isDeriv := pm.current.(*DerivProvider)
+	if !isDeriv {
+		return false, false, 0, 0, false, false
+	}
+	return true, dp.IsConnected(), dp.LastTickAtUnix(), dp.SymbolsLoaded(), dp.CandleReady(), dp.UsingPollFallback()
 }
 
 // connectionManager manages the WebSocket connection with reconnection and failover logic.
@@ -1333,6 +1352,16 @@ func (pm *ProviderManager) subscribeProvider(provider MarketProvider) error {
 			}
 		}
 		return provider.Subscribe(fhSymbols)
+	case ProviderDeriv:
+		derivSymbols := pm.symbolRegistry.DerivSubscriptions()
+		if len(derivSymbols) == 0 {
+			for _, sym := range pm.config.Symbols {
+				if d := CanonicalToDeriv(sym); d != "" {
+					derivSymbols = append(derivSymbols, d)
+				}
+			}
+		}
+		return provider.Subscribe(derivSymbols)
 	default:
 		return provider.Subscribe(pm.config.Symbols)
 	}
@@ -1470,6 +1499,35 @@ func (pm *ProviderManager) handleMessage(providerType ProviderType, data []byte)
 				pm.lastTickReceived.Store(time.Now().Unix())
 			}
 		}
+
+	case ProviderDeriv:
+		res, err := ParseDerivMessage(data)
+		if err != nil {
+			pm.logger.Warn("Deriv parse error", zap.Error(err))
+			return
+		}
+		if res.MsgType != "tick" && res.MsgType != "history" && res.MsgType != "candles" {
+			return
+		}
+		for _, tick := range res.Ticks {
+			if tick.Quote <= 0 {
+				continue
+			}
+			symbol := tick.Symbol
+			if pm.symbolRegistry != nil {
+				symbol = pm.symbolRegistry.DerivToCanonical(tick.Symbol)
+			} else {
+				symbol = DerivToCanonicalHeuristic(tick.Symbol)
+			}
+			ts := tick.Epoch
+			if ts <= 0 {
+				ts = time.Now().Unix()
+			}
+			pm.tickHandler(symbol, tick.Quote, tick.Bid, tick.Ask, 0, ts, "deriv")
+		}
+		if len(res.Ticks) > 0 {
+			pm.lastTickReceived.Store(time.Now().Unix())
+		}
 	}
 }
 
@@ -1593,9 +1651,12 @@ func (pm *ProviderManager) switchToPrimary() {
 	case ProviderTwelveData:
 		pm.primary = NewTwelveDataProvider(pm.config.TwelveDataAPIKeys, pm.logger.Named("twelvedata"))
 	case ProviderMassive:
+		// LEGACY: rebuild only if Massive is the configured primary
 		pm.primary = NewMassiveProvider(pm.config.MassiveAPIKeys, pm.logger.Named("massive"))
 	case ProviderFinnhub:
 		pm.primary = NewFinnhubProvider(pm.config.FinnhubAPIKeys, pm.logger.Named("finnhub"))
+	case ProviderDeriv:
+		pm.primary = NewDerivProvider(pm.config.DerivAppID, pm.logger.Named("deriv"))
 	}
 
 	toProvider := string(pm.primary.Name())
@@ -1668,11 +1729,14 @@ func (pm *ProviderManager) checkPrimaryHealth() {
 	var testProvider MarketProvider
 	switch primaryName {
 	case ProviderMassive:
+		// LEGACY: health check only if Massive is primary
 		testProvider = NewMassiveProvider(pm.config.MassiveAPIKeys, pm.logger.Named("massive-healthcheck"))
 	case ProviderTwelveData:
 		testProvider = NewTwelveDataProvider(pm.config.TwelveDataAPIKeys, pm.logger.Named("twelvedata-healthcheck"))
 	case ProviderFinnhub:
 		testProvider = NewFinnhubProvider(pm.config.FinnhubAPIKeys, pm.logger.Named("finnhub-healthcheck"))
+	case ProviderDeriv:
+		testProvider = NewDerivProvider(pm.config.DerivAppID, pm.logger.Named("deriv-healthcheck"))
 	default:
 		pm.logger.Warn("Unknown primary provider type, skipping health check",
 			zap.String("provider", string(primaryName)))
@@ -1785,14 +1849,21 @@ func loadConfig() *Config {
 		}
 	}
 
-	// Warn if all keys are missing
+	derivAppID := config.GetEnvString("DERIV_APP_ID", derivDefaultAppID)
+	if strings.TrimSpace(derivAppID) == "" {
+		derivAppID = derivDefaultAppID
+	}
+
+	// Warn if all keys are missing (Deriv uses app_id, not these keys)
 	if len(twelveDataAPIKeys) == 0 && len(massiveAPIKeys) == 0 && len(finnhubAPIKeys) == 0 {
-		bootstrapLogger.Warn("No market data API keys set (TWELVEDATA_API_KEYS, MASSIVE_API_KEYS, FINNHUB_API_KEYS)")
+		bootstrapLogger.Info("No Massive/TwelveData/Finnhub API keys set; Deriv uses DERIV_APP_ID",
+			zap.String("deriv_app_id", derivAppID))
 	} else {
 		bootstrapLogger.Info("API keys loaded",
 			zap.Int("twelvedata_keys", len(twelveDataAPIKeys)),
 			zap.Int("massive_keys", len(massiveAPIKeys)),
-			zap.Int("finnhub_keys", len(finnhubAPIKeys)))
+			zap.Int("finnhub_keys", len(finnhubAPIKeys)),
+			zap.String("deriv_app_id", derivAppID))
 	}
 
 	redisAddr := os.Getenv("REDIS_ADDR")
@@ -1823,7 +1894,7 @@ func loadConfig() *Config {
 		symbols[i] = strings.TrimSpace(symbols[i])
 	}
 
-	// Provider configuration
+	// Provider configuration. Empty/unset defaults to Deriv (not auto).
 	providerStr := strings.ToLower(os.Getenv("MARKET_PROVIDER"))
 	var provider ProviderType
 	switch providerStr {
@@ -1833,12 +1904,16 @@ func loadConfig() *Config {
 		provider = ProviderMassive
 	case "finnhub":
 		provider = ProviderFinnhub
-	case "auto", "":
+	case "deriv":
+		provider = ProviderDeriv
+	case "auto":
 		provider = ProviderAuto
+	case "":
+		provider = ProviderDeriv
 	default:
-		bootstrapLogger.Warn("Unknown MARKET_PROVIDER, using 'auto'",
+		bootstrapLogger.Warn("Unknown MARKET_PROVIDER, using 'deriv'",
 			zap.String("value", providerStr))
-		provider = ProviderAuto
+		provider = ProviderDeriv
 	}
 
 	// Failover timeout (default 30 seconds)
@@ -1952,6 +2027,7 @@ func loadConfig() *Config {
 		PostgresDSN:       postgresDSN,
 		TicksTopic:        config.GetEnvString("TICKS_TOPIC", "ticks.v1"),
 		MarketProvider:    provider,
+		DerivAppID:        derivAppID,
 		FailoverTimeout:   failoverTimeout,
 		AutoSwitchback:    autoSwitchback,
 		SwitchbackDelay:   switchbackDelay,
@@ -2268,69 +2344,76 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	// Start provider manager
 	app.providerManager.Start()
 
-	// Initialize crypto feeds (independent of ProviderManager)
-	// ProviderManager (Massive/TwelveData) handles forex/commodity/stocks via WebSocket.
-	// Crypto is handled by Nobitex (REST) and/or Binance (WS) based on CryptoProvider config.
+	// Initialize crypto feeds (independent of ProviderManager) unless Deriv
+	// is the market provider. When CRYPTO_PROVIDER=binance and connected,
+	// handleTick drops non-binance crypto ticks — so Deriv must own crypto.
+	if cfg.MarketProvider == ProviderDeriv {
+		app.activeCryptoProvider.Store("deriv")
+		zapLog.Info("MARKET_PROVIDER=deriv: skipping Binance/Nobitex crypto feeds (Deriv supplies forex+crypto)")
+	} else {
+		// ProviderManager (Massive/TwelveData) handles forex/commodity/stocks via WebSocket.
+		// Crypto is handled by Nobitex (REST) and/or Binance (WS) based on CryptoProvider config.
 
-	// Load crypto provider preference from DB if available
-	cryptoProvider := cfg.CryptoProvider
-	if app.db != nil {
-		var dbProvider string
-		err := app.db.QueryRow("SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
-		if err == nil && dbProvider != "" {
-			cryptoProvider = dbProvider
-			zapLog.Info("Loaded crypto provider from DB", zap.String("provider", cryptoProvider))
+		// Load crypto provider preference from DB if available
+		cryptoProvider := cfg.CryptoProvider
+		if app.db != nil {
+			var dbProvider string
+			err := app.db.QueryRow("SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
+			if err == nil && dbProvider != "" {
+				cryptoProvider = dbProvider
+				zapLog.Info("Loaded crypto provider from DB", zap.String("provider", cryptoProvider))
+			}
 		}
-	}
-	app.activeCryptoProvider.Store(cryptoProvider)
+		app.activeCryptoProvider.Store(cryptoProvider)
 
-	// Build both feeds (cheap — just struct allocation)
-	if cfg.NobitexEnabled && len(app.symbolRegistry.CryptoSymbols) > 0 {
-		nobitexCfg := NobitexConfig{
-			Token:        cfg.NobitexToken,
-			PollInterval: cfg.NobitexPollInterval,
-			USDTUSDRate:  cfg.NobitexUSDTRate,
-			BaseURL:      cfg.NobitexBaseURL,
-			Symbols:      app.symbolRegistry.NobitexSubscriptions(),
-			Enabled:      true,
+		// Build both feeds (cheap — just struct allocation)
+		if cfg.NobitexEnabled && len(app.symbolRegistry.CryptoSymbols) > 0 {
+			nobitexCfg := NobitexConfig{
+				Token:        cfg.NobitexToken,
+				PollInterval: cfg.NobitexPollInterval,
+				USDTUSDRate:  cfg.NobitexUSDTRate,
+				BaseURL:      cfg.NobitexBaseURL,
+				Symbols:      app.symbolRegistry.NobitexSubscriptions(),
+				Enabled:      true,
+			}
+			app.nobitexFeed = NewNobitexCryptoFeed(nobitexCfg, app.handleTick, app.symbolRegistry, zapLog)
 		}
-		app.nobitexFeed = NewNobitexCryptoFeed(nobitexCfg, app.handleTick, app.symbolRegistry, zapLog)
-	}
 
-	if len(app.symbolRegistry.CryptoSymbols) > 0 {
-		binanceCfg := BinanceConfig{
-			BaseURL:     cfg.BinanceBaseURL,
-			Symbols:     app.symbolRegistry.BinanceSubscriptions(),
-			USDTUSDRate: cfg.BinanceUSDTRate,
-			Enabled:     cfg.BinanceEnabled || cryptoProvider == "binance" || cryptoProvider == "both",
+		if len(app.symbolRegistry.CryptoSymbols) > 0 {
+			binanceCfg := BinanceConfig{
+				BaseURL:     cfg.BinanceBaseURL,
+				Symbols:     app.symbolRegistry.BinanceSubscriptions(),
+				USDTUSDRate: cfg.BinanceUSDTRate,
+				Enabled:     cfg.BinanceEnabled || cryptoProvider == "binance" || cryptoProvider == "both",
+			}
+			app.binanceFeed = NewBinanceCryptoFeed(binanceCfg, app.handleTick, app.symbolRegistry, zapLog)
 		}
-		app.binanceFeed = NewBinanceCryptoFeed(binanceCfg, app.handleTick, app.symbolRegistry, zapLog)
-	}
 
-	// Start based on active crypto provider
-	switch cryptoProvider {
-	case "binance":
-		if app.binanceFeed != nil {
-			app.binanceFeed.Start()
-		}
-		zapLog.Info("Crypto provider: binance (WebSocket)")
-	case "both":
-		if app.nobitexFeed != nil {
-			app.nobitexFeed.Start()
-		}
-		if app.binanceFeed != nil {
-			app.binanceFeed.Start()
-		}
-		zapLog.Info("Crypto provider: both (nobitex primary, binance fallback)")
-	default: // "nobitex"
-		if app.nobitexFeed != nil {
-			app.nobitexFeed.Start()
-			zapLog.Info("Crypto provider: nobitex (REST polling)",
-				zap.Duration("poll_interval", cfg.NobitexPollInterval))
-		} else {
-			zapLog.Info("Nobitex crypto feed disabled",
-				zap.Bool("enabled", cfg.NobitexEnabled),
-				zap.Int("crypto_symbols", len(app.symbolRegistry.CryptoSymbols)))
+		// Start based on active crypto provider
+		switch cryptoProvider {
+		case "binance":
+			if app.binanceFeed != nil {
+				app.binanceFeed.Start()
+			}
+			zapLog.Info("Crypto provider: binance (WebSocket)")
+		case "both":
+			if app.nobitexFeed != nil {
+				app.nobitexFeed.Start()
+			}
+			if app.binanceFeed != nil {
+				app.binanceFeed.Start()
+			}
+			zapLog.Info("Crypto provider: both (nobitex primary, binance fallback)")
+		default: // "nobitex"
+			if app.nobitexFeed != nil {
+				app.nobitexFeed.Start()
+				zapLog.Info("Crypto provider: nobitex (REST polling)",
+					zap.Duration("poll_interval", cfg.NobitexPollInterval))
+			} else {
+				zapLog.Info("Nobitex crypto feed disabled",
+					zap.Bool("enabled", cfg.NobitexEnabled),
+					zap.Int("crypto_symbols", len(app.symbolRegistry.CryptoSymbols)))
+			}
 		}
 	}
 
@@ -2338,11 +2421,16 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	if app.db != nil {
 		app.dynamicSymbols = NewDynamicSymbolManager(app.db, zapLog)
 
-		// Wire providers (MassiveProvider is inside providerManager)
+		// Wire providers. Massive is LEGACY/UNUSED unless MARKET_PROVIDER=massive.
+		// When MARKET_PROVIDER=deriv, Binance/Nobitex are not started; DerivProvider
+		// is wired via SetDerivProvider for contest-driven subscribe/unsubscribe.
 		var massiveProv *MassiveProvider
 		if app.providerManager != nil && app.providerManager.primary != nil {
 			if mp, ok := app.providerManager.primary.(*MassiveProvider); ok {
 				massiveProv = mp
+			}
+			if dp, ok := app.providerManager.primary.(*DerivProvider); ok {
+				app.dynamicSymbols.SetDerivProvider(dp)
 			}
 		}
 		app.dynamicSymbols.SetProviders(massiveProv, app.nobitexFeed, app.binanceFeed)
@@ -2553,6 +2641,11 @@ func (a *App) handleTick(symbol string, price, bid, ask, volume float64, ts int6
 				return // drop nobitex ticks when binance is active
 			}
 			if source != "binance" && a.binanceFeed != nil && a.binanceFeed.IsConnected() {
+				return
+			}
+		case "deriv":
+			// Deriv owns crypto when MARKET_PROVIDER=deriv; drop leftover feeds.
+			if source != "deriv" {
 				return
 			}
 		case "both":
@@ -2817,6 +2910,13 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	} else {
 		providerInfo["status"] = "connected"
 	}
+	if ok, connected, lastTickAt, symbolsLoaded, candleReady, pollFallback := a.providerManager.DerivHealth(); ok {
+		providerInfo["connected"] = connected
+		providerInfo["last_tick_at"] = lastTickAt
+		providerInfo["symbols_loaded"] = symbolsLoaded
+		providerInfo["candle_ready"] = candleReady
+		providerInfo["poll_fallback"] = pollFallback
+	}
 	response["provider"] = providerInfo
 
 	// Check Redis connectivity (critical - used for tick caching)
@@ -2917,6 +3017,7 @@ func (pm *ProviderManager) SwitchToProvider(providerName ProviderType) error {
 
 	switch providerName {
 	case ProviderMassive:
+		// LEGACY: constructed only when an operator explicitly switches to massive
 		pm.current = NewMassiveProvider(pm.config.MassiveAPIKeys, pm.logger.Named("massive"))
 		pm.usingFallback.Store(pm.primary.Name() != ProviderMassive)
 	case ProviderTwelveData:
@@ -2925,6 +3026,9 @@ func (pm *ProviderManager) SwitchToProvider(providerName ProviderType) error {
 	case ProviderFinnhub:
 		pm.current = NewFinnhubProvider(pm.config.FinnhubAPIKeys, pm.logger.Named("finnhub"))
 		pm.usingFallback.Store(pm.primary.Name() != ProviderFinnhub)
+	case ProviderDeriv:
+		pm.current = NewDerivProvider(pm.config.DerivAppID, pm.logger.Named("deriv"))
+		pm.usingFallback.Store(pm.primary.Name() != ProviderDeriv)
 	default:
 		pm.mu.Unlock()
 		return fmt.Errorf("unknown provider: %s", providerName)
@@ -2988,10 +3092,10 @@ func (a *App) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	providerType := ProviderType(provider)
-	if providerType != ProviderMassive && providerType != ProviderTwelveData && providerType != ProviderFinnhub {
+	if providerType != ProviderMassive && providerType != ProviderTwelveData && providerType != ProviderFinnhub && providerType != ProviderDeriv {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid provider, must be 'massive', 'twelvedata', or 'finnhub'"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid provider, must be 'deriv', 'massive', 'twelvedata', or 'finnhub'"})
 		return
 	}
 
@@ -3118,7 +3222,7 @@ func (a *App) handleGetProviderConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"forex": map[string]interface{}{
 			"active":         string(a.providerManager.CurrentProvider()),
-			"available":      []string{"massive", "twelvedata", "finnhub"},
+			"available":      []string{"deriv", "massive", "twelvedata", "finnhub"},
 			"using_fallback": a.providerManager.UsingFallback(),
 		},
 	}
@@ -3137,7 +3241,7 @@ func (a *App) handleSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 	ready := a.providerManager.IsReady()
 
 	// Gather available providers
-	availableProviders := []string{"massive", "twelvedata", "nobitex", "binance"}
+	availableProviders := []string{"deriv", "massive", "twelvedata", "nobitex", "binance"}
 
 	// Gather per-symbol status
 	a.ticksMu.RLock()

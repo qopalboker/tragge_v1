@@ -463,15 +463,19 @@ function handleLogout(): void {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  /* Flex items default to min-width:auto; without 0, wide rails expand the page. */
+  min-width: 0;
+  max-width: 100%;
   margin-inline-start: var(--sidebar-width, 240px);
 }
 
 .layout-content {
   flex: 1;
-  max-width: var(--max-content-width, 1200px);
+  width: 100%;
+  max-width: min(var(--max-content-width, 1200px), 100%);
+  min-width: 0;
   margin: 0 auto;
   padding: 32px;
-  width: 100%;
   box-sizing: border-box;
 }
 

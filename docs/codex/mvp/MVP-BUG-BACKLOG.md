@@ -22,7 +22,9 @@
 | P0-3 | Paid start quorum counted system bots as real users | Domain | **FIXED 2026-08-17** | `is_system=false` count in SM + auto-start + list/details APIs |
 | P0-4 | CountdownTimer emitted FE-invented `running` status | User UI | **FIXED 2026-08-17** | Timestamp presentation only; parent re-fetches backend |
 
-| P0-5 | 30m tournaments not generated every 10 minutes | Scheduler | **FIXED 2026-08-17** | `EVERY_10_MIN` + horizon materialization + 0106 auto_create |
+| P0-5 | 30m tournaments not generated every 10 minutes | Scheduler | **FIXED 2026-08-18** | Root cause: 0106 unapplied + `create_cron` CHECK blocked `auto_create`; fixed CHECK + applied 0104–0108; live auto-start proof |
+| P0-8 | Massive default / dead forex feed | Market | **FIXED 2026-08-18** | Default `MARKET_PROVIDER=deriv`; public Deriv WS; Massive LEGACY unused |
+| P0-9 | Dashboard mobile horizontal overflow | User UI | **FIXED 2026-08-18** | Flex `min-width:0` on layout + rail constraints (not blanket overflow hidden) |
 | P0-6 | Free contests auto-started with 0 real users (T-bot alone) | Domain/Scheduler | **FIXED 2026-08-17** | Free start requires ≥1 real user; else cancel |
 | P0-7 | Contest Info stale after SPA navigate A→B | User UI | **FIXED 2026-08-17** | Clear state on contestId watch |
 
@@ -72,7 +74,7 @@
 | P2-8 | IRR/toman notification amount divisor inconsistency risk | UI | Notifications vs wallet currency path — document ledger unit |
 | P2-9 | Playwright default is mock mode | Test | Integration mode optional; domain E2E covers financial spine |
 | P2-10 | Full authenticated browser journey not automated end-to-end | Test | Lab drill recommended |
-| P2-11 | Local DB pollution from E2E users/contests | Ops | Use `scripts/mvp/cleanup-e2e-test-data.mjs` explicitly |
+| P2-11 | Local DB pollution from E2E users/contests | Ops | Classified cleanup `scripts/mvp/cleanup-e2e-test-data.mjs` (SAFE_TO_DELETE only; 343 cleared 2026-08-18) |
 | P2-12 | Free practice still auto-joins T-bot (not counted as real) | Product | Policy §6 free path; labeled system — not paid quorum |
 
 ---

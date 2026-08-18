@@ -272,17 +272,24 @@ func (g *FreeContestGenerator) generationLoop() {
 
 	logger := g.obs.Logger.Logger
 
-	// Calculate time until next hour boundary
+	// Wait for the next IntervalMinutes boundary (not always the next hour).
+	intervalMinutes := g.config.IntervalMinutes
+	if intervalMinutes <= 0 {
+		intervalMinutes = 60
+	}
+	interval := time.Duration(intervalMinutes) * time.Minute
 	now := time.Now().UTC()
-	nextHour := now.Truncate(time.Hour).Add(time.Hour)
-	initialWait := time.Until(nextHour)
+	nextBoundary := now.Truncate(interval).Add(interval)
+	initialWait := time.Until(nextBoundary)
 
-	logger.Info("Waiting until next hour boundary", zap.Duration("wait", initialWait))
+	logger.Info("Waiting until next interval boundary",
+		zap.Duration("wait", initialWait),
+		zap.Int("interval_minutes", intervalMinutes),
+	)
 
-	// Wait until the next hour boundary
+	// Wait until the next interval boundary
 	select {
 	case <-time.After(initialWait):
-		// Generate contests at the hour boundary
 		g.generateIfNeeded()
 	case <-g.stopChan:
 		return
@@ -704,21 +711,31 @@ func (g *FreeContestGenerator) cleanupOldContests() {
 	// Use a longer retention for stuck contests (3x normal) that have no ended_at
 	stuckRetentionInterval := fmt.Sprintf("%d hours", g.config.CleanupRetentionHours*3)
 
-	// Delete dependent settlement rows first — contests FK from contest_settlements
+	cleanupFilter := `
+		SELECT id FROM contests
+		WHERE is_free = true
+		  AND auto_generated = true
+		  AND status IN ('completed', 'cancelled')
+		  AND (
+		      (ended_at IS NOT NULL AND ended_at < NOW() - $1::interval)
+		      OR
+		      (ended_at IS NULL AND starts_at < NOW() - $2::interval)
+		  )`
+
+	// contest_prize_locks has no ON DELETE CASCADE; delete locks first.
+	if _, err := g.db.Primary().ExecContext(ctx,
+		`DELETE FROM contest_prize_locks WHERE contest_id IN (`+cleanupFilter+`)`,
+		retentionInterval,
+		stuckRetentionInterval,
+	); err != nil {
+		logger.Error("Failed to cleanup prize locks for old free contests", zap.Error(err))
+		return
+	}
+
+	// Delete dependent settlement rows — contests FK from contest_settlements
 	// otherwise blocks cleanup of completed/cancelled free contests.
 	if _, err := g.db.Primary().ExecContext(ctx,
-		`DELETE FROM contest_settlements
-		 WHERE contest_id IN (
-			SELECT id FROM contests
-			WHERE is_free = true
-			  AND auto_generated = true
-			  AND status IN ('completed', 'cancelled')
-			  AND (
-			      (ended_at IS NOT NULL AND ended_at < NOW() - $1::interval)
-			      OR
-			      (ended_at IS NULL AND starts_at < NOW() - $2::interval)
-			  )
-		 )`,
+		`DELETE FROM contest_settlements WHERE contest_id IN (`+cleanupFilter+`)`,
 		retentionInterval,
 		stuckRetentionInterval,
 	); err != nil {

@@ -111,8 +111,9 @@ services:
       SHARD_ENABLED: ${SHARD_ENABLED:-false}
       SHARD_COUNT: "1"
       SHARD_ID: "0"
-      # No mock market feed in production
-      MARKET_PROVIDER: ${MARKET_PROVIDER:-massive}
+      # No mock market feed in production. Deriv is the default market provider.
+      MARKET_PROVIDER: ${MARKET_PROVIDER:-deriv}
+      DERIV_APP_ID: ${DERIV_APP_ID:-1089}
     volumes:
       # Bind mount replaces named volume for production durability.
       # Host path MUST be a persistent block/filesystem mount.

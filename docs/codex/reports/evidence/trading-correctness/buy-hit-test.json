@@ -1,10 +1,10 @@
 {
-  "cx": 313.25,
-  "cy": 228.5,
-  "width": 131.5,
+  "cx": 946.34375,
+  "cy": 253,
+  "width": 90.6875,
   "height": 82,
-  "top": 187.5,
-  "left": 247.5,
+  "top": 212,
+  "left": 901,
   "inViewport": true,
   "topTag": "BUTTON",
   "topClass": "tp-qtbb",
@@ -16,7 +16,7 @@
     "div.tp-wll.scrollbar-thin",
     "div.tp-sb",
     "div.tp-main",
-    "div.tp-root.tp-dark",
+    "div.tp-root.tp-dark.tp-rtl",
     "div"
   ],
   "navRightCovers": false

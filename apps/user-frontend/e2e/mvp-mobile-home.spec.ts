@@ -75,8 +75,14 @@ const VIEWPORTS = [
   { name: '360', width: 360, height: 800 },
   { name: '375', width: 375, height: 812 },
   { name: '390', width: 390, height: 844 },
+  { name: '412', width: 412, height: 915 },
   { name: '414', width: 414, height: 896 },
   { name: '430', width: 430, height: 932 },
+];
+
+const DESKTOP_VIEWPORTS = [
+  { name: '1280', width: 1280, height: 800 },
+  { name: '1440', width: 1440, height: 900 },
 ];
 
 test.describe('MVP mobile home', () => {
@@ -150,4 +156,19 @@ test.describe('MVP mobile home', () => {
     // Center home remains active on dashboard
     await expect(page.locator('nav.bottom-nav a[href*="dashboard"]')).toHaveClass(/active|bottom-nav-item-active/);
   });
+
+  for (const vp of DESKTOP_VIEWPORTS) {
+    test(`desktop dashboard no horizontal overflow @ ${vp.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await seedDashboardApis(page);
+      await page.goto('/user/dashboard');
+      const home = page.locator('.home[dir="rtl"]');
+      await expect(home).toBeVisible({ timeout: 15000 });
+      const overflow = await page.evaluate(() => {
+        const de = document.documentElement;
+        return { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth };
+      });
+      expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
+    });
+  }
 });

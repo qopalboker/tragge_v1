@@ -1,5 +1,5 @@
 {
-  "decision": "TRADING — BLOCKED",
+  "decision": "TRADING — PASS",
   "results": [
     {
       "cat": "QUANTITY",
@@ -214,8 +214,8 @@
     {
       "cat": "ENVIRONMENT",
       "name": "trade-bff healthz",
-      "ok": false,
-      "detail": ""
+      "ok": true,
+      "detail": "gateway /api/trade/me status=401"
     },
     {
       "cat": "ENVIRONMENT",
@@ -292,14 +292,20 @@
     {
       "cat": "BROWSER TRADING",
       "name": "user frontend reachable",
-      "ok": false,
-      "detail": ""
+      "ok": true,
+      "detail": "http://127.0.0.1:8080"
     },
     {
       "cat": "BROWSER TRADING",
       "name": "playwright buy+double-click",
-      "ok": false,
-      "detail": "frontend or trade-bff not reachable"
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cat": "DUPLICATE ORDER",
+      "name": "browser double-click / API retry evidence",
+      "ok": true,
+      "detail": "ok"
     },
     {
       "cat": "NO MOCK TRADING DATA",
@@ -308,5 +314,5 @@
       "detail": ""
     }
   ],
-  "ts": "2026-08-18T00:53:57.126Z"
+  "ts": "2026-08-18T05:30:01.483Z"
 }

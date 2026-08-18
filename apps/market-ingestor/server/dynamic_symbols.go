@@ -19,7 +19,8 @@ type DynamicSymbolManager struct {
 	logger *zap.Logger
 
 	// Provider references for subscribe/unsubscribe
-	massiveProvider *MassiveProvider
+	massiveProvider *MassiveProvider // LEGACY/UNUSED unless MARKET_PROVIDER=massive
+	derivProvider   *DerivProvider
 	nobitexFeed     *NobitexCryptoFeed
 	binanceFeed     *BinanceCryptoFeed
 
@@ -42,6 +43,11 @@ func (m *DynamicSymbolManager) SetProviders(massive *MassiveProvider, nobitex *N
 	m.massiveProvider = massive
 	m.nobitexFeed = nobitex
 	m.binanceFeed = binance
+}
+
+// SetDerivProvider wires contest-driven subscribe/unsubscribe to Deriv.
+func (m *DynamicSymbolManager) SetDerivProvider(deriv *DerivProvider) {
+	m.derivProvider = deriv
 }
 
 // Start runs the periodic refresh loop as a safety net.
@@ -219,6 +225,13 @@ func (m *DynamicSymbolManager) queryContestSymbols(ctx context.Context, contestI
 
 // subscribe routes to the correct provider based on symbol type.
 func (m *DynamicSymbolManager) subscribe(symbol string) {
+	if m.derivProvider != nil {
+		if err := m.derivProvider.SubscribeSymbol(symbol); err != nil {
+			m.logger.Warn("failed to subscribe symbol on Deriv",
+				zap.String("symbol", symbol), zap.Error(err))
+		}
+		return
+	}
 	if isCryptoSymbol(symbol) {
 		if m.nobitexFeed != nil {
 			m.nobitexFeed.AddSymbol(symbol)
@@ -236,6 +249,13 @@ func (m *DynamicSymbolManager) subscribe(symbol string) {
 
 // unsubscribe routes to the correct provider based on symbol type.
 func (m *DynamicSymbolManager) unsubscribe(symbol string) {
+	if m.derivProvider != nil {
+		if err := m.derivProvider.UnsubscribeSymbol(symbol); err != nil {
+			m.logger.Warn("failed to unsubscribe symbol on Deriv",
+				zap.String("symbol", symbol), zap.Error(err))
+		}
+		return
+	}
 	if isCryptoSymbol(symbol) {
 		if m.nobitexFeed != nil {
 			m.nobitexFeed.RemoveSymbol(symbol)

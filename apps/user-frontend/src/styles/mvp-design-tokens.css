@@ -245,9 +245,12 @@ body,
   touch-action: pan-x;
   padding-bottom: 4px;
   /* Keep rail inside parent width; avoid expanding document scrollWidth */
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-inline: 0;
   padding-inline: 0;
+  box-sizing: border-box;
 }
 
 .mvp-h-scroll::-webkit-scrollbar {

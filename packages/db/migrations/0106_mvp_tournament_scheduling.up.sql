@@ -4,12 +4,23 @@
 
 BEGIN;
 
--- Align duration_type helper bug surface: no schema change required.
+-- CalendarProcessor keys off auto_create + recurrence_rule, not create_cron.
+-- Live DBs still have the legacy CHECK that required create_cron whenever
+-- auto_create=TRUE. Relax that before flipping 30m templates on.
+ALTER TABLE tournament_templates
+    DROP CONSTRAINT IF EXISTS chk_template_auto_create_requires_cron;
+
+ALTER TABLE tournament_templates
+    ADD CONSTRAINT chk_template_auto_create_requires_cron
+    CHECK (auto_create = FALSE OR create_cron IS NOT NULL OR recurrence_rule IS NOT NULL);
 
 -- Quick 30m templates: every 10 minutes, auto-create + auto-start, paid quorum = 2.
+-- create_cron is a deterministic EVERY_10_MIN placeholder for ops visibility
+-- and leftover environments that still enforce the legacy CHECK.
 UPDATE tournament_templates
 SET
     auto_create = TRUE,
+    create_cron = '*/10 * * * *',
     auto_start = TRUE,
     min_participants = 2,
     recurrence_rule = 'EVERY_10_MIN',
@@ -33,6 +44,7 @@ WHERE is_free = FALSE
 -- Creation remains owned by free-contest-generator (avoid double-materialization).
 UPDATE tournament_templates
 SET
+    auto_create = FALSE,
     auto_start = TRUE,
     min_participants = 1,
     is_free = TRUE,

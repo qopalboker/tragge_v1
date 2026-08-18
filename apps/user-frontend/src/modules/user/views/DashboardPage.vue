@@ -271,8 +271,14 @@ onMounted(() => {
   max-width: min(720px, 100%);
   margin: 0 auto;
   overflow-x: clip;
+  min-width: 0;
   min-height: 100%;
   box-sizing: border-box;
+}
+
+.rail-section {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Hero */
@@ -439,7 +445,10 @@ onMounted(() => {
 }
 .rtl-flip { transform: scaleX(-1); }
 .sug-card {
-  width: min(72vw, 240px);
+  /* Bound to parent content box, not raw viewport — avoids padding-driven overflow. */
+  flex: 0 0 auto;
+  width: min(240px, 100%);
+  max-width: calc(100vw - 2 * var(--mvp-page-pad, 16px) - 8px);
   padding: 14px;
   text-decoration: none;
   color: inherit;
@@ -447,6 +456,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   min-height: 168px;
+  box-sizing: border-box;
 }
 .sug-card.skel {
   min-height: 160px;
