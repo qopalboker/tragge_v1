@@ -59,7 +59,9 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT DISTINCT u.id, u.email, u.status, u.created_at,
 			   COALESCE(uv.status, 'none') as kyc_status,
-			   ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL) as roles
+			   ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL) as roles,
+			   (u.telegram_id IS NOT NULL) as telegram_linked,
+			   u.telegram_username
 		FROM users u
 		LEFT JOIN user_roles ur ON u.id = ur.user_id
 		LEFT JOIN roles r ON ur.role_id = r.id
@@ -70,7 +72,10 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	argIdx := 1
 
 	if search != "" {
-		query += " AND (u.email ILIKE $" + itoa(argIdx) + " OR u.id::text ILIKE $" + itoa(argIdx) + ")"
+		query += " AND (u.email ILIKE $" + itoa(argIdx) +
+			" OR u.id::text ILIKE $" + itoa(argIdx) +
+			" OR u.telegram_username ILIKE $" + itoa(argIdx) +
+			" OR CAST(u.telegram_id AS TEXT) ILIKE $" + itoa(argIdx) + ")"
 		args = append(args, "%"+search+"%")
 		argIdx++
 	}
@@ -87,7 +92,7 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 
-	query += " GROUP BY u.id, u.email, u.status, u.created_at, uv.status ORDER BY u.created_at DESC"
+	query += " GROUP BY u.id, u.email, u.status, u.created_at, uv.status, u.telegram_id, u.telegram_username ORDER BY u.created_at DESC"
 
 	// Get total count
 	countQuery := `
@@ -100,7 +105,10 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	countArgIdx := 1
 
 	if search != "" {
-		countQuery += " AND (u.email ILIKE $" + itoa(countArgIdx) + " OR u.id::text ILIKE $" + itoa(countArgIdx) + ")"
+		countQuery += " AND (u.email ILIKE $" + itoa(countArgIdx) +
+			" OR u.id::text ILIKE $" + itoa(countArgIdx) +
+			" OR u.telegram_username ILIKE $" + itoa(countArgIdx) +
+			" OR CAST(u.telegram_id AS TEXT) ILIKE $" + itoa(countArgIdx) + ")"
 		countArgs = append(countArgs, "%"+search+"%")
 		countArgIdx++
 	}
@@ -154,14 +162,18 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		var user UserResponse
 		var rolesArray []sql.NullString
 		var kycStatus sql.NullString
+		var tgUsername sql.NullString
 
-		if err := rows.Scan(&user.ID, &user.Email, &user.Status, &user.CreatedAt, &kycStatus, (*pqArray)(&rolesArray)); err != nil {
+		if err := rows.Scan(&user.ID, &user.Email, &user.Status, &user.CreatedAt, &kycStatus, (*pqArray)(&rolesArray), &user.TelegramLinked, &tgUsername); err != nil {
 			a.log().Error("Failed to scan user row", zap.Error(err))
 			continue
 		}
 
 		if kycStatus.Valid {
 			user.KYCStatus = &kycStatus.String
+		}
+		if tgUsername.Valid && tgUsername.String != "" {
+			user.TelegramUsername = &tgUsername.String
 		}
 
 		user.Roles = make([]string, 0)
@@ -196,17 +208,21 @@ func (a *App) handleGetUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get user basic info (circuit breaker protected)
 	var username, displayName, avatarURL, country sql.NullString
+	var tgUsername, tgFirst, tgLast sql.NullString
+	var telegramID sql.NullInt64
 	var emailVerified sql.NullBool
 	err := a.circuits.ExecuteReplica(ctx, func(ctx context.Context) error {
 		return a.pool.Replica().QueryRowContext(ctx, `
 			SELECT u.id, u.email, COALESCE(u.username, ''), COALESCE(u.display_name, ''),
 				   COALESCE(u.avatar_url, ''), u.status, u.created_at,
-				   COALESCE(u.country, ''), COALESCE(u.email_verified, false)
+				   COALESCE(u.country, ''), COALESCE(u.email_verified, false),
+				   u.telegram_id, u.telegram_username, u.telegram_first_name, u.telegram_last_name
 			FROM users u
 			WHERE u.id = $1`, userID).Scan(
 			&response.User.ID, &response.User.Email, &username, &displayName,
 			&avatarURL, &response.User.Status, &response.User.CreatedAt,
-			&country, &emailVerified)
+			&country, &emailVerified,
+			&telegramID, &tgUsername, &tgFirst, &tgLast)
 	})
 	if err != nil {
 		if a.isCircuitError(w, err) {
@@ -234,6 +250,38 @@ func (a *App) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		response.User.Country = &country.String
 	}
 	response.User.EmailVerified = emailVerified.Valid && emailVerified.Bool
+	if telegramID.Valid {
+		id := telegramID.Int64
+		response.User.TelegramID = &id
+	}
+	if tgUsername.Valid && tgUsername.String != "" {
+		response.User.TelegramUsername = &tgUsername.String
+	}
+	if tgFirst.Valid && tgFirst.String != "" {
+		response.User.TelegramFirstName = &tgFirst.String
+	}
+	if tgLast.Valid && tgLast.String != "" {
+		response.User.TelegramLastName = &tgLast.String
+	}
+	if telegramID.Valid {
+		first := ""
+		last := ""
+		if tgFirst.Valid {
+			first = strings.TrimSpace(tgFirst.String)
+		}
+		if tgLast.Valid {
+			last = strings.TrimSpace(tgLast.String)
+		}
+		disp := strings.TrimSpace(first + " " + last)
+		if disp == "" {
+			if tgUsername.Valid && tgUsername.String != "" {
+				disp = tgUsername.String
+			} else {
+				disp = "Telegram User"
+			}
+		}
+		response.User.TelegramDisplayName = &disp
+	}
 
 	// Get user roles (circuit breaker protected)
 	rolesResult, err := a.circuits.ExecuteReplicaWithResult(ctx,

@@ -370,6 +370,9 @@ onMounted(fetchUsers);
                 >
                   {{ t(`users.role.${role}`) }}
                 </span>
+                <span v-if="user.telegram_linked" class="role-badge role-telegram">
+                  {{ user.telegram_username ? `Telegram: @${user.telegram_username}` : 'Telegram linked' }}
+                </span>
               </div>
               <span class="user-date">{{ formatDate(user.created_at) }}</span>
             </div>
@@ -834,6 +837,11 @@ onMounted(fetchUsers);
 .role-moderator {
   background-color: #F3E8FF;
   color: #9333EA;
+}
+
+.role-telegram {
+  background-color: rgba(0, 136, 204, 0.15);
+  color: #38bdf8;
 }
 
 .role-user {

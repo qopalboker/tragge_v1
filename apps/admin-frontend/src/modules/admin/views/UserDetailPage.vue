@@ -493,6 +493,34 @@ onMounted(fetchUser);
               </div>
             </div>
 
+            <div v-if="user.user.telegram_id" class="info-card">
+              <h3 class="card-title">Telegram</h3>
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="info-label">Telegram</span>
+                  <span class="info-value">
+                    {{ user.user.telegram_username ? `@${user.user.telegram_username}` : 'Telegram User' }}
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Telegram ID</span>
+                  <span class="info-value mono">{{ user.user.telegram_id }}</span>
+                </div>
+                <div v-if="user.user.telegram_first_name" class="info-row">
+                  <span class="info-label">First name</span>
+                  <span class="info-value">{{ user.user.telegram_first_name }}</span>
+                </div>
+                <div v-if="user.user.telegram_last_name" class="info-row">
+                  <span class="info-label">Last name</span>
+                  <span class="info-value">{{ user.user.telegram_last_name }}</span>
+                </div>
+                <div v-if="user.user.telegram_display_name" class="info-row">
+                  <span class="info-label">Display name</span>
+                  <span class="info-value">{{ user.user.telegram_display_name }}</span>
+                </div>
+              </div>
+            </div>
+
             <div class="info-card">
               <h3 class="card-title">{{ t('userDetail.statistics') }}</h3>
               <div class="stats-grid">

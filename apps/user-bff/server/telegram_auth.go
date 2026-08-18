@@ -140,12 +140,53 @@ func (a *App) handleTelegramMiniAppAuth(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func telegramProfileDisplayName(tg auth.TelegramUser) string {
+	first := strings.TrimSpace(tg.FirstName)
+	last := strings.TrimSpace(tg.LastName)
+	combined := strings.TrimSpace(first + " " + last)
+	if combined != "" {
+		return combined
+	}
+	if uname := strings.TrimSpace(tg.Username); uname != "" {
+		return uname
+	}
+	return "TRAGGE User"
+}
+
+func nullTelegramString(s string) interface{} {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func (a *App) syncTelegramProfileMetadata(ctx context.Context, userID string, tg auth.TelegramUser) {
+	// Always refresh Telegram metadata from verified initData.
+	// Do NOT overwrite users.display_name — that may be a custom TRAGGE name.
+	_, err := a.pool.Primary().ExecContext(ctx, `
+		UPDATE users SET
+			telegram_username = $2,
+			telegram_first_name = $3,
+			telegram_last_name = $4,
+			updated_at = NOW()
+		WHERE id = $1
+	`, userID, nullTelegramString(tg.Username), nullTelegramString(tg.FirstName), nullTelegramString(tg.LastName))
+	if err != nil {
+		a.log().Warn("Telegram profile metadata sync failed",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+	}
+}
+
 func (a *App) findOrCreateTelegramUser(ctx context.Context, tg auth.TelegramUser) (string, error) {
 	var userID string
 	err := a.pool.Primary().QueryRowContext(ctx, `
 		SELECT id FROM users WHERE telegram_id = $1
 	`, tg.ID).Scan(&userID)
 	if err == nil {
+		a.syncTelegramProfileMetadata(ctx, userID, tg)
 		return userID, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -155,15 +196,8 @@ func (a *App) findOrCreateTelegramUser(ctx context.Context, tg auth.TelegramUser
 	email := auth.SyntheticTelegramEmail(tg.ID)
 	// Username must be unique platform-wide. Telegram @handles can collide with
 	// existing TRAGGE usernames — always use a deterministic tg_<id> key.
-	// Human-readable TG username still appears in display_name when present.
 	username := fmt.Sprintf("tg_%d", tg.ID)
-	displayName := strings.TrimSpace(strings.TrimSpace(tg.FirstName) + " " + strings.TrimSpace(tg.LastName))
-	if uname := strings.TrimSpace(tg.Username); uname != "" && displayName == "" {
-		displayName = uname
-	}
-	if displayName == "" {
-		displayName = username
-	}
+	displayName := telegramProfileDisplayName(tg)
 
 	tx, err := a.pool.Primary().BeginTx(ctx, nil)
 	if err != nil {
@@ -174,16 +208,23 @@ func (a *App) findOrCreateTelegramUser(ctx context.Context, tg auth.TelegramUser
 	// Create Telegram-only user. Email is a non-delivery synthetic unique key
 	// because the users.email column remains NOT NULL UNIQUE.
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO users (id, email, password_hash, username, display_name, email_verified, telegram_id, terms_accepted_at, created_at)
-		VALUES ($1, $2, NULL, $3, $4, TRUE, $5, NOW(), NOW())
+		INSERT INTO users (
+			id, email, password_hash, username, display_name, email_verified,
+			telegram_id, telegram_username, telegram_first_name, telegram_last_name,
+			terms_accepted_at, created_at
+		)
+		VALUES ($1, $2, NULL, $3, $4, TRUE, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id
-	`, uuid.NewString(), email, username, displayName, tg.ID).Scan(&userID)
+	`, uuid.NewString(), email, username, displayName, tg.ID,
+		nullTelegramString(tg.Username), nullTelegramString(tg.FirstName), nullTelegramString(tg.LastName),
+	).Scan(&userID)
 	if err != nil {
 		// Race: another request created the same telegram user.
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			if selErr := a.pool.Primary().QueryRowContext(ctx, `
 				SELECT id FROM users WHERE telegram_id = $1 OR email = $2
 			`, tg.ID, email).Scan(&userID); selErr == nil {
+				a.syncTelegramProfileMetadata(ctx, userID, tg)
 				return userID, nil
 			}
 		}

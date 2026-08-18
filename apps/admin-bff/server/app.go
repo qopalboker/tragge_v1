@@ -1613,12 +1613,14 @@ type KYCRequestInfoRequest struct {
 // User management types
 
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Roles     []string  `json:"roles"`
-	Status    string    `json:"status"`
-	KYCStatus *string   `json:"kyc_status,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID               string    `json:"id"`
+	Email            string    `json:"email"`
+	Roles            []string  `json:"roles"`
+	Status           string    `json:"status"`
+	KYCStatus        *string   `json:"kyc_status,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	TelegramLinked   bool      `json:"telegram_linked"`
+	TelegramUsername *string   `json:"telegram_username,omitempty"`
 }
 
 type UserDetailResponse struct {
@@ -1644,15 +1646,20 @@ type UserDetailResponse struct {
 
 // UserBasicInfo represents basic user information.
 type UserBasicInfo struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	Username      *string   `json:"username,omitempty"`
-	DisplayName   *string   `json:"display_name,omitempty"`
-	AvatarURL     *string   `json:"avatar_url,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	EmailVerified bool      `json:"email_verified"`
-	Status        string    `json:"status"`
-	Country       *string   `json:"country,omitempty"`
+	ID                  string    `json:"id"`
+	Email               string    `json:"email"`
+	Username            *string   `json:"username,omitempty"`
+	DisplayName         *string   `json:"display_name,omitempty"`
+	AvatarURL           *string   `json:"avatar_url,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	EmailVerified       bool      `json:"email_verified"`
+	Status              string    `json:"status"`
+	Country             *string   `json:"country,omitempty"`
+	TelegramID          *int64    `json:"telegram_id,omitempty"`
+	TelegramUsername    *string   `json:"telegram_username,omitempty"`
+	TelegramFirstName   *string   `json:"telegram_first_name,omitempty"`
+	TelegramLastName    *string   `json:"telegram_last_name,omitempty"`
+	TelegramDisplayName *string   `json:"telegram_display_name,omitempty"`
 }
 
 // UserKYCInfo represents KYC verification information.

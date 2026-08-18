@@ -9,6 +9,8 @@ export interface User {
   status: string;
   kyc_status?: string;
   created_at: string;
+  telegram_linked?: boolean;
+  telegram_username?: string;
 }
 
 // Comprehensive user detail types
@@ -22,6 +24,11 @@ export interface UserBasicInfo {
   email_verified: boolean;
   status: string;
   country?: string;
+  telegram_id?: number;
+  telegram_username?: string;
+  telegram_first_name?: string;
+  telegram_last_name?: string;
+  telegram_display_name?: string;
 }
 
 export interface UserKYCInfo {

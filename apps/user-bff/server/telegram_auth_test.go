@@ -44,6 +44,24 @@ func signInitDataForHandler(t *testing.T, botToken string, fields map[string]str
 	return values.Encode()
 }
 
+func TestTelegramProfileDisplayName(t *testing.T) {
+	if got := telegramProfileDisplayName(auth.TelegramUser{FirstName: "Ada", LastName: "Lovelace"}); got != "Ada Lovelace" {
+		t.Fatalf("name combo: %q", got)
+	}
+	if got := telegramProfileDisplayName(auth.TelegramUser{Username: "ada"}); got != "ada" {
+		t.Fatalf("username fallback: %q", got)
+	}
+	if got := telegramProfileDisplayName(auth.TelegramUser{}); got != "TRAGGE User" {
+		t.Fatalf("empty fallback: %q", got)
+	}
+	if nullTelegramString("  ") != nil {
+		t.Fatal("blank telegram string must be SQL NULL")
+	}
+	if nullTelegramString("ada") == nil {
+		t.Fatal("non-blank telegram string must be preserved")
+	}
+}
+
 func TestIsPlaceholderTelegramBotToken(t *testing.T) {
 	if !isPlaceholderTelegramBotToken("123456:TRAGGE-LIVE-E2E-BOT-TOKEN-NOT-PROD") {
 		t.Fatal("lab fixture token must be treated as placeholder")
