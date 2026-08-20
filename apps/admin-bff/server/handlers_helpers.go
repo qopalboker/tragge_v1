@@ -267,11 +267,11 @@ func (a *App) handleGetFinancialSummary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Query prizes paid grouped by date
+	// Query prizes paid grouped by date (ledger_type enum uses prize_credit, not "prize")
 	prizesQuery := fmt.Sprintf(`
 		SELECT date_trunc('%s', created_at) as period, COALESCE(SUM(ABS(amount_cents)), 0) as total
 		FROM wallet_ledger
-		WHERE type = 'prize'
+		WHERE type = 'prize_credit'
 		AND created_at >= $1 AND created_at <= $2
 		GROUP BY period
 		ORDER BY period

@@ -239,11 +239,30 @@ function stopTestPrice(): void {
   testPriceLoading.value = false;
 }
 
+const providerConfigForbidden = ref(false);
+
+function stopProviderPoll(): void {
+  if (providerPollInterval) {
+    clearInterval(providerPollInterval);
+    providerPollInterval = null;
+  }
+}
+
 async function loadProviderConfig(): Promise<void> {
   try {
-    providerConfig.value = await getProviderConfig();
-  } catch (e) {
-    console.warn('Failed to load provider config:', e);
+    const config = await getProviderConfig();
+    if (!isMounted) return;
+    providerConfig.value = config;
+    providerConfigForbidden.value = false;
+  } catch (e: unknown) {
+    if (!isMounted) return;
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    // 403 = intentional market.view gate — no toast, no console spam.
+    if (status === 403) {
+      providerConfigForbidden.value = true;
+      providerConfig.value = null;
+      stopProviderPoll();
+    }
   }
 }
 
@@ -433,17 +452,17 @@ async function toggleActive(symbol: Symbol): Promise<void> {
 
 onMounted(() => {
   fetchSymbols();
-  loadProviderConfig();
-  providerPollInterval = setInterval(loadProviderConfig, 5000);
+  void (async () => {
+    await loadProviderConfig();
+    if (!isMounted || providerConfigForbidden.value) return;
+    providerPollInterval = setInterval(loadProviderConfig, 5000);
+  })();
 });
 
 onUnmounted(() => {
   isMounted = false;
   stopTestPrice();
-  if (providerPollInterval) {
-    clearInterval(providerPollInterval);
-    providerPollInterval = null;
-  }
+  stopProviderPoll();
 });
 </script>
 
@@ -456,8 +475,12 @@ onUnmounted(() => {
       </button>
     </div>
 
+    <div v-if="providerConfigForbidden" class="provider-permission-banner" role="status">
+      {{ t('provider.permissionDenied') }}
+    </div>
+
     <!-- Provider Configuration Section -->
-    <div v-if="providerConfig" class="provider-section">
+    <div v-else-if="providerConfig" class="provider-section">
       <h2 class="section-title">{{ t('provider.title') }}</h2>
 
       <div class="provider-cards">
@@ -1430,6 +1453,16 @@ onUnmounted(() => {
 }
 
 /* Provider Configuration */
+.provider-permission-banner {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .provider-section {
   margin-bottom: var(--spacing-xl);
 }

@@ -39,6 +39,8 @@ const entryFee = computed(() => {
   return `$${(props.contest.entry_fee_cents / 100).toFixed(2)}`;
 });
 
+const isFreeEntry = computed(() => props.contest.entry_fee_cents === 0);
+
 /** Product display timezone: Asia/Tehran (authoritative UI TZ; not browser local). */
 const TEHRAN_TZ = 'Asia/Tehran';
 
@@ -169,12 +171,35 @@ const formattedFirstPrize = computed(() => {
   return `$${(firstPlacePrize.value / 100).toFixed(0)}`;
 });
 
+const hasAnyPrize = computed(
+  () => estimatedPrizePool.value > 0 || firstPlacePrize.value > 0,
+);
+
 const symbolsList = computed(() => {
-  return props.contest.symbols
-    .filter(s => s.enabled)
-    .map(s => s.symbol)
-    .slice(0, 3)
-    .join(', ') + (props.contest.symbols.length > 3 ? '...' : '');
+  const symbols = props.contest.symbols;
+  if (!Array.isArray(symbols) || symbols.length === 0) return '';
+  return (
+    symbols
+      .filter((s) => s.enabled)
+      .map((s) => s.symbol)
+      .slice(0, 3)
+      .join(', ') + (symbols.length > 3 ? '...' : '')
+  );
+});
+
+/** QTY is trading allocation, not money. Guard transitional nulls. */
+const qtyDisplay = computed(() => {
+  const qty = props.contest.qty_total;
+  if (qty == null || typeof qty !== 'number' || !Number.isFinite(qty)) {
+    return '—';
+  }
+  return `${qty.toLocaleString()} QTY`;
+});
+
+const contestIdLabel = computed(() => {
+  const id = props.contest.id;
+  if (!id) return '';
+  return `ID ${id}`;
 });
 
 const canJoin = computed(() => {
@@ -244,83 +269,129 @@ defineExpose({ handleJoin });
 </script>
 
 <template>
-  <div :class="['contest-card', 'card', { 'contest-card-compact': compact }]">
-    <!-- Header -->
-    <div class="card-header">
-      <div class="contest-title">
-        <span class="contest-name">{{ contest.name }}</span>
-        <span class="contest-duration">{{ duration }}</span>
+  <div :class="['contest-card', 'card', { 'contest-card-compact': compact, 'is-open': showDetails }]">
+    <div class="cc-main">
+      <!-- TYPE -->
+      <div class="cc-cell cc-type">
+        <span class="cc-label">{{ t('tournament.colType') || 'Type' }}</span>
+        <div class="cc-type-badges">
+          <span v-if="durationTypeLabel" class="duration-type-badge">
+            <span class="duration-icon">{{ durationTypeIcon }}</span>
+            <span class="duration-label">{{ durationTypeLabel }}</span>
+          </span>
+          <span v-if="marketTypeLabel" class="market-type-badge">
+            <span class="market-icon">{{ marketTypeIcon }}</span>
+            <span class="market-label">{{ marketTypeLabel }}</span>
+          </span>
+          <span v-if="!durationTypeLabel && !marketTypeLabel" class="cc-muted">{{ duration }}</span>
+        </div>
       </div>
-      <div class="header-badges">
-        <span v-if="marketTypeLabel" class="market-type-badge">
-          <span class="market-icon">{{ marketTypeIcon }}</span>
-          <span class="market-label">{{ marketTypeLabel }}</span>
-        </span>
-        <span v-if="durationTypeLabel" class="duration-type-badge">
-          <span class="duration-icon">{{ durationTypeIcon }}</span>
-          <span class="duration-label">{{ durationTypeLabel }}</span>
-        </span>
+
+      <!-- TOURNAMENT (name + id) -->
+      <div class="cc-cell cc-tournament">
+        <span class="cc-label">{{ t('contests.name') || 'Tournament' }}</span>
+        <span class="contest-name" :title="contest.name">{{ contest.name }}</span>
+        <span v-if="contestIdLabel" class="contest-id" :title="contest.id">{{ contestIdLabel }}</span>
+      </div>
+
+      <!-- START & END -->
+      <div class="cc-cell cc-schedule">
+        <span class="cc-label">{{ t('contest.starts') || 'Start' }} &amp; {{ t('contest.ends') || 'End' }}</span>
+        <span class="cc-schedule-line ma-ltr-num">{{ formattedStartTime }}</span>
+        <span class="cc-schedule-line ma-ltr-num">{{ formattedEndTime }}</span>
+        <span class="cc-schedule-dur">{{ duration }}</span>
+      </div>
+
+      <!-- TRADERS -->
+      <div class="cc-cell cc-traders">
+        <span class="cc-label">{{ t('freePractice.traders') || t('contests.participants') || 'Traders' }}</span>
+        <span class="cc-traders-value ma-ltr-num">{{ participantDisplay }}</span>
+      </div>
+
+      <!-- FIRST & TOTAL PRIZE (authoritative only) -->
+      <div class="cc-cell cc-prize">
+        <span class="cc-label">{{ t('contests.firstPrize') || '1st' }} &amp; {{ t('contests.prizePool') }}</span>
+        <template v-if="hasAnyPrize">
+          <span class="cc-prize-first ma-ltr-num">{{ formattedFirstPrize }}</span>
+          <span class="cc-prize-total ma-ltr-num">{{ formattedPrizePool }}</span>
+        </template>
+        <span v-else class="cc-prize-none">{{ formattedPrizePool }}</span>
+      </div>
+
+      <!-- ENTRY FEE (own column — never on the Join button) -->
+      <div class="cc-cell cc-fee">
+        <span class="cc-label">{{ t('contests.entryFee') || 'Entry fee' }}</span>
+        <span :class="['cc-fee-value', 'ma-ltr-num', { 'cc-fee-free': isFreeEntry }]">{{ entryFee }}</span>
+      </div>
+
+      <!-- STARTING IN (countdown) -->
+      <div class="cc-cell cc-countdown">
+        <span class="cc-label">{{ t('countdown.startsIn') || t('contests.time.startsIn') || 'Starting in' }}</span>
+        <CountdownTimer
+          :starts-at="contest.starts_at"
+          :ends-at="contest.ends_at"
+          :status="contest.status"
+          :compact="true"
+          @status-change="emit('refresh', contest.id)"
+        />
+      </div>
+
+      <!-- JOIN — text is only Join / Enter Trading / Joined -->
+      <div class="cc-cell cc-join">
+        <div class="card-actions">
+          <button
+            v-if="!compact"
+            class="btn btn-secondary btn-sm cc-details-btn"
+            type="button"
+            @click="toggleDetails"
+          >
+            {{ showDetails ? t('common.hide') || 'Hide' : t('contests.details') }}
+          </button>
+          <button
+            v-if="canJoin"
+            class="btn btn-primary join-btn"
+            type="button"
+            :disabled="isJoining"
+            @click="handleJoinClick"
+          >
+            <span v-if="isJoining" class="btn-loading">
+              <span class="spinner"></span>
+            </span>
+            <span v-else>{{ t('contests.join') || 'Join' }}</span>
+          </button>
+          <span v-else-if="contest.status === 'cancelled'" class="joined-badge joined-badge-muted">
+            {{ t('contests.cancelled') || 'Contest Cancelled' }}
+          </span>
+          <button
+            v-else-if="contest.status === 'running' && isJoined"
+            class="btn btn-primary join-btn"
+            type="button"
+            @click="router.push(`/trade/${contest.id}`)"
+          >
+            {{ t('contests.enterTrading') || 'Enter Trading' }}
+          </button>
+          <span v-else-if="isJoined" class="joined-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {{ t('contests.joined') }}
+          </span>
+          <span
+            v-else-if="contest.status === 'registration_closed' || contest.status === 'scheduled'"
+            class="joined-badge joined-badge-muted"
+          >
+            {{ t('countdown.startingNow') || 'Starting...' }}
+          </span>
+        </div>
       </div>
     </div>
 
-    <!-- Countdown Timer -->
-    <div class="countdown-section">
-      <CountdownTimer
-        :starts-at="contest.starts_at"
-        :ends-at="contest.ends_at"
-        :status="contest.status"
-        :compact="compact"
-        @status-change="emit('refresh', contest.id)"
-      />
-    </div>
-
-    <!-- Description -->
-    <p v-if="contest.description && !compact" class="contest-description">
+    <p v-if="contest.description && !compact && showDetails" class="contest-description">
       {{ contest.description }}
     </p>
 
-    <!-- Main Info Row (layout: participants left): participants LEFT, entry fee where duration box was (no timeframe box). -->
-    <div class="info-row">
-      <div class="info-item">
-        <span class="info-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        </span>
-        <span class="info-text">{{ participantDisplay }} {{ t('contests.joined') }}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M7 15h10M7 11h4" />
-          </svg>
-        </span>
-        <span class="info-text">{{ t('contests.entryFee') || 'Entry fee' }}: {{ entryFee }}</span>
-      </div>
-    </div>
-
-    <!-- Prize Pool / First prize — authoritative only -->
-    <div class="prize-section">
-      <div class="prize-info">
-        <span class="prize-label">{{ t('contests.prizePool') }}</span>
-        <span class="prize-value">{{ formattedPrizePool }}</span>
-      </div>
-      <div class="prize-info">
-        <span class="prize-label">{{ t('contests.firstPrize') || '1st prize' }}</span>
-        <span class="prize-value">{{ formattedFirstPrize }}</span>
-      </div>
-    </div>
-
-    <div class="schedule-row">
-      <span class="schedule-item">{{ t('contest.starts') }}: {{ formattedStartTime }}</span>
-      <span class="schedule-item">{{ t('contest.ends') }}: {{ formattedEndTime }}</span>
-    </div>
-
     <!-- Participant Progress Bar -->
-    <div v-if="maxParticipants" class="participants-progress">
+    <div v-if="maxParticipants && showDetails" class="participants-progress">
       <div class="progress-bar">
         <div
           class="progress-fill"
@@ -334,30 +405,30 @@ defineExpose({ handleJoin });
     <!-- Stats Grid (collapsed by default) -->
     <div v-if="showDetails" class="stats-grid">
       <div class="stat">
-        <span class="stat-label">{{ t('contest.starts') }}</span>
-        <span class="stat-value">{{ formattedStartTime }}</span>
+        <span class="stat-label">{{ t('contest.starts') || 'Start' }}</span>
+        <span class="stat-value ma-ltr-num">{{ formattedStartTime }}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">{{ t('contest.ends') }}</span>
-        <span class="stat-value">{{ formattedEndTime }}</span>
+        <span class="stat-label">{{ t('contest.ends') || 'End' }}</span>
+        <span class="stat-value ma-ltr-num">{{ formattedEndTime }}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">{{ t('contest.symbols') }}</span>
+        <span class="stat-label">{{ t('contest.symbols') || 'Symbols' }}</span>
         <span class="stat-value">{{ symbolsList || '-' }}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">{{ t('contest.tradingCapital') }}</span>
-        <span class="stat-value">${{ contest.qty_total.toLocaleString() }}</span>
+        <span class="stat-label">{{ t('contest.tradingCapital') || 'QTY' }}</span>
+        <span class="stat-value ma-ltr-num">{{ qtyDisplay }}</span>
       </div>
     </div>
 
     <!-- Expandable Details -->
     <div v-if="showDetails" class="details-section">
       <div class="details-content">
-        <h4>{{ t('contest.availableSymbols') }}</h4>
+        <h4>{{ t('contest.availableSymbols') || 'Symbols' }}</h4>
         <div class="symbols-list">
           <span
-            v-for="symbol in contest.symbols"
+            v-for="symbol in contest.symbols || []"
             :key="symbol.symbol"
             :class="['symbol-tag', { 'symbol-disabled': !symbol.enabled }]"
           >
@@ -366,53 +437,10 @@ defineExpose({ handleJoin });
         </div>
 
         <template v-if="contest.rules">
-          <h4>{{ t('contest.rules') }}</h4>
+          <h4>{{ t('contest.rules') || 'Rules' }}</h4>
           <p class="rules-text">{{ JSON.stringify(contest.rules, null, 2) }}</p>
         </template>
       </div>
-    </div>
-
-    <!-- Actions: Join CTA must NOT embed price (price is in info row). -->
-    <div class="card-actions">
-      <button class="btn btn-secondary btn-sm" @click="toggleDetails">
-        {{ showDetails ? t('common.hide') : t('contests.details') }}
-      </button>
-      <button
-        v-if="canJoin"
-        class="btn btn-primary join-btn"
-        :disabled="isJoining"
-        @click="handleJoinClick"
-      >
-        <span v-if="isJoining" class="btn-loading">
-          <span class="spinner"></span>
-        </span>
-        <span v-else>{{ t('contests.join') || t('contests.joinNow') || 'Join' }}</span>
-      </button>
-      <span v-else-if="contest.status === 'cancelled'" class="joined-badge">
-        {{ t('contests.cancelled') || 'Contest Cancelled' }}
-      </span>
-      <button
-        v-else-if="contest.status === 'running' && isJoined"
-        class="btn btn-primary join-btn"
-        type="button"
-        @click="router.push(`/trade/${contest.id}`)"
-      >
-        {{ t('contests.enterTrading') || 'Enter Trading' }}
-      </button>
-      <template v-else-if="isJoined">
-        <span class="joined-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          {{ t('contests.joined') }}
-        </span>
-      </template>
-      <span
-        v-else-if="contest.status === 'registration_closed' || contest.status === 'scheduled'"
-        class="joined-badge"
-      >
-        {{ t('countdown.startingNow') || 'Starting...' }}
-      </span>
     </div>
 
     <!-- Insufficient Balance Modal -->
@@ -421,7 +449,7 @@ defineExpose({ handleJoin });
         <div class="modal-content">
           <div class="modal-header">
             <h3 class="modal-title">{{ t('contests.depositRequired') }}</h3>
-            <button class="modal-close" @click="closeDepositModal">
+            <button class="modal-close" type="button" @click="closeDepositModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -441,10 +469,10 @@ defineExpose({ handleJoin });
             </p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="closeDepositModal">
+            <button class="btn btn-secondary" type="button" @click="closeDepositModal">
               {{ t('common.cancel') }}
             </button>
-            <button class="btn btn-primary" @click="goToDeposit">
+            <button class="btn btn-primary" type="button" @click="goToDeposit">
               {{ t('contests.depositNow') }}
             </button>
           </div>
@@ -458,274 +486,262 @@ defineExpose({ handleJoin });
 .contest-card {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow-x: hidden;
+  background: var(--mvp-bg-card, var(--color-surface));
+  border: 1px solid var(--mvp-border, var(--color-border));
+  border-radius: var(--mvp-radius-sm, 12px);
+  color: var(--mvp-text, var(--color-text-primary));
 }
 
 .contest-card-compact {
-  padding: var(--spacing-md);
+  padding: 10px;
 }
 
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-}
-
-.header-badges {
+.cc-main {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: var(--spacing-xs);
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-[dir="rtl"] .header-badges {
-  align-items: flex-start;
+.cc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-.duration-type-badge {
-  display: inline-flex;
+.cc-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mvp-text-muted, var(--color-text-muted));
+}
+
+.cc-type-badges {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
+  min-width: 0;
 }
 
-.duration-icon {
-  font-size: var(--font-size-sm);
-  line-height: 1;
-}
-
-.duration-label {
-  line-height: 1.2;
-}
-
+.duration-type-badge,
 .market-type-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  background-color: var(--color-primary-light, #EEF2FF);
-  color: var(--color-primary);
-  border-radius: var(--radius-md);
+  max-width: 100%;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.duration-type-badge {
+  background-color: var(--color-bg-tertiary, var(--mvp-bg-mid));
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
+}
+
+.market-type-badge {
+  background-color: var(--mvp-emerald-soft, var(--color-primary-light));
+  color: var(--mvp-emerald, var(--color-primary));
+}
+
+.duration-icon,
 .market-icon {
-  font-size: var(--font-size-sm);
+  font-size: 12px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
+.duration-label,
 .market-label {
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.countdown-section {
-  padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--color-border-light, var(--color-border));
+.contest-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mvp-text, var(--color-text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.schedule-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin: var(--spacing-sm) 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.schedule-item {
+.contest-id {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mvp-text-muted, var(--color-text-muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.info-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  padding: var(--spacing-sm) 0;
-}
-
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.info-icon {
-  display: flex;
-  align-items: center;
-  color: var(--color-text-muted);
-}
-
-.info-text {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.prize-section {
-  display: flex;
-  justify-content: space-between;
-  padding: var(--spacing-md);
-  background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-bg-tertiary));
-  border-radius: var(--radius-md);
-}
-
-.prize-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.prize-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-
-.prize-value {
-  font-size: var(--font-size-md);
+.cc-schedule-line {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  color: var(--mvp-text, var(--color-text-primary));
+}
+
+.cc-schedule-dur {
+  font-size: 11px;
+  color: var(--mvp-text-muted, var(--color-text-muted));
+}
+
+.cc-traders-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mvp-text, var(--color-text-primary));
+}
+
+.cc-prize-first {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mvp-emerald, var(--color-primary));
+}
+
+.cc-prize-total {
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
+}
+
+.cc-prize-none,
+.cc-muted {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mvp-text-muted, var(--color-text-muted));
+}
+
+.cc-fee-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mvp-text, var(--color-text-primary));
+}
+
+.cc-fee-free {
+  color: var(--mvp-emerald, var(--color-primary));
+}
+
+.cc-countdown :deep(.countdown-timer) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.contest-description {
+  font-size: 13px;
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
+  line-height: 1.5;
+  margin: 0;
+  min-width: 0;
 }
 
 .participants-progress {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 4px;
+  min-width: 0;
 }
 
 .progress-bar {
   height: 6px;
-  background-color: var(--color-bg-tertiary);
-  border-radius: var(--radius-full);
+  background-color: var(--mvp-bg-mid, var(--color-bg-tertiary));
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light, #6366F1));
-  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--mvp-emerald, var(--color-primary)), var(--mvp-emerald-dim, #00b386));
+  border-radius: 999px;
   transition: width 0.3s ease;
 }
 
 .progress-fill.progress-full {
-  background: linear-gradient(90deg, var(--color-warning), var(--color-danger));
+  background: linear-gradient(90deg, var(--color-warning, #f59e0b), var(--color-danger, #ef4444));
 }
 
 .progress-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  text-align: right;
-}
-
-[dir="rtl"] .progress-label {
-  text-align: left;
-}
-
-.contest-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-}
-
-.contest-name {
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.contest-duration {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.contest-description {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-
-.status-badge {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  flex-shrink: 0;
-}
-
-.status-open {
-  background-color: #ECFDF5;
-  color: #059669;
-}
-
-.status-scheduled {
-  background-color: #FEF3C7;
-  color: #D97706;
-}
-
-.status-live {
-  background-color: #FEE2E2;
-  color: #DC2626;
-}
-
-.status-paused {
-  background-color: #FEF3C7;
-  color: #D97706;
-}
-
-.status-ended {
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
+  font-size: 11px;
+  color: var(--mvp-text-muted, var(--color-text-muted));
+  text-align: end;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
 }
 
 .stat {
   display: flex;
   justify-content: space-between;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--radius-sm);
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  background-color: var(--mvp-bg-mid, var(--color-bg-secondary));
+  border-radius: 8px;
 }
 
 .stat-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-size: 11px;
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
+  flex-shrink: 0;
 }
 
 .stat-value {
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mvp-text, var(--color-text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .details-section {
-  padding: var(--spacing-md);
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  padding: 10px;
+  background-color: var(--mvp-bg-mid, var(--color-bg-secondary));
+  border-radius: 10px;
+  font-size: 13px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .details-content h4 {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  margin-bottom: var(--spacing-xs);
-  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--mvp-text, var(--color-text-primary));
 }
 
 .details-content p {
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-sm);
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
+  margin: 0 0 8px;
 }
 
 .details-content p:last-child {
@@ -735,16 +751,16 @@ defineExpose({ handleJoin });
 .symbols-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-sm);
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .symbol-tag {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background-color: var(--color-bg-primary);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
+  padding: 3px 7px;
+  background-color: var(--mvp-bg-deep, var(--color-bg-primary));
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .symbol-disabled {
@@ -753,72 +769,70 @@ defineExpose({ handleJoin });
 }
 
 .rules-text {
-  font-family: monospace;
-  font-size: var(--font-size-xs);
+  font-family: var(--mvp-font-num, monospace);
+  font-size: 11px;
   white-space: pre-wrap;
-  background-color: var(--color-bg-primary);
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
+  word-break: break-word;
+  background-color: var(--mvp-bg-deep, var(--color-bg-primary));
+  padding: 8px;
+  border-radius: 8px;
 }
 
 .card-actions {
   display: flex;
-  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
-  margin-top: auto;
-  padding-top: var(--spacing-sm);
+  min-width: 0;
 }
 
 .card-actions .btn-sm {
   flex: 0 0 auto;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
+  padding: 6px 10px;
+  font-size: 11px;
 }
 
 .join-btn {
-  flex: 1;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, #4F46E5));
-  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--mvp-emerald, var(--color-primary)), var(--mvp-emerald-dim, #00b386));
+  color: #04120e;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 .join-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 12px var(--mvp-emerald-glow, rgba(0, 212, 160, 0.3));
 }
 
 .joined-badge {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  text-align: center;
-  background-color: #ECFDF5;
-  color: #059669;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-}
-
-.enter-trading-btn {
-  flex: 1;
-  text-align: center;
-  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white !important;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  gap: 4px;
+  padding: 6px 10px;
+  background-color: var(--mvp-emerald-soft, #ECFDF5);
+  color: var(--mvp-emerald, #059669);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.joined-badge-muted {
+  background-color: var(--mvp-bg-mid, var(--color-bg-tertiary));
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
 }
 
 .btn-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: 4px;
 }
 
 .spinner {
@@ -836,7 +850,6 @@ defineExpose({ handleJoin });
   }
 }
 
-/* Modal Styles */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -848,12 +861,12 @@ defineExpose({ handleJoin });
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: var(--spacing-md);
+  padding: 16px;
 }
 
 .modal-content {
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-lg);
+  background: var(--mvp-bg-card-solid, var(--color-bg-primary));
+  border-radius: var(--mvp-radius-md, 16px);
   max-width: 400px;
   width: 100%;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
@@ -875,14 +888,14 @@ defineExpose({ handleJoin });
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border);
+  padding: 16px;
+  border-bottom: 1px solid var(--mvp-border, var(--color-border));
 }
 
 .modal-title {
-  font-size: var(--font-size-lg);
+  font-size: 16px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--mvp-text, var(--color-text-primary));
   margin: 0;
 }
 
@@ -894,14 +907,13 @@ defineExpose({ handleJoin });
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  border-radius: 8px;
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
   cursor: pointer;
-  transition: background-color var(--transition-fast);
 }
 
 .modal-close:hover {
-  background: var(--color-bg-secondary);
+  background: var(--mvp-bg-mid, var(--color-bg-secondary));
 }
 
 .modal-close svg {
@@ -910,42 +922,153 @@ defineExpose({ handleJoin });
 }
 
 .modal-body {
-  padding: var(--spacing-xl);
+  padding: 24px;
   text-align: center;
 }
 
 .deposit-icon {
   width: 64px;
   height: 64px;
-  background: var(--color-primary-light, #EEF2FF);
+  background: var(--mvp-emerald-soft, var(--color-primary-light));
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto var(--spacing-lg);
+  margin: 0 auto 16px;
 }
 
 .deposit-icon svg {
   width: 32px;
   height: 32px;
-  color: var(--color-primary);
+  color: var(--mvp-emerald, var(--color-primary));
 }
 
 .deposit-message {
-  font-size: var(--font-size-md);
-  color: var(--color-text-secondary);
+  font-size: 14px;
+  color: var(--mvp-text-secondary, var(--color-text-secondary));
   line-height: 1.5;
   margin: 0;
 }
 
 .modal-footer {
   display: flex;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-lg);
-  border-top: 1px solid var(--color-border);
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--mvp-border, var(--color-border));
 }
 
 .modal-footer .btn {
   flex: 1;
+}
+
+/* Desktop: horizontal competition row. Compact carousel cards stay stacked. */
+@media (min-width: 900px) {
+  .contest-card:not(.contest-card-compact) {
+    grid-column: 1 / -1;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-main {
+    display: grid;
+    grid-template-columns:
+      minmax(72px, 0.85fr)
+      minmax(0, 1.5fr)
+      minmax(0, 1.15fr)
+      minmax(52px, 0.7fr)
+      minmax(0, 1fr)
+      minmax(64px, 0.8fr)
+      minmax(92px, 1.05fr)
+      auto;
+    align-items: center;
+    gap: 0;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-cell {
+    padding: 0 10px;
+    border-inline-start: 1px solid var(--mvp-border, var(--color-border));
+    justify-content: center;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-cell:first-child {
+    border-inline-start: none;
+    padding-inline-start: 0;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-join {
+    padding-inline-end: 0;
+    align-items: stretch;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-type-badges {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .contest-card:not(.contest-card-compact) .card-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .contest-card:not(.contest-card-compact) .join-btn {
+    flex: 0 0 auto;
+    min-width: 88px;
+    padding: 7px 14px;
+    font-size: 12px;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-details-btn {
+    padding: 6px 8px;
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-label {
+    /* Column IA is implied by order; labels stay on stacked mobile cards. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .contest-card:not(.contest-card-compact) .cc-cell {
+    position: relative;
+  }
+}
+
+@media (max-width: 899px) {
+  .contest-card {
+    /* Stacked card — never a shrunk table row */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cc-main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cc-cell {
+    border-inline-start: none;
+    padding-block: 2px;
+  }
+
+  .contest-name {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .cc-schedule-line,
+  .cc-prize-first,
+  .cc-prize-total,
+  .cc-fee-value {
+    white-space: normal;
+  }
+
+  .join-btn {
+    flex: 1 1 120px;
+  }
 }
 </style>

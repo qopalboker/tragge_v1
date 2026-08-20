@@ -20,8 +20,14 @@ export interface ContestTemplate {
 // API functions
 
 export async function getContestTemplates(): Promise<ContestTemplate[]> {
-  const response = await api.get<ContestTemplate[]>('/api/admin/contests/templates');
-  return response.data;
+  // Backend returns { templates: ContestTemplate[] }, not a bare array.
+  const response = await api.get<ContestTemplate[] | { templates?: ContestTemplate[] }>(
+    '/api/admin/contests/templates',
+  );
+  const data = response.data;
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.templates)) return data.templates;
+  return [];
 }
 
 export async function getContestTemplate(key: string): Promise<ContestTemplate> {

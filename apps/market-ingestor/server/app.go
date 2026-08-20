@@ -1353,9 +1353,10 @@ func (pm *ProviderManager) subscribeProvider(provider MarketProvider) error {
 		}
 		return provider.Subscribe(fhSymbols)
 	case ProviderDeriv:
+		// Forex/commodity only — crypto goes to Nobitex/Binance under CRYPTO_PROVIDER.
 		derivSymbols := pm.symbolRegistry.DerivSubscriptions()
 		if len(derivSymbols) == 0 {
-			for _, sym := range pm.config.Symbols {
+			for _, sym := range pm.symbolRegistry.ForexSymbols {
 				if d := CanonicalToDeriv(sym); d != "" {
 					derivSymbols = append(derivSymbols, d)
 				}
@@ -2344,76 +2345,74 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	// Start provider manager
 	app.providerManager.Start()
 
-	// Initialize crypto feeds (independent of ProviderManager) unless Deriv
-	// is the market provider. When CRYPTO_PROVIDER=binance and connected,
-	// handleTick drops non-binance crypto ticks — so Deriv must own crypto.
-	if cfg.MarketProvider == ProviderDeriv {
-		app.activeCryptoProvider.Store("deriv")
-		zapLog.Info("MARKET_PROVIDER=deriv: skipping Binance/Nobitex crypto feeds (Deriv supplies forex+crypto)")
-	} else {
-		// ProviderManager (Massive/TwelveData) handles forex/commodity/stocks via WebSocket.
-		// Crypto is handled by Nobitex (REST) and/or Binance (WS) based on CryptoProvider config.
-
-		// Load crypto provider preference from DB if available
-		cryptoProvider := cfg.CryptoProvider
-		if app.db != nil {
-			var dbProvider string
-			err := app.db.QueryRow("SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
-			if err == nil && dbProvider != "" {
-				cryptoProvider = dbProvider
-				zapLog.Info("Loaded crypto provider from DB", zap.String("provider", cryptoProvider))
-			}
+	// Category split:
+	//   Forex/commodity → MARKET_PROVIDER (deriv default)
+	//   Crypto → CRYPTO_PROVIDER (nobitex default)
+	// Both can run simultaneously; handleTick routes by asset class.
+	cryptoProvider := cfg.CryptoProvider
+	if app.db != nil {
+		var dbProvider string
+		err := app.db.QueryRow("SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
+		if err == nil && dbProvider != "" {
+			cryptoProvider = dbProvider
+			zapLog.Info("Loaded crypto provider from DB", zap.String("provider", cryptoProvider))
 		}
-		app.activeCryptoProvider.Store(cryptoProvider)
+	}
+	// When primary market is Deriv, force crypto onto Nobitex (or explicit CRYPTO_PROVIDER),
+	// never onto Deriv — product rule: Forex=Deriv, Crypto=Nobitex.
+	if cfg.MarketProvider == ProviderDeriv && (cryptoProvider == "" || cryptoProvider == "deriv") {
+		cryptoProvider = "nobitex"
+	}
+	app.activeCryptoProvider.Store(cryptoProvider)
+	zapLog.Info("Provider category split",
+		zap.String("forex_provider", string(cfg.MarketProvider)),
+		zap.String("crypto_provider", cryptoProvider))
 
-		// Build both feeds (cheap — just struct allocation)
-		if cfg.NobitexEnabled && len(app.symbolRegistry.CryptoSymbols) > 0 {
-			nobitexCfg := NobitexConfig{
-				Token:        cfg.NobitexToken,
-				PollInterval: cfg.NobitexPollInterval,
-				USDTUSDRate:  cfg.NobitexUSDTRate,
-				BaseURL:      cfg.NobitexBaseURL,
-				Symbols:      app.symbolRegistry.NobitexSubscriptions(),
-				Enabled:      true,
-			}
-			app.nobitexFeed = NewNobitexCryptoFeed(nobitexCfg, app.handleTick, app.symbolRegistry, zapLog)
+	if cfg.NobitexEnabled && len(app.symbolRegistry.CryptoSymbols) > 0 {
+		nobitexCfg := NobitexConfig{
+			Token:        cfg.NobitexToken,
+			PollInterval: cfg.NobitexPollInterval,
+			USDTUSDRate:  cfg.NobitexUSDTRate,
+			BaseURL:      cfg.NobitexBaseURL,
+			Symbols:      app.symbolRegistry.NobitexSubscriptions(),
+			Enabled:      true,
 		}
+		app.nobitexFeed = NewNobitexCryptoFeed(nobitexCfg, app.handleTick, app.symbolRegistry, zapLog)
+	}
 
-		if len(app.symbolRegistry.CryptoSymbols) > 0 {
-			binanceCfg := BinanceConfig{
-				BaseURL:     cfg.BinanceBaseURL,
-				Symbols:     app.symbolRegistry.BinanceSubscriptions(),
-				USDTUSDRate: cfg.BinanceUSDTRate,
-				Enabled:     cfg.BinanceEnabled || cryptoProvider == "binance" || cryptoProvider == "both",
-			}
-			app.binanceFeed = NewBinanceCryptoFeed(binanceCfg, app.handleTick, app.symbolRegistry, zapLog)
+	if len(app.symbolRegistry.CryptoSymbols) > 0 {
+		binanceCfg := BinanceConfig{
+			BaseURL:     cfg.BinanceBaseURL,
+			Symbols:     app.symbolRegistry.BinanceSubscriptions(),
+			USDTUSDRate: cfg.BinanceUSDTRate,
+			Enabled:     cfg.BinanceEnabled || cryptoProvider == "binance" || cryptoProvider == "both",
 		}
+		app.binanceFeed = NewBinanceCryptoFeed(binanceCfg, app.handleTick, app.symbolRegistry, zapLog)
+	}
 
-		// Start based on active crypto provider
-		switch cryptoProvider {
-		case "binance":
-			if app.binanceFeed != nil {
-				app.binanceFeed.Start()
-			}
-			zapLog.Info("Crypto provider: binance (WebSocket)")
-		case "both":
-			if app.nobitexFeed != nil {
-				app.nobitexFeed.Start()
-			}
-			if app.binanceFeed != nil {
-				app.binanceFeed.Start()
-			}
-			zapLog.Info("Crypto provider: both (nobitex primary, binance fallback)")
-		default: // "nobitex"
-			if app.nobitexFeed != nil {
-				app.nobitexFeed.Start()
-				zapLog.Info("Crypto provider: nobitex (REST polling)",
-					zap.Duration("poll_interval", cfg.NobitexPollInterval))
-			} else {
-				zapLog.Info("Nobitex crypto feed disabled",
-					zap.Bool("enabled", cfg.NobitexEnabled),
-					zap.Int("crypto_symbols", len(app.symbolRegistry.CryptoSymbols)))
-			}
+	switch cryptoProvider {
+	case "binance":
+		if app.binanceFeed != nil {
+			app.binanceFeed.Start()
+		}
+		zapLog.Info("Crypto provider: binance (WebSocket)")
+	case "both":
+		if app.nobitexFeed != nil {
+			app.nobitexFeed.Start()
+		}
+		if app.binanceFeed != nil {
+			app.binanceFeed.Start()
+		}
+		zapLog.Info("Crypto provider: both (nobitex primary, binance fallback)")
+	default: // "nobitex"
+		if app.nobitexFeed != nil {
+			app.nobitexFeed.Start()
+			zapLog.Info("Crypto provider: nobitex (REST polling)",
+				zap.Duration("poll_interval", cfg.NobitexPollInterval))
+		} else {
+			zapLog.Info("Nobitex crypto feed disabled",
+				zap.Bool("enabled", cfg.NobitexEnabled),
+				zap.Int("crypto_symbols", len(app.symbolRegistry.CryptoSymbols)))
 		}
 	}
 
@@ -2644,7 +2643,7 @@ func (a *App) handleTick(symbol string, price, bid, ask, volume float64, ts int6
 				return
 			}
 		case "deriv":
-			// Deriv owns crypto when MARKET_PROVIDER=deriv; drop leftover feeds.
+			// Legacy: if somehow activeCrypto=deriv, accept deriv crypto ticks only.
 			if source != "deriv" {
 				return
 			}

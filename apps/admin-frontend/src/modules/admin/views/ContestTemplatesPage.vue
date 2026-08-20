@@ -21,9 +21,11 @@ async function fetchTemplates(): Promise<void> {
   loading.value = true;
   error.value = false;
   try {
-    templates.value = await getContestTemplates();
+    const list = await getContestTemplates();
+    templates.value = Array.isArray(list) ? list : [];
   } catch {
     error.value = true;
+    templates.value = [];
     toast.error(t('contestTemplates.loadError'));
   } finally {
     loading.value = false;
@@ -31,7 +33,8 @@ async function fetchTemplates(): Promise<void> {
 }
 
 const filteredTemplates = computed(() => {
-  return templates.value.filter((tpl) => {
+  const list = Array.isArray(templates.value) ? templates.value : [];
+  return list.filter((tpl) => {
     if (filterAssetClass.value && tpl.asset_class !== filterAssetClass.value) return false;
     if (filterDurationType.value && tpl.duration_type !== filterDurationType.value) return false;
     if (filterFreeOnly.value && !tpl.is_free) return false;
@@ -56,12 +59,10 @@ function formatEntryFee(cents: number): string {
   }).format(cents / 100);
 }
 
+/** QTY is a tournament allocation unit — never currency. */
 function formatQty(qty: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(qty);
+  const n = typeof qty === 'number' && Number.isFinite(qty) ? qty : 0;
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)} QTY`;
 }
 
 function formatDuration(minutes: number): string {

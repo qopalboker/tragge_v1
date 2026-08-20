@@ -7,6 +7,13 @@ import {
 } from '@tragge/frontend-shared';
 import { getLocale } from '@/i18n';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Skip the global error-toast interceptor for optional / background calls. */
+    silent?: boolean;
+  }
+}
+
 // The admin-frontend's single axios instance. Separate from the
 // user-frontend's client so a leaked admin bundle cannot be coerced
 // into calling /api/user/* endpoints â€” neither the base URL nor the
@@ -40,12 +47,14 @@ export const api = createApiClient({
 });
 
 // Surface non-auth API errors as toasts. Mirrors the user-frontend
-// policy; admin views can opt out by catching the error themselves.
+// policy; callers can opt out with `{ silent: true }` on the request
+// (used for optional endpoints such as providerconfig).
 api.interceptors.response.use(
   (r) => r,
   (error: AxiosError) => {
     const status = error.response?.status;
-    if (status !== 401) {
+    const silent = Boolean(error.config?.silent);
+    if (status !== 401 && !silent) {
       useToast().error(getErrorMessage(error));
     }
     return Promise.reject(error);

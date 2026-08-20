@@ -495,7 +495,7 @@ services:
       NOBITEX_BASE_URL: ${NOBITEX_BASE_URL:-https://apiv2.nobitex.ir}
       NOBITEX_POLL_INTERVAL: ${NOBITEX_POLL_INTERVAL:-2s}
       NOBITEX_USDT_USD_RATE: ${NOBITEX_USDT_USD_RATE:-1.0}
-      CRYPTO_PROVIDER: ${CRYPTO_PROVIDER:-binance}
+      CRYPTO_PROVIDER: ${CRYPTO_PROVIDER:-nobitex}
       CONTROL_API_KEY_FILE: /run/secrets/control_api_key
       # trading-engine
       CONSUMER_GROUP: trading-engine

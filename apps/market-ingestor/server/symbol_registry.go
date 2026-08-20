@@ -472,9 +472,11 @@ func (r *SymbolRegistry) FinnhubToCanonical(finnhubSymbol string) string {
 }
 
 // DerivSubscriptions returns Deriv v3 symbols for every mapped canonical symbol.
+// DerivSubscriptions returns Deriv symbols for forex/commodity only.
+// Crypto is owned by CRYPTO_PROVIDER (Nobitex by default) under the category split.
 func (r *SymbolRegistry) DerivSubscriptions() []string {
 	var subs []string
-	for _, sym := range r.CanonicalSymbols {
+	for _, sym := range r.ForexSymbols {
 		if d, ok := r.ToDeriv[sym]; ok && d != "" {
 			subs = append(subs, d)
 		}

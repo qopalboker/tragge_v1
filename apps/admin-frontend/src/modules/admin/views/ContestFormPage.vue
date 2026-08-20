@@ -691,7 +691,7 @@ onMounted(() => {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="qty_total">{{ t('contestForm.qtyTotal') }} ($) *</label>
+            <label class="form-label" for="qty_total">{{ t('contestForm.qtyTotal') }} *</label>
             <input
               id="qty_total"
               v-model.number="form.qty_total"

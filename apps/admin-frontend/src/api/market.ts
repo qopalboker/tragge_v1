@@ -79,7 +79,9 @@ export async function reconnectProvider(): Promise<void> {
 }
 
 export async function getProviderConfig(): Promise<ProviderConfig> {
-  const response = await api.get<ProviderConfig>('/api/admin/providerconfig');
+  const response = await api.get<ProviderConfig>('/api/admin/providerconfig', {
+    silent: true,
+  });
 
   return response.data;
 }

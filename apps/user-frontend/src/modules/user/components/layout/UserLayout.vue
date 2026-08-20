@@ -475,11 +475,20 @@ function handleLogout(): void {
 
 .layout-topbar {
   width: 100%;
-  max-width: min(var(--max-content-width, 1200px), 100%);
+  max-width: none;
   min-width: 0;
-  margin: 0 auto;
-  padding: 8px 32px 0;
+  margin: 0;
+  padding: 8px 32px;
   box-sizing: border-box;
+  background: color-mix(in srgb, var(--mvp-bg-mid, #0a1220) 92%, transparent);
+  border-bottom: 1px solid var(--mvp-border, var(--theme-glass-border, var(--color-border)));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.layout-topbar :deep(.user-navbar) {
+  max-width: min(var(--max-content-width, 1200px), 100%);
+  margin-inline: auto;
 }
 
 .layout-content {
@@ -537,7 +546,7 @@ function handleLogout(): void {
 @media (max-width: 767px) {
   .layout-main { margin-inline-start: 0; }
   .layout-topbar {
-    padding: 4px var(--mvp-page-pad, 16px) 0;
+    padding: 6px var(--mvp-page-pad, 16px);
     max-width: none;
   }
   .layout-content {

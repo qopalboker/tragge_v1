@@ -120,6 +120,17 @@ export function useChartData(): UseChartDataReturn {
     resolution: string = '1m',
     limit?: number
   ): Promise<void> {
+    const sym = (symbol || '').trim();
+    // Never call /api/trade/candles with an empty symbol (400).
+    if (!sym) {
+      candles.value = [];
+      currentBar.value = null;
+      error.value = null;
+      isLoading.value = false;
+      dataVersion.value++;
+      return;
+    }
+
     const resolvedLimit = limit ?? getHistoryLimit(resolution);
     isLoading.value = true;
     error.value = null;
@@ -133,7 +144,7 @@ export function useChartData(): UseChartDataReturn {
       const tvResolution = TV_RESOLUTION_MAP[resolution] ?? '1';
 
       const response = await api.get<TradingViewCandlesResponse>('/api/trade/candles', {
-        params: { symbol, resolution: tvResolution, from: fromTS, to: toTS },
+        params: { symbol: sym, resolution: tvResolution, from: fromTS, to: toTS },
       });
 
       if (response.data.noData || !response.data.bars) {

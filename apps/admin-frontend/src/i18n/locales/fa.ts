@@ -1592,6 +1592,7 @@ export default {
     switchConfirm: 'تغییر به {provider}؟',
     switchSuccess: 'ارائه‌دهنده به {provider} تغییر یافت',
     switchError: 'خطا در تغییر ارائه‌دهنده',
+    permissionDenied: 'شما مجوز مشاهده تنظیمات ارائه‌دهنده را ندارید.',
     description: {
       nobitex: 'صرافی نوبیتکس (REST polling)',
       binance: 'صرافی بایننس (WebSocket)',
@@ -1654,7 +1655,7 @@ export default {
     maxParticipants: 'حداکثر شرکت‌کنندگان',
     maxParticipantsPlaceholder: 'برای نامحدود خالی بگذارید',
     qtyTotal: 'QTY کل',
-    qtyTotalHint: 'مقدار QTY اختصاص‌یافته به هر شرکت‌کننده.',
+    qtyTotalHint: 'QTY واحد تخصیص تورنمنت است، نه پول. مقدار QTY اختصاص‌یافته به هر شرکت‌کننده.',
     isFree: 'مسابقه رایگان',
     entryFee: 'ورودیه',
     entryFeeHint: 'مبلغی که هر شرکت‌کننده برای ورود می‌پردازد.',

@@ -323,6 +323,12 @@ function formatDollars(amount: number): string {
   }).format(amount);
 }
 
+/** Tournament allocation unit — never currency. */
+function formatQty(qty: number): string {
+  const n = typeof qty === 'number' && Number.isFinite(qty) ? qty : 0;
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)} QTY`;
+}
+
 function formatPercent(bps: number): string {
   return `${(bps / 100).toFixed(2)}%`;
 }
@@ -787,7 +793,7 @@ onUnmounted(() => {
         <!-- QTY Total Card -->
         <div class="info-card">
           <span class="info-card-label">{{ t('contestDetail.cards.qtyTotal') }}</span>
-          <span class="info-card-value">{{ formatDollars(contest.qty_total) }}</span>
+          <span class="info-card-value">{{ formatQty(contest.qty_total) }}</span>
         </div>
 
         <!-- Time Card -->
@@ -892,7 +898,7 @@ onUnmounted(() => {
                 </div>
                 <div class="info-row">
                   <span class="info-label">{{ t('contestDetail.overview.initialCapital') }}</span>
-                  <span class="info-value">{{ formatDollars(contest.qty_total) }}</span>
+                  <span class="info-value">{{ formatQty(contest.qty_total) }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">{{ t('contests.id') }}</span>
@@ -1056,8 +1062,8 @@ onUnmounted(() => {
                       </div>
                     </td>
                     <td>{{ formatDateTime(p.joined_at) }}</td>
-                    <td>{{ formatDollars(p.qty_total) }}</td>
-                    <td>{{ formatDollars(p.qty_available) }}</td>
+                    <td>{{ formatQty(p.qty_total) }}</td>
+                    <td>{{ formatQty(p.qty_available) }}</td>
                     <td>
                       <span :class="['participant-status', p.qty_available > 0 ? 'status-active-badge' : 'status-inactive-badge']">
                         {{ p.qty_available > 0 ? t('contestDetail.participants.active') : t('contestDetail.participants.inactive') }}

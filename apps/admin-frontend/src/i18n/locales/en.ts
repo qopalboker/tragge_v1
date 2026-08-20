@@ -1574,6 +1574,7 @@ export default {
     switchConfirm: 'Switch to {provider}?',
     switchSuccess: 'Provider switched to {provider}',
     switchError: 'Failed to switch provider',
+    permissionDenied: 'You do not have permission to view provider configuration.',
     description: {
       nobitex: 'Nobitex crypto exchange (REST polling)',
       binance: 'Binance crypto exchange (WebSocket)',
@@ -1636,7 +1637,7 @@ export default {
     maxParticipants: 'Maximum Participants',
     maxParticipantsPlaceholder: 'Leave blank for unlimited',
     qtyTotal: 'QTY Total',
-    qtyTotalHint: 'Total QTY allocated to each participant.',
+    qtyTotalHint: 'QTY is the tournament allocation unit, not money. Total QTY allocated to each participant.',
     isFree: 'Free Contest',
     entryFee: 'Entry Fee',
     entryFeeHint: 'Amount each participant pays to join.',

@@ -1055,8 +1055,11 @@ onMounted(async () => {
 
   setResolution(props.resolution);
 
-  await fetchHistory(props.symbol, props.resolution);
-  updateChartData(candles.value);
+  // Wait for contest symbols — never request candles with symbol="".
+  if (props.symbol && props.symbol.trim()) {
+    await fetchHistory(props.symbol, props.resolution);
+    updateChartData(candles.value);
+  }
 
   updatePositionLines();
   updatePendingOrderLines();

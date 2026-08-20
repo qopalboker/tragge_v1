@@ -89,12 +89,11 @@ gate("PROVIDER", "ingestor mode=deriv", /Market provider mode.*"provider": "deri
 gate("PROVIDER", "Massive not initialized as primary", !/Connecting.*"provider": "massive"/.test(ingestorLogs) && !/forex authentication failed/.test(ingestorLogs.split("\n").slice(-30).join("\n")));
 gate(
   "PROVIDER",
-  "Binance/Nobitex skipped when deriv",
-  /skipping Binance\/Nobitex/.test(ingestorLogs) ||
+  "Forex/Crypto category split (Deriv + Nobitex)",
+  /Provider category split|Crypto provider: nobitex/.test(ingestorLogs) ||
     (/MARKET_PROVIDER:\s*\$\{MARKET_PROVIDER:-deriv\}/.test(compose) &&
-      /MARKET_PROVIDER=deriv: skipping Binance\/Nobitex|skipping Binance\/Nobitex crypto feeds/.test(
-        read("apps/market-ingestor/server/app.go"),
-      )),
+      /CRYPTO_PROVIDER:\s*\$\{CRYPTO_PROVIDER:-nobitex\}/.test(compose) &&
+      /Provider category split/.test(read("apps/market-ingestor/server/app.go"))),
 );
 
 // --- Scheduler ---
