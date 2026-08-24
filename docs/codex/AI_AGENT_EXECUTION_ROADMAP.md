@@ -117,7 +117,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done on branch `codex/CI-001-frontend-tests-ci` (2026-08-25) — Vitest in CI; Playwright quarantined |
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch (merged to main with stack land) |
 | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch (stack land) |
-| FIN-001 | Single source of truth for platform fee | 1 | P0 | Not started |
+| FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch (stack land in progress) |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Not started |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Not started |

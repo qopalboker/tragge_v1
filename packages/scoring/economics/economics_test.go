@@ -13,10 +13,10 @@ func TestResolvePlatformFeeBps(t *testing.T) {
 		want int
 	}{
 		{"canonical bps wins", 2500, 20.0, 2500},
-		{"fallback commission percent", 0, 20.0, 2000},
+		{"commission ignored when bps unset", 0, 20.0, DefaultPlatformFeeBps},
 		{"default when both empty", 0, 0, DefaultPlatformFeeBps},
-		{"ignore invalid high bps", 20000, 15.0, 1500},
-		{"commission 17%", 0, 17.0, 1700},
+		{"invalid high bps falls to default (commission ignored)", 20000, 15.0, DefaultPlatformFeeBps},
+		{"commission 17% ignored", 0, 17.0, DefaultPlatformFeeBps},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -24,6 +24,29 @@ func TestResolvePlatformFeeBps(t *testing.T) {
 				t.Fatalf("got %d want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// FIN-001: conflicting legacy fields must resolve deterministically from
+// platform_fee_bps alone (numeric example: entry 100 USDT = 10000 cents).
+func TestFIN001ConflictingLegacyFieldsDeterministic(t *testing.T) {
+	const entryFeeCents int64 = 10000 // 100 USDT
+	// Intentionally conflict: bps says 20%, commission_rate says 50%.
+	feeBps := ResolvePlatformFeeBps(2000, 50.0)
+	if feeBps != 2000 {
+		t.Fatalf("feeBps=%d want 2000 (commission_rate must not win)", feeBps)
+	}
+	platformCents, prizeCents := SplitEntryFee(entryFeeCents, feeBps)
+	// Before FIN-001 with commission-first fallback at bps=0: 50% → 5000/5000.
+	// After FIN-001: always 20/80 from platform_fee_bps.
+	if platformCents != 2000 || prizeCents != 8000 {
+		t.Fatalf("split platform=%d prize=%d want 2000/8000", platformCents, prizeCents)
+	}
+	// bps unset + noisy commission_rate → default 2000, same split.
+	feeBps = ResolvePlatformFeeBps(0, 50.0)
+	platformCents, prizeCents = SplitEntryFee(entryFeeCents, feeBps)
+	if feeBps != DefaultPlatformFeeBps || platformCents != 2000 || prizeCents != 8000 {
+		t.Fatalf("unset bps: fee=%d platform=%d prize=%d", feeBps, platformCents, prizeCents)
 	}
 }
 

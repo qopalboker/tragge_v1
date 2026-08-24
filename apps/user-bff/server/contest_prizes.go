@@ -42,7 +42,7 @@ type PrizeRankPreview struct {
 const DefaultPlatformFeeBps = economics.DefaultPlatformFeeBps
 
 // ResolveEffectiveFeeBps is the single fee authority for user-bff.
-// Canonical field is platform_fee_bps; commission_rate is deprecated fallback only.
+// Canonical field is platform_fee_bps (FIN-001). commission_rate is ignored.
 func ResolveEffectiveFeeBps(platformFeeBps int, commissionRate float64) int {
 	return economics.ResolvePlatformFeeBps(platformFeeBps, commissionRate)
 }
