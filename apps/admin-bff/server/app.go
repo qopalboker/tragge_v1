@@ -459,6 +459,14 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		mfaChallenges:           mfaChallenges,
 	}
 
+	// SEC-009: when admin_mfa_enabled is ON, Super Admin routes reject
+	// password-only sessions (empty MFAAssurance). Policy OFF keeps MVP path.
+	if app.auth != nil && app.auth.Middleware != nil {
+		app.auth.Middleware.SetSuperAdminMFAPolicy(func(ctx context.Context) (bool, error) {
+			return app.isAdminMFAEnabled(ctx)
+		})
+	}
+
 	// Initialize ban expiry sweeper to auto-unban expired temporary bans
 	app.banExpirySweeper = newBanExpirySweeper(pool.Primary(), obs.Logger.Logger)
 

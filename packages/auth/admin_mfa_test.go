@@ -278,9 +278,21 @@ func TestSuperAdminMFAAssurancePersistsAcrossRefreshAndMiddleware(t *testing.T) 
 	}
 	legacyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/admin", nil)
 	legacyRequest.Header.Set("Authorization", "Bearer "+legacy.AccessToken)
+
+	// MVP / policy OFF: password-only Super Admin is accepted.
 	legacyRecorder := httptest.NewRecorder()
+	a.Middleware.RequireAuth(a.Middleware.RequireAdminAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))).ServeHTTP(legacyRecorder, legacyRequest)
+	if legacyRecorder.Code != http.StatusNoContent {
+		t.Fatalf("policy-off super-admin status=%d want 204", legacyRecorder.Code)
+	}
+
+	// Policy ON: same password-only token must be rejected.
+	a.Middleware.SetSuperAdminMFAPolicy(func(context.Context) (bool, error) { return true, nil })
+	legacyRecorder = httptest.NewRecorder()
 	a.Middleware.RequireAuth(a.Middleware.RequireAdminAccess(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))).ServeHTTP(legacyRecorder, legacyRequest)
 	if legacyRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("legacy super-admin status=%d", legacyRecorder.Code)
+		t.Fatalf("policy-on super-admin without MFA status=%d want 401", legacyRecorder.Code)
 	}
 }
