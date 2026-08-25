@@ -357,9 +357,9 @@ func (a *App) processContestStateRecord(record *kgo.Record) {
 		zap.String("contest_id", state.ContestID))
 }
 
-// finalizeContest computes final ranks and payouts for a contest.
-// This function supports crash recovery by tracking finalization state.
-// If the worker crashes mid-finalization, it can resume from the last completed step.
+// finalizeContest projects final ranks for a contest (ARCH-005: projection only).
+// Prize credits, contest Complete, and wallets_credited are owned by settlement.
+// Crash recovery tracks projection steps only.
 func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 	startTime := time.Now()
 

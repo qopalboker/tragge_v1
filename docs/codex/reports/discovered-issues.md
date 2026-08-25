@@ -253,3 +253,16 @@ Platform mounts payment/wallet/kyc boundary APIs and owns orchestration modules.
 | **Status** | Open — **not runtime-verified** |
 
 Webhook idempotency + ledger credit paths are unit/contract tested in Platform memory backends. Live Postgres webhook E2E against real provider fixtures was not reproduced this session.
+
+---
+
+## ARCH005-SETTLEMENT-HTTP-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH005-SETTLEMENT-HTTP-CUTOVER |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-005 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Platform settlement module owns finalization authority in-process. Full cutover of `settlement-service` Kafka/HTTP serving onto Platform-only was not completed this session.

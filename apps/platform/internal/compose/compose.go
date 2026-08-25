@@ -62,6 +62,7 @@ func (p *Platform) WorkerJobs() []modules.Job {
 	jobs = append(jobs, p.Leaderboard.Jobs()...)
 	jobs = append(jobs, p.Notification.Jobs()...)
 	jobs = append(jobs, p.Payment.Jobs()...)
+	jobs = append(jobs, p.Settlement.Jobs()...)
 	return jobs
 }
 

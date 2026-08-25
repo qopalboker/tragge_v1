@@ -11,6 +11,9 @@ func TestNoSettlementAuthority(t *testing.T) {
 	if svc.HasSettlementAuthority() {
 		t.Fatal("leaderboard must not have settlement authority")
 	}
+	if svc.MayCompleteContest() {
+		t.Fatal("leaderboard must not complete contests")
+	}
 	if err := svc.CreditWallets(context.Background(), "c1"); !errors.Is(err, ErrNoSettlementAuthority) {
 		t.Fatalf("CreditWallets: %v", err)
 	}
