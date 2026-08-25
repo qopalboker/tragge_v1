@@ -56,7 +56,8 @@
     "e2e:admin": "playwright test --project=admin-chromium",
     "e2e:firefox": "playwright test --project=firefox",
     "e2e:report": "playwright show-report",
-    "e2e:install": "playwright install --with-deps"
+    "e2e:install": "playwright install --with-deps",
+    "test:doc002": "node --test scripts/sec-doc002-docs-sync.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

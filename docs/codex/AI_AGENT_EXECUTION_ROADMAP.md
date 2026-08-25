@@ -106,7 +106,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** CI-003 on main (protection applied). **CI-004** on branch (gitleaks). Next: **DOC-002**.
+> **Status note (2026-08-25 continuity):** FIN-006, MD-005A, CI-002…004 on main path. **DOC-002** docs-sync checklist landing. Paid-production remains **NO-GO**; gaps tracked.
+> **Status note (2026-08-25 continuity):** CI-003 on main. CI-004/DOC-002 landing. Paid-production remains NO-GO; gaps tracked.
 
 ### Task Tracker
 
@@ -138,6 +139,9 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Done (merged to main) — protection applied; CI003-REVIEW-ENFORCEMENT open |
 | CI-004 | Continuous secret-scanning in CI | 5 | Nice-to-have | Done on branch `codex/CI-004-secret-scanning` (2026-08-25) — gitleaks always-on |
 | DOC-002 | Ongoing documentation-sync process | 6 | â€” | Not started |
+| CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Done on branch `codex/CI-003-branch-protection-gate` (2026-08-25) — apply script + aggregate gates; review-count gap open |
+| CI-004 | Continuous secret-scanning in CI | 5 | Nice-to-have | Done (merged to main) — gitleaks always-on |
+| DOC-002 | Ongoing documentation-sync process | 6 | — | Done on branch `codex/DOC-002-docs-sync-process` (2026-08-25) — PR template checklist + status refresh |
 
 *P0 = blocks paid-production launch. P1 = important, not launch-blocking. Quick win = high value, low effort.*
 

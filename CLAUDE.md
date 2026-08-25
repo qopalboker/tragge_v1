@@ -19,8 +19,9 @@ This file provides guidance for AI assistants working with the tragge repository
 - **Observability**: Prometheus, Grafana, Loki, Tempo, Alertmanager
 - **Deployment**: Docker Compose (dev/lab) and Kubernetes overlays (staging/production) — K8s overlay drift is an open P0 (INFRA-001)
 - **Codebase**: Order-of-magnitude inventory lives in the current-state audit (hundreds of Go/Vue/TS files); re-run `node scripts/production-baseline.mjs inventory` for live counts
-- **CI/CD**: GitHub Actions (lint, test, build) — frontend suites / required gates still tracked as CI-001/CI-003
-- **Secrets**: Docker secrets (dev) and external secrets managers (production)
+- **CI/CD**: GitHub Actions with required gates on `main` (CI-003 aggregate checks). Frontend Vitest is in CI (CI-001); Playwright remains quarantined. Continuous gitleaks secret scanning is CI-004.
+- **Secrets**: Docker secrets (dev) and external secrets managers (production); CI gitleaks scans every PR
+
 
 ### What's Implemented
 
