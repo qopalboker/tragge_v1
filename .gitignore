@@ -117,3 +117,6 @@ infra/docker/.env.tunnel.*
 
 # Go build cache (never commit)
 .go-cache/
+
+# Local format-patch delivery archives (not for PR review)
+docs/codex/patches/
