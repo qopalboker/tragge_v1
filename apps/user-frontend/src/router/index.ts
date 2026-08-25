@@ -24,15 +24,15 @@ const router = createRouter({
   routes,
 })
 
-// Global auth guard. No admin branch — an unauthenticated hit on any
-// protected route goes to /user/login. The pre-split code picked
-// between /user/login and /admin/login based on `to.path`, which is
-// no longer meaningful here.
+// Global auth guard. No admin branch — browser guests hit /user/login.
+// Telegram Mini App / miniapp meta must NEVER land on the password form
+// (see docs/codex/reports/USER-UI-UNIFICATION-TELEGRAM-AUTH-2026-08-17.md).
 router.beforeEach(async (to) => {
   const requiresAuth = to.matched.some(r => r.meta.requiresAuth)
   const isAuthPage = to.matched.some(r => r.meta.isAuthPage)
   const roleRecord = to.matched.find(r => r.meta.requiresRole)
   const requiresRole = roleRecord?.meta.requiresRole
+  const isMiniappRoute = to.matched.some(r => r.meta.miniapp)
 
   // Only load the store when we actually need it (lazy import keeps the
   // landing-page chunk small). `bootstrap()` is deduped against the
@@ -42,6 +42,27 @@ router.beforeEach(async (to) => {
     const auth = useAuthStore()
     if (!auth.ready) {
       await auth.bootstrap()
+    }
+
+    const { isTelegramMiniApp } = await import('@/modules/miniapp/telegram')
+    const inTelegram = isTelegramMiniApp() || isMiniappRoute
+
+    // Telegram / miniapp: never redirect to password login. While
+    // telegram_authenticating or after definitive failure, send users to
+    // the Mini App auth-error page (retry without leaving Telegram).
+    if (
+      inTelegram &&
+      (auth.bootstrapPhase === 'telegram_authenticating' ||
+        isAuthPage ||
+        (requiresAuth && !auth.isAuthenticated))
+    ) {
+      if (auth.isAuthenticated) {
+        return '/miniapp/home'
+      }
+      if (to.name === 'telegram-auth-error') {
+        return true
+      }
+      return { name: 'telegram-auth-error' }
     }
 
     if (requiresAuth && !auth.isAuthenticated) {
@@ -57,8 +78,6 @@ router.beforeEach(async (to) => {
     // Redirect authenticated users away from auth pages (login,
     // register, forgot-password).
     if (isAuthPage && auth.isAuthenticated) {
-      // Telegram Mini App users land on the mobile shell.
-      const { isTelegramMiniApp } = await import('@/modules/miniapp/telegram')
       return isTelegramMiniApp() ? '/miniapp/home' : '/user/dashboard'
     }
   }

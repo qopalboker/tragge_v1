@@ -192,5 +192,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @tragge/user-frontend lint
       - run: pnpm --filter @tragge/admin-frontend lint
+      # CI-001: Vitest unit/component suites (must stay green).
+      - name: Vitest (user-frontend)
+        run: pnpm --filter @tragge/user-frontend test
+      - name: Vitest (admin-frontend)
+        run: pnpm --filter @tragge/admin-frontend test
       - run: pnpm --filter @tragge/user-frontend build
       - run: pnpm --filter @tragge/admin-frontend build
+      # Playwright E2E is explicitly quarantined (not silently dropped):
+      # playwright.config.ts disables webServer when CI=1; suites need a live
+      # frontend (+ often API) stack. Ticket: docs/codex/reports/discovered-issues.md
+      # (CI-001-PLAYWRIGHT-QUARANTINE). Do not `pnpm e2e` here until lifted.
