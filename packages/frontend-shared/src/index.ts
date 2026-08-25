@@ -2,6 +2,14 @@
 // Consumers import from '@tragge/frontend-shared' (root barrel) or
 // '@tragge/frontend-shared/styles/main.css' (global CSS).
 
+// MD-001 market-data tick v2 (full UI cutover tracked as MD001-FRONTEND-CUTOVER)
+export type {
+  AssetGroup,
+  TickQuality,
+  FixedPrice,
+  TickEventV2,
+} from './marketdata/tick-v2';
+
 // Auth primitives
 export type {
   AccessTokenBearer,

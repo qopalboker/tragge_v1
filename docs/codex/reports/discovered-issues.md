@@ -331,3 +331,29 @@ Standalone Engine image/entrypoint exists. Default Compose still serves Engine v
 | **Status** | Open — **not runtime-verified** |
 
 `packages/money` primitives exist and ban float64 internally. Legacy Engine/Market Data/contracts `float64` call sites remain until ENG-002/MD-001 cutover. Do not claim financial boundaries are float-free repo-wide.
+
+---
+
+## MD001-KAFKA-V2-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | MD001-KAFKA-V2-CUTOVER |
+| **Severity** | P1 (verification gap) |
+| **Found during** | MD-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Tick contract v2 and Engine admission helpers exist. Production Kafka still defaults to `ticks.v1` float snapshots. Do not claim live market data is fixed-point end-to-end until topic/producer/consumer cutover is verified.
+
+---
+
+## MD001-FRONTEND-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | MD001-FRONTEND-CUTOVER |
+| **Severity** | P2 (verification gap) |
+| **Found during** | MD-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+TypeScript v2 types are exported for frontends. Chart/trading websocket handlers still consume legacy float tick payloads.

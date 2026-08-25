@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tragge.local/contracts/tick_event.v2.json",
+  "title": "TickEvent v2",
+  "description": "MD-001 canonical fixed-point market tick (policy §9.7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "symbol",
+    "asset_group",
+    "bid",
+    "ask",
+    "provider",
+    "provider_timestamp_ms",
+    "received_at_ms",
+    "published_at_ms",
+    "sequence",
+    "source_epoch",
+    "quality",
+    "is_synthetic",
+    "normalization_version"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 2 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "symbol": { "type": "string", "minLength": 1 },
+    "asset_group": { "type": "string", "enum": ["forex", "crypto"] },
+    "bid": { "$ref": "#/$defs/fixed_price" },
+    "ask": { "$ref": "#/$defs/fixed_price" },
+    "last": { "$ref": "#/$defs/fixed_price" },
+    "provider": { "type": "string", "minLength": 1 },
+    "provider_timestamp_ms": { "type": "integer", "minimum": 1 },
+    "received_at_ms": { "type": "integer", "minimum": 1 },
+    "published_at_ms": { "type": "integer", "minimum": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "source_epoch": { "type": "integer", "minimum": 0 },
+    "quality": { "type": "string", "enum": ["good", "degraded", "suspect", "unusable"] },
+    "is_synthetic": { "type": "boolean" },
+    "normalization_version": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "fixed_price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "scale"],
+      "properties": {
+        "units": { "type": "integer" },
+        "scale": { "type": "integer", "minimum": 0, "maximum": 18 }
+      }
+    }
+  }
+}
