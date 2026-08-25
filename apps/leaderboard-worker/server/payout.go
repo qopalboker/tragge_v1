@@ -30,18 +30,10 @@ func CalculatePrizePoolGross(participantsCount int, entryFeeCents int64) int64 {
 }
 
 // CalculatePrizePoolNet calculates the net prize pool after platform fee deduction.
-// Uses floor((gross * (10000-bps)) / 10000) for historical consistency with tests
-// and settlement. packages/scoring/economics.CalculatePool uses fee-then-subtract
-// which can differ by 1 cent; callers that need package economics should call it
-// directly with participants+entry.
+// FIN-002: delegates to economics.NetFromGross (same math as settlement).
 func CalculatePrizePoolNet(prizePoolGross int64, platformFeeBps int) int64 {
-	if platformFeeBps <= 0 {
-		return prizePoolGross
-	}
-	if platformFeeBps >= 10000 {
-		return 0
-	}
-	return (prizePoolGross * int64(10000-platformFeeBps)) / 10000
+	net, _ := economics.NetFromGross(prizePoolGross, platformFeeBps)
+	return net
 }
 
 // CalculateWinnersCount calculates the number of winners using the shared formula.

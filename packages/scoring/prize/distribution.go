@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 )
 
 // MaxCommissionRate is the maximum allowed commission rate as a fraction.
@@ -29,13 +30,20 @@ func GetWinnersCount(participants int) int {
 	return prizedistribution.GetWinnersCount(participants, cfg.WinnerPercent)
 }
 
-// CalculatePrizePool computes the net prize pool in cents after commission.
-//   - participants: number of contest participants
-//   - entryFeeCents: entry fee per participant in cents
-//   - commissionRate: platform commission as a fraction (e.g. 0.20 for 20%)
+// CalculatePrizePoolFromBps computes the net prize pool using FIN-001/FIN-002
+// canonical platform_fee_bps via packages/scoring/economics.
+func CalculatePrizePoolFromBps(participants int, entryFeeCents int, platformFeeBps int) int64 {
+	if participants <= 0 || entryFeeCents <= 0 {
+		return 0
+	}
+	return economics.CalculatePool(participants, int64(entryFeeCents), platformFeeBps).NetCents
+}
+
+// CalculatePrizePool computes the net prize pool in cents after platform fee.
+//   - commissionRate: legacy fraction (e.g. 0.20 for 20%); converted to bps.
 //
-// Returns the prize pool available for distribution in cents.
-// Returns an error if commissionRate is negative or exceeds MaxCommissionRate.
+// FIN-002: delegates to economics (same math as settlement/leaderboard).
+// Prefer CalculatePrizePoolFromBps for new callers.
 func CalculatePrizePool(participants int, entryFeeCents int, commissionRate float64) (int64, error) {
 	if participants <= 0 || entryFeeCents <= 0 {
 		return 0, nil
@@ -46,9 +54,7 @@ func CalculatePrizePool(participants int, entryFeeCents int, commissionRate floa
 	if commissionRate > MaxCommissionRate {
 		return 0, fmt.Errorf("prize: commission rate %.4f exceeds maximum allowed %.4f", commissionRate, MaxCommissionRate)
 	}
-	gross := int64(participants) * int64(entryFeeCents)
-	commission := int64(math.Floor(float64(gross) * commissionRate))
-	return gross - commission, nil
+	return CalculatePrizePoolFromBps(participants, entryFeeCents, FractionToPlatformFeeBps(commissionRate)), nil
 }
 
 // CalculatePrizeDistribution computes the prize breakdown for each winner position
@@ -96,7 +102,7 @@ func CalculatePrizeDistributionWithTiers(participants int, prizePoolCents int64,
 }
 
 // PreviewPrizes generates a PrizePreview for pre-start display.
-// This shows prospective participants what the prize breakdown would be.
+// commissionRate is a legacy fraction; fee math uses economics via bps.
 func PreviewPrizes(participants int, entryFeeCents int, commissionRate float64) (PrizePreview, error) {
 	pool, err := CalculatePrizePool(participants, entryFeeCents, commissionRate)
 	if err != nil {
@@ -114,6 +120,21 @@ func PreviewPrizes(participants int, entryFeeCents int, commissionRate float64) 
 		WinnersCount:   GetWinnersCount(participants),
 		Slots:          slots,
 	}, nil
+}
+
+// PreviewPrizesFromBps is the FIN-002 canonical preview path (platform_fee_bps).
+func PreviewPrizesFromBps(participants int, entryFeeCents int, platformFeeBps int) PrizePreview {
+	pool := economics.CalculatePool(participants, int64(entryFeeCents), platformFeeBps)
+	slots := CalculatePrizeDistribution(participants, pool.NetCents)
+	return PrizePreview{
+		Participants:   participants,
+		EntryFeeCents:  entryFeeCents,
+		CommissionRate: float64(pool.PlatformFeeBps) / 10000.0,
+		GrossPool:      pool.GrossCents,
+		NetPool:        pool.NetCents,
+		WinnersCount:   GetWinnersCount(participants),
+		Slots:          slots,
+	}
 }
 
 // RankedParticipant represents a participant with their score for tie handling.

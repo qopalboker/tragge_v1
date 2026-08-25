@@ -17,6 +17,7 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
+	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/shopspring/decimal"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -608,9 +609,11 @@ func (s *SettlementService) calculatePrizes(rankings []contracts.FinalRanking, c
 		} else if platformFeeBps == 0 && !contestInfo.EconomicsLocked {
 			platformFeeBps = s.app.config.PlatformFeeBps
 		}
-		// Floor-net formula matches packages/scoring/economics.CalculatePool.
-		prizePoolNet = (prizePoolGross * int64(10000-platformFeeBps)) / 10000
-		platformFee = prizePoolGross - prizePoolNet
+		// FIN-002: sole fee math via packages/scoring/economics.
+		poolCalc := economics.CalculatePool(participantsCount, contestInfo.EntryFeeCents, platformFeeBps)
+		prizePoolGross = poolCalc.GrossCents
+		prizePoolNet = poolCalc.NetCents
+		platformFee = poolCalc.FeeCents
 	}
 
 	pool := PrizePool{

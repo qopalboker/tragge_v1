@@ -85,6 +85,29 @@ func PlatformFeeBpsForPaidWrite(isFree bool, entryFeeCents int64, platformFeeBps
 	return ResolvePlatformFeeBps(platformFeeBps, 0)
 }
 
+// NetFromGross applies platform_fee_bps to a gross pool (integer cents).
+// Floor net first so fee + net == gross always.
+func NetFromGross(grossCents int64, platformFeeBps int) (netCents, feeCents int64) {
+	if grossCents < 0 {
+		grossCents = 0
+	}
+	if platformFeeBps < 0 {
+		platformFeeBps = 0
+	}
+	if platformFeeBps > 10000 {
+		platformFeeBps = 10000
+	}
+	if platformFeeBps == 0 {
+		return grossCents, 0
+	}
+	if platformFeeBps >= 10000 {
+		return 0, grossCents
+	}
+	netCents = (grossCents * int64(10000-platformFeeBps)) / 10000
+	feeCents = grossCents - netCents
+	return netCents, feeCents
+}
+
 // CalculatePool computes gross, platform fee, and net distributable prize pool.
 // All amounts are integer cents. Net uses floor division so fee never underflows.
 func CalculatePool(participants int, entryFeeCents int64, platformFeeBps int) PoolResult {
@@ -101,9 +124,7 @@ func CalculatePool(participants int, entryFeeCents int64, platformFeeBps int) Po
 		platformFeeBps = 10000
 	}
 	gross := int64(participants) * entryFeeCents
-	// Floor net first so fee + net == gross always with integer cents.
-	net := (gross * int64(10000-platformFeeBps)) / 10000
-	fee := gross - net
+	net, fee := NetFromGross(gross, platformFeeBps)
 	return PoolResult{
 		Participants:   participants,
 		EntryFeeCents:  entryFeeCents,
