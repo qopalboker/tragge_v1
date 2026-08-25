@@ -9,15 +9,21 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/secrets"
-	"go.uber.org/zap"
 )
 
 const (
+	//nolint:gosec // G101: setting key / resource id, not a credential value
 	telegramBotTokenSettingKey = "telegram_bot_token"
 	telegramTokenReloadChannel = "system:telegram_bot_token:reload"
-	telegramSettingsResourceID = "telegram_bot_token"
+	//nolint:gosec // G101: resource id string for reauth grants, not a secret
+	telegramSettingsResourceID    = "telegram_bot_token"
+	telegramSettingsSourceNone    = "none"
+	telegramSettingsSourceEnv     = "env"
+	telegramSettingsSourceAdminDB = "admin_db"
 )
 
 type telegramSettingsResponse struct {
@@ -47,7 +53,7 @@ func (a *App) systemSecretKey() ([]byte, error) {
 
 func (a *App) handleGetTelegramSettings(w http.ResponseWriter, r *http.Request) {
 	key, err := a.systemSecretKey()
-	resp := telegramSettingsResponse{Configured: false, Source: "none"}
+	resp := telegramSettingsResponse{Configured: false, Source: telegramSettingsSourceNone}
 	if err == nil && a.pool != nil {
 		var ciphertext string
 		var updatedAt time.Time
@@ -60,7 +66,7 @@ func (a *App) handleGetTelegramSettings(w http.ResponseWriter, r *http.Request) 
 			plain, decErr := auth.DecryptSystemSecret(ciphertext, key)
 			if decErr == nil && strings.TrimSpace(plain) != "" {
 				resp.Configured = true
-				resp.Source = "admin_db"
+				resp.Source = telegramSettingsSourceAdminDB
 				resp.Masked = auth.MaskSecret(plain)
 				resp.UpdatedAt = &updatedAt
 				if updatedBy.Valid {
@@ -74,7 +80,7 @@ func (a *App) handleGetTelegramSettings(w http.ResponseWriter, r *http.Request) 
 		envTok := strings.TrimSpace(secrets.Load("TELEGRAM_BOT_TOKEN"))
 		if envTok != "" {
 			resp.Configured = true
-			resp.Source = "env"
+			resp.Source = telegramSettingsSourceEnv
 			resp.Masked = auth.MaskSecret(envTok)
 		}
 	}
@@ -86,23 +92,32 @@ func (a *App) handlePutTelegramSettings(w http.ResponseWriter, r *http.Request) 
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{adminMFAErrorKey: adminMsg.InvalidBody})
 		return
 	}
 	token := strings.TrimSpace(req.Token)
 	if token == "" || looksLikePlaceholderBotToken(token) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid telegram bot token", "code": "telegram_token_invalid"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			adminMFAErrorKey: "invalid telegram bot token",
+			adminJSONCodeKey: "telegram_token_invalid",
+		})
 		return
 	}
 	key, err := a.systemSecretKey()
 	if err != nil {
 		a.log().Error("system secret key unavailable for telegram settings")
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "encryption key unavailable", "code": "telegram_settings_crypto_unavailable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			adminMFAErrorKey: "encryption key unavailable",
+			adminJSONCodeKey: "telegram_settings_crypto_unavailable",
+		})
 		return
 	}
 	ciphertext, err := auth.EncryptSystemSecret(token, key)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "could not store token", "code": "telegram_token_invalid"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			adminMFAErrorKey: "could not store token",
+			adminJSONCodeKey: "telegram_token_invalid",
+		})
 		return
 	}
 	actor := auth.GetUserID(r.Context())
@@ -116,17 +131,17 @@ func (a *App) handlePutTelegramSettings(w http.ResponseWriter, r *http.Request) 
 	`, telegramBotTokenSettingKey, ciphertext, actor)
 	if err != nil {
 		a.log().Error("failed to persist telegram bot token setting", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{adminMFAErrorKey: adminMsg.InternalError})
 		return
 	}
 	a.logAuditEvent(r.Context(), actor, "settings.telegram_bot_token.set", "system_setting", telegramBotTokenSettingKey, map[string]string{
-		"configured": "true",
+		"configured": adminMFAPolicyBoolTrue,
 		"masked":     auth.MaskSecret(token),
 	})
 	a.publishTelegramTokenReload(r.Context())
 	writeJSON(w, http.StatusOK, telegramSettingsResponse{
 		Configured: true,
-		Source:     "admin_db",
+		Source:     telegramSettingsSourceAdminDB,
 		Masked:     auth.MaskSecret(token),
 	})
 }
@@ -137,20 +152,23 @@ func (a *App) handleDeleteTelegramSettings(w http.ResponseWriter, r *http.Reques
 		`DELETE FROM system_encrypted_settings WHERE key=$1`, telegramBotTokenSettingKey)
 	if err != nil {
 		a.log().Error("failed to clear telegram bot token setting", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{adminMFAErrorKey: adminMsg.InternalError})
 		return
 	}
 	a.logAuditEvent(r.Context(), actor, "settings.telegram_bot_token.clear", "system_setting", telegramBotTokenSettingKey, map[string]string{
-		"configured": "false",
+		"configured": adminMFAPolicyBoolFalse,
 	})
 	a.publishTelegramTokenReload(r.Context())
-	writeJSON(w, http.StatusOK, telegramSettingsResponse{Configured: false, Source: "none"})
+	writeJSON(w, http.StatusOK, telegramSettingsResponse{Configured: false, Source: telegramSettingsSourceNone})
 }
 
 func (a *App) handleTestTelegramSettings(w http.ResponseWriter, r *http.Request) {
 	key, err := a.systemSecretKey()
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "encryption key unavailable", "code": "telegram_settings_crypto_unavailable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			adminMFAErrorKey: "encryption key unavailable",
+			adminJSONCodeKey: "telegram_settings_crypto_unavailable",
+		})
 		return
 	}
 	token := ""
@@ -167,21 +185,27 @@ func (a *App) handleTestTelegramSettings(w http.ResponseWriter, r *http.Request)
 		token = strings.TrimSpace(secrets.Load("TELEGRAM_BOT_TOKEN"))
 	}
 	if token == "" || looksLikePlaceholderBotToken(token) {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "telegram bot token not configured", "code": "telegram_auth_unavailable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			adminMFAErrorKey: "telegram bot token not configured",
+			adminJSONCodeKey: "telegram_auth_unavailable",
+		})
 		return
 	}
 	ok, username, testErr := telegramGetMe(r.Context(), token)
 	actor := auth.GetUserID(r.Context())
-	okStr := "false"
+	okStr := adminMFAPolicyBoolFalse
 	if ok {
-		okStr = "true"
+		okStr = adminMFAPolicyBoolTrue
 	}
 	a.logAuditEvent(r.Context(), actor, "settings.telegram_bot_token.test", "system_setting", telegramBotTokenSettingKey, map[string]string{
 		"ok": okStr,
 	})
 	if testErr != nil || !ok {
 		// Never include upstream bodies that might echo the token.
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "telegram connection test failed", "code": "telegram_connection_failed"})
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			adminMFAErrorKey: "telegram connection test failed",
+			adminJSONCodeKey: "telegram_connection_failed",
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -194,7 +218,7 @@ func (a *App) requireTelegramBotTokenSensitive() func(http.Handler) http.Handler
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := a.consumeSensitiveGrant(r, actionTelegramBotToken, telegramSettingsResourceID, "settings.manage"); err != nil {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "sensitive action denied"})
+				writeJSON(w, http.StatusForbidden, map[string]string{adminMFAErrorKey: adminMFASensitiveDeniedMsg})
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -228,7 +252,7 @@ func telegramGetMe(ctx context.Context, token string) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var parsed struct {
 		OK     bool `json:"ok"`

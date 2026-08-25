@@ -23,7 +23,8 @@ const (
 	actionElevatedUserCreate    = "user.create.elevated"
 	actionAdminMFAReset         = "admin.mfa.reset"
 	actionAdminMFAPolicy        = "admin.mfa.policy"
-	actionTelegramBotToken      = "settings.telegram_bot_token"
+	//nolint:gosec // G101: sensitive-action id, not a credential value
+	actionTelegramBotToken = "settings.telegram_bot_token"
 )
 
 type sensitiveActionSpec struct {

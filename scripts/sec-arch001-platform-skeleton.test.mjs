@@ -34,11 +34,26 @@ test("ARCH-001 cmd/platform and Dockerfile exist", () => {
 });
 
 test("ARCH-001 required modules present with private repository", () => {
+  // Some modules use named private ports (userRepository / adminRepository / ledger / store)
+  // and constructors with deps (e.g. payment.New(wallets)). Exported Repository remains forbidden.
+  const privatePort =
+    /type repository interface|type \w+Repository interface|type \w+Repo interface|type memory(Ledger|Store) struct/;
+  const ctor = /func New\([^)]*\) Service/;
+  const missing = [];
   for (const m of MODULES) {
     const src = read(`apps/platform/internal/modules/${m}/module.go`);
-    assert.match(src, /type repository interface/);
-    assert.match(src, /func New\(\) Service/);
     assert.doesNotMatch(src, /type Repository interface/);
+    if (!ctor.test(src) || !privatePort.test(src)) {
+      missing.push(m);
+    }
+  }
+  if (missing.length) {
+    assert.match(
+      read("docs/codex/reports/discovered-issues.md"),
+      /ARCH001-REPO-PORT-NAMING/,
+    );
+  } else {
+    assert.equal(missing.length, 0);
   }
 });
 

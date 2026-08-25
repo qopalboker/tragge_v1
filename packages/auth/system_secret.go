@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+//nolint:gosec // G101: ciphertext format prefix, not a credential
 const SystemSecretCiphertextPrefix = "enc:system:v1:"
 
 var (
@@ -48,7 +49,10 @@ func EncryptSystemSecret(plaintext string, key []byte) (string, error) {
 		return "", err
 	}
 	sealed := gcm.Seal(nil, nonce, []byte(plaintext), []byte(SystemSecretCiphertextPrefix))
-	return SystemSecretCiphertextPrefix + base64.RawStdEncoding.EncodeToString(append(nonce, sealed...)), nil
+	out := make([]byte, 0, len(nonce)+len(sealed))
+	out = append(out, nonce...)
+	out = append(out, sealed...)
+	return SystemSecretCiphertextPrefix + base64.RawStdEncoding.EncodeToString(out), nil
 }
 
 // DecryptSystemSecret opens ciphertext produced by EncryptSystemSecret.

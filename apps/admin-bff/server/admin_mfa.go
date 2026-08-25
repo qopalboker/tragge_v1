@@ -18,6 +18,7 @@ import (
 const (
 	adminMFAChallengeField       = "challenge"
 	adminMFAErrorKey             = "error"
+	adminJSONCodeKey             = "code"
 	adminMFAExpiresAtField       = "expires_at"
 	adminMFAFailureCategoryField = "failure_category"
 	adminMFAFailureResponse      = "additional authentication failed"

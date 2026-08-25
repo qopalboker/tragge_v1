@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -35,7 +36,7 @@ func TestGetTelegramSettingsNeverReturnsRawToken(t *testing.T) {
 	t.Setenv("TELEGRAM_BOT_TOKEN", "7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw")
 
 	app := &App{config: &Config{AdminMFA: auth.AdminMFAConfig{EncryptionKey: key}}}
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/security/telegram", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/admin/security/telegram", nil)
 	rec := httptest.NewRecorder()
 	app.handleGetTelegramSettings(rec, req)
 	if rec.Code != http.StatusOK {
@@ -57,13 +58,17 @@ func TestGetTelegramSettingsNeverReturnsRawToken(t *testing.T) {
 func TestPutTelegramSettingsRejectsEmptyTokenWithoutLeak(t *testing.T) {
 	app := &App{config: &Config{}}
 	body, _ := json.Marshal(map[string]string{"token": "changeme"})
-	req := httptest.NewRequest(http.MethodPut, "/api/admin/security/telegram", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/admin/security/telegram", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	app.handlePutTelegramSettings(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if strings.Contains(rec.Body.String(), "changeme") && strings.Count(rec.Body.String(), "changeme") > 1 {
-		// error may mention invalid; ensure we don't echo full token fields
+	respBody := rec.Body.String()
+	if strings.Contains(respBody, `"token"`) {
+		t.Fatal("response echoed token field")
+	}
+	if strings.Count(respBody, "changeme") > 0 {
+		t.Fatal("response echoed placeholder token value")
 	}
 }

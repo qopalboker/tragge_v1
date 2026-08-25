@@ -8,12 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/secrets"
-	"go.uber.org/zap"
 )
 
 const (
+	//nolint:gosec // G101: setting key name, not a credential value
 	telegramBotTokenSettingKey = "telegram_bot_token"
 	telegramTokenReloadChannel = "system:telegram_bot_token:reload"
 )
@@ -122,9 +124,8 @@ func (a *App) startTelegramTokenReloadListener(ctx context.Context) {
 				if msg == nil {
 					continue
 				}
-				a.reloadTelegramVerifier(context.Background())
+				a.reloadTelegramVerifier(ctx)
 			}
 		}
 	}()
 }
-
