@@ -490,3 +490,16 @@ Full AUTO / FORCE_PROVIDER / PAUSE_SYMBOL with 1h review remains MD-005 / MD-006
 
 CI-002 establishes a non-zero coverage floor for the original 7 services. Deep coverage of settlement/finalize financial paths and non-short admin-bff integrations remains follow-up work.
 
+
+---
+
+## CI003-REVIEW-ENFORCEMENT
+
+| Field | Value |
+|---|---|
+| **ID** | CI003-REVIEW-ENFORCEMENT |
+| **Severity** | P2 (process) |
+| **Found during** | CI-003 (2026-08-25) |
+| **Status** | Open |
+
+Required approving review count is 0 so automated stack-land merges remain possible. Enable count=1 when a merge bot bypass or human-review SLA is in place.

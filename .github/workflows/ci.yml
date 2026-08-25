@@ -356,6 +356,20 @@ jobs:
           path: docs/codex/reports/CI-002-coverage-summary.json
           if-no-files-found: warn
 
+  ci-003-branch-protection:
+    name: CI-003 branch protection wiring
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: CI-003 wiring suite
+        run: node --test scripts/sec-ci003-branch-protection.test.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
 
 
 
@@ -613,3 +627,66 @@ jobs:
       # playwright.config.ts disables webServer when CI=1; suites need a live
       # frontend (+ often API) stack. Ticket: docs/codex/reports/discovered-issues.md
       # (CI-001-PLAYWRIGHT-QUARANTINE). Do not `pnpm e2e` here until lifted.
+
+  # ---- CI-003 always-on aggregate gates (safe for required status checks) ----
+  go-ci-complete:
+    name: Go CI complete
+    needs: [detect-changes, lint-and-test-go]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Go CI
+        run: |
+          set -e
+          go_needed="${{ needs.detect-changes.outputs.go }}"
+          go_result="${{ needs.lint-and-test-go.result }}"
+          echo "go_needed=$go_needed go_result=$go_result"
+          if [ "$go_needed" != "true" ]; then
+            echo "No Go path changes; Go CI skipped — OK for CI-003 gate"
+            exit 0
+          fi
+          if [ "$go_result" != "success" ]; then
+            echo "Go CI required and did not succeed"
+            exit 1
+          fi
+          echo "Go CI succeeded"
+
+  frontend-ci-complete:
+    name: Frontend CI complete
+    needs: [detect-changes, lint-and-test-frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Frontend CI
+        run: |
+          set -e
+          fe_needed="${{ needs.detect-changes.outputs.frontend }}"
+          fe_result="${{ needs.lint-and-test-frontend.result }}"
+          echo "fe_needed=$fe_needed fe_result=$fe_result"
+          if [ "$fe_needed" != "true" ]; then
+            echo "No frontend path changes; Frontend CI skipped — OK for CI-003 gate"
+            exit 0
+          fi
+          if [ "$fe_result" != "success" ]; then
+            echo "Frontend CI required and did not succeed"
+            exit 1
+          fi
+          echo "Frontend CI succeeded"
+
+  ci-003-required-gate:
+    name: CI required gate
+    needs: [go-ci-complete, frontend-ci-complete, ci-002-critical-go-coverage, sec-008-auth-regression, sec-009-admin-reauth-mfa]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require aggregate gates
+        run: |
+          set -e
+          for r in "${{ needs.go-ci-complete.result }}" "${{ needs.frontend-ci-complete.result }}" "${{ needs.ci-002-critical-go-coverage.result }}" "${{ needs.sec-008-auth-regression.result }}" "${{ needs.sec-009-admin-reauth-mfa.result }}"; do
+            echo "dep_result=$r"
+            if [ "$r" != "success" ]; then
+              echo "CI-003 required gate failed (dependency not success)"
+              exit 1
+            fi
+          done
+          echo "CI-003 required gate OK"
