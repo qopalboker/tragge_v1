@@ -106,14 +106,14 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** Repo check found no prior `codex/*` branches or `docs/codex/decisions/` entries for this roadmap. `main` tip includes product work (Deriv/Nobitex, Contest Info, admin fixes) outside this tracker. Phase 0 roadmap tasks were still open; DOC-001 completed on `codex/DOC-001-correct-claude-status`. Next: INFRA-001.
+> **Status note (2026-08-25 continuity):** Repo check found no prior `codex/*` branches or `docs/codex/decisions/` entries for this roadmap at session start. `main` tip includes product work (Deriv/Nobitex, Contest Info, admin fixes) outside this tracker. DOC-001 done on branch (awaiting merge). INFRA-001 **blocked** pending human kubeconfig — see `docs/codex/decisions/INFRA-001-decision-log.md`. Next unblocked Phase 0: CI-001.
 
 ### Task Tracker
 
 | ID | Task | Phase | Priority | Status |
 |---|---|---|---|---|
 | DOC-001 | Correct `CLAUDE.md` status | 0 | Quick win | Done on branch `codex/DOC-001-correct-claude-status` (2026-08-25) — awaiting merge |
-| INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Not started |
+| INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Blocked — awaiting live cluster / kubeconfig (decision 2026-08-25) |
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Not started |
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Not started |
 | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Not started |
@@ -156,6 +156,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 **Done when:** a reviewer who reads only `CLAUDE.md` reaches the same conclusion as one who reads the full audit.
 
 #### INFRA-001 — Contain K8s production overlay drift (stopgap)
+**Status:** Blocked 2026-08-25 — human chose park until kubeconfig/cluster access exists (`docs/codex/decisions/INFRA-001-decision-log.md`). Preliminary: production overlay still targets obsolete standalone names; `kubectl kustomize overlays/production` also fails on a tab in `base/network-policies.yaml` line ~82.
+
 **Subtasks**
 - [ ] Dry-run `kustomize build` against `infra/k8s/overlays/production` and diff its output against what's actually deployed in the cluster, to establish ground truth.
 - [ ] Based on that ground truth, not a guess: either (a) add the missing base Deployment/HPA manifests for `trade-bff`, `user-bff`, `admin-bff`, `market-ingestor`, `leaderboard-worker`, `payment-service` if they're genuinely still live, or (b) repoint the overlay's patch targets at `api-server` / `trading-core` / `worker` if those are what's actually live.
