@@ -12,6 +12,8 @@ Versioned contracts for the tragge event-driven trading platform.
 > ARCH-006 introduced `envelope.v1` (`packages/contracts/envelope/v1` and
 > `schemas/envelope.v1.json`) for cross-system command/event metadata.
 > ENG-001 adds Platform↔Engine target contracts under `packages/contracts/engine/v1`.
+> MD-001 adds fixed-point market-data tick contract v2 under
+> `packages/contracts/marketdata/v2`, `schemas/tick_event.v2.json`, and `ts/v2`.
 
 ## Structure
 

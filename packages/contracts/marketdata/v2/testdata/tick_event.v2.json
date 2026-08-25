@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "event_id": "evt-1",
+  "symbol": "EURUSD",
+  "asset_group": "forex",
+  "bid": { "units": 109990000, "scale": 8 },
+  "ask": { "units": 110010000, "scale": 8 },
+  "last": { "units": 110000000, "scale": 8 },
+  "provider": "deriv",
+  "provider_timestamp_ms": 1700000000000,
+  "received_at_ms": 1700000000050,
+  "published_at_ms": 1700000000100,
+  "sequence": 42,
+  "source_epoch": 1,
+  "quality": "good",
+  "is_synthetic": false,
+  "normalization_version": 1
+}

@@ -7,11 +7,13 @@
   "types": "./index.ts",
   "exports": {
     ".": "./index.ts",
-    "./v1": "./v1/index.ts"
+    "./v1": "./v1/index.ts",
+    "./v2": "./v2/index.ts"
   },
   "files": [
     "*.ts",
-    "v1/**/*.ts"
+    "v1/**/*.ts",
+    "v2/**/*.ts"
   ],
   "license": "MIT"
 }
