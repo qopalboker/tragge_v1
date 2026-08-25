@@ -109,7 +109,7 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 		// Ledger type enum
 		`DO $$ BEGIN
 			CREATE TYPE ledger_type AS ENUM (
-				'deposit', 'withdrawal', 'contest_entry', 'contest_refund',
+				'deposit', 'admin_funded_deposit', 'withdrawal', 'contest_entry', 'contest_refund',
 				'prize_credit', 'adjustment', 'affiliate_commission'
 			);
 		EXCEPTION

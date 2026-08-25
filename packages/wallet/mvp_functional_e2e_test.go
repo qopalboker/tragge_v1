@@ -68,7 +68,7 @@ func TestMVP_AdminCreditJoinSettle_E2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := svc.CreditIdempotentWithReason(ctx, tx, userID, creditAmt, LedgerTypeDeposit, &refType, nil, &desc, &reason, idemp)
+	entry, err := svc.CreditIdempotentWithReason(ctx, tx, userID, creditAmt, LedgerTypeAdminFundedDeposit, &refType, nil, &desc, &reason, idemp)
 	if err != nil {
 		tx.Rollback()
 		t.Fatalf("admin credit: %v", err)
@@ -82,7 +82,7 @@ func TestMVP_AdminCreditJoinSettle_E2E(t *testing.T) {
 
 	// Duplicate admin credit must not double-fund
 	tx2, _ := db.BeginTx(ctx, nil)
-	_, err = svc.CreditIdempotentWithReason(ctx, tx2, userID, creditAmt, LedgerTypeDeposit, &refType, nil, &desc, &reason, idemp)
+	_, err = svc.CreditIdempotentWithReason(ctx, tx2, userID, creditAmt, LedgerTypeAdminFundedDeposit, &refType, nil, &desc, &reason, idemp)
 	if err == nil {
 		tx2.Commit()
 		t.Fatal("expected duplicate credit error")

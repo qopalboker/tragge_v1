@@ -304,6 +304,23 @@ jobs:
       - name: FIN-005 harness + Power Law production guard
         run: node --test scripts/sec-fin005-reconciliation-harness.test.mjs
 
+  fin-006-admin-funded-deposit:
+    name: FIN-006 admin funded deposit classification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: FIN-006 regression suite
+        run: node --test scripts/sec-fin006-admin-funded-deposit.test.mjs
+
+
   lifecycle-001-late-entry:
     name: LIFECYCLE-001 late entry policy
     runs-on: ubuntu-latest

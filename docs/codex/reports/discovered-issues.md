@@ -396,3 +396,45 @@ Compose profile `target` defines Platform + Engine + Market Data. Live up/smoke 
 | **Status** | Open — **no service proven safe to delete** |
 
 ARCH-008 documented KEEP/REPLACE/DELETE_AFTER_CUTOVER for all listed standalones. Zero services met SAFE_TO_DELETE (proven zero callers/traffic/refs). Wrapper imports and/or ingress/gateway names remain. Do not delete `apps/*` trees without closing cutover gaps and producing traffic evidence.
+
+---
+
+## FIN006-LEDGER-TYPE-BACKFILL
+
+| Field | Value |
+|---|---|
+| **ID** | FIN006-LEDGER-TYPE-BACKFILL |
+| **Severity** | P2 (policy exception) |
+| **Found during** | FIN-006 (2026-08-25) |
+| **Status** | Open — documented exception |
+
+FIN-006 backfills historical wallet_ledger.type from deposit to dmin_funded_deposit for rows with 
+eason_code=WALLET_TOPUP and 
+ef_type=admin_action. Amounts and balances are unchanged. This is a human-approved one-time classification correction that conflicts with a strict reading of policy §13.1 ledger immutability.
+
+---
+
+## FIN006-ACCOUNT-MAPPING
+
+| Field | Value |
+|---|---|
+| **ID** | FIN006-ACCOUNT-MAPPING |
+| **Severity** | P2 (deferred scope) |
+| **Found during** | FIN-006 (2026-08-25) |
+| **Status** | Open — **not implemented** |
+
+Double-entry account mapping for dmin_funded_deposit (manual adjustment clearing vs deposit clearing vs non-revenue) was intentionally deferred. FIN-006 is classification + reporting exclusion only.
+
+---
+
+## FIN006-RUNTIME-DASHBOARD
+
+| Field | Value |
+|---|---|
+| **ID** | FIN006-RUNTIME-DASHBOARD |
+| **Severity** | P1 (verification gap) |
+| **Found during** | FIN-006 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Static/unit locks cover charge path + metrics SQL predicate. Live Admin charge → dashboard metric against real Postgres was not run in this session.
+

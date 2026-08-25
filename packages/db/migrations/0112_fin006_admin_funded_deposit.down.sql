@@ -1,0 +1,2 @@
+-- 0112_fin006_admin_funded_deposit.down.sql
+-- PostgreSQL cannot remove enum values; down migration is a no-op.

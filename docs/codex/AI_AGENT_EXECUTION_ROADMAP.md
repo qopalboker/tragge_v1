@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** ARCH-008 on main. ARCH-009 done on branch. Stack land complete through ARCH-009. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** Stack landed through ARCH-009 on main. **FIN-006** on branch (admin_funded_deposit) — awaiting financial sign-off. Next after sign-off: **MD-005A** (separate). Then CI-002→CI-003→CI-004→DOC-002. Keep gaps tracked.
 
 ### Task Tracker
 
@@ -122,6 +122,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Done (merged to main) — signed off; Postgres dual-race NOT runtime-verified (FIN003-POSTGRES-DUAL-RACE) |
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) — in-process harness; Compose/staging follow-ups open |
+| FIN-006 | Classify admin wallet top-ups as admin_funded_deposit | 1 | P0 | Done on branch codex/fin-006-admin-funded-deposit-classification (2026-08-25) — awaiting financial sign-off |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |

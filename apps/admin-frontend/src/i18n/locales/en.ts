@@ -1006,7 +1006,7 @@ export default {
       activeContests: 'Active Contests',
       scheduledContests: 'Scheduled Contests',
       totalRevenue: 'Total Revenue',
-      depositsToday: 'Deposits Today',
+      depositsToday: 'Gateway Deposits Today',
       tradesToday: 'Trades Today',
       ordersToday: 'Orders Today',
       pendingKYC: 'Pending KYC',
