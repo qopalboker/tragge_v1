@@ -106,13 +106,13 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** FIN-001..005 and LIFECYCLE-001..002 on main. LIFECYCLE-003 done on branch (audit-safe archival). Next: **ARCH-001**. Open gaps: FIN003-POSTGRES-DUAL-RACE, FIN005-*, LIFECYCLE*. INFRA-001 parked; INFRA-002 on main. Keep FIN-006 / MD-005A separate.
+> **Status note (2026-08-25 continuity):** FIN/LIFECYCLE on main. ARCH-001 done on branch (platform modular monolith skeleton). Next: ARCH-002. Gaps: FIN003-POSTGRES-DUAL-RACE, FIN005-*. Keep FIN-006/MD-005A separate. INFRA-002 on main.
 
 ### Task Tracker
 
 | ID | Task | Phase | Priority | Status |
 |---|---|---|---|---|
-| DOC-001 | Correct CLAUDE.md status | 0 | Quick win | Done (merged to main) |
+| DOC-001 | Correct `CLAUDE.md` status | 0 | Quick win | Done (merged to main) |
 | INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Blocked — awaiting live cluster / kubeconfig (decision 2026-08-25) |
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done (merged to main) — Vitest in CI; Playwright quarantined |
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done (merged to main) |
@@ -120,17 +120,17 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-001 | Single source of truth for platform fee | 1 | P0 | Done (merged to main) — signed off |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done (merged to main) — signed off |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Done (merged to main) — signed off; Postgres dual-race NOT runtime-verified (FIN003-POSTGRES-DUAL-RACE) |
-| FIN-004 | Reconcile prize distribution algorithm vs. 	ralent_v1 | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
+| FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) — in-process harness; Compose/staging follow-ups open |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
-| LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done on branch codex/LIFECYCLE-003-audit-safe-archival (2026-08-25) — awaiting merge |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Not started |
+| LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001 Done on branch `codex/arch-001-create-the-platform-modular-monolith-skele` (2026-08-25) — awaiting merge; ARCH-002..007 Not started |
 | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
 | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
-| ENGINE-001 | pricebook.go: float64 → decimal | 4 | P1 | Not started |
-| ENGINE-002 | position_management.go: float64 → decimal | 4 | P1 | Not started |
+| ENGINE-001 | `pricebook.go`: float64 → decimal | 4 | P1 | Not started |
+| ENGINE-002 | `position_management.go`: float64 → decimal | 4 | P1 | Not started |
 | ENGINE-003 | Regression-lock WAL fail-closed behavior | 4 | P1 | Not started |
 | CI-002 | Test coverage for the 7 untested critical Go services | 5 | P1 | Not started |
 | CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Not started |
@@ -320,8 +320,9 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### ARCH-001…007 — Execute the existing internal architecture roadmap
 **Subtasks**
-- [ ] Pull the exact scope for each of ARCH-001 through ARCH-007 from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` — that document is the authority; don't let a paraphrase here drift from it (this directive deliberately doesn't restate their scope).
-- [ ] Execute in whatever dependency order that document implies; ask if the order isn't specified (§4).
+- [x] Pull exact scope from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` (authority).
+- [x] **ARCH-001** — Platform modular-monolith skeleton (`apps/platform`, modes api/realtime/worker, module stubs, boundary + smoke tests, one Dockerfile). See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
+- [ ] ARCH-002…007 — not started; each own branch/PR per source document.
 - [ ] Treat each as its own branch/PR, following §5 and §6.
 
 **Verify:** per-task, as specified in the source document.

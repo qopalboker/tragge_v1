@@ -1,0 +1,35 @@
+# ARCH-001 desired-state: one Platform image, three mode deployments.
+# Not wired into production compose yet (INFRA parked / migration later).
+services:
+  platform-api:
+    build:
+      context: ../..
+      dockerfile: apps/platform/Dockerfile
+      args:
+        VERSION: ${PLATFORM_VERSION:-dev}
+    image: tragge/platform:${PLATFORM_VERSION:-dev}
+    command: ["--mode=api", "--addr=:8080"]
+    ports:
+      - "18080:8080"
+    environment:
+      PLATFORM_MODE: api
+
+  platform-realtime:
+    image: tragge/platform:${PLATFORM_VERSION:-dev}
+    command: ["--mode=realtime", "--addr=:8080"]
+    ports:
+      - "18081:8080"
+    environment:
+      PLATFORM_MODE: realtime
+    depends_on:
+      - platform-api
+
+  platform-worker:
+    image: tragge/platform:${PLATFORM_VERSION:-dev}
+    command: ["--mode=worker", "--addr=:8080"]
+    ports:
+      - "18082:8080"
+    environment:
+      PLATFORM_MODE: worker
+    depends_on:
+      - platform-api
