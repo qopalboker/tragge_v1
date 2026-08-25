@@ -25,3 +25,7 @@ Net pool **$800** (80000 cents):
 **Answer (human):** **Implement tralent_v1 as production path.**
 
 **Implemented:** `CalculateForContest` / `TralentV1*` become production; Power Law retained as `*PowerLaw` for divergence tests only. Settlement, leaderboard, economics, prize package call `CalculateForContest`.
+
+## 2026-08-25 — Human financial sign-off
+
+**Decision:** FIN-004 **approved**. Power Law must remain **only** for divergence/regression comparison — do not reintroduce it into the production payout path.

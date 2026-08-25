@@ -22,7 +22,11 @@
     "test:fin002": "node --test scripts/sec-fin002-prize-path-check.test.mjs",
     "test:fin003": "node --test scripts/sec-fin003-finalization-owner.test.mjs",
     "test:fin004": "node --test scripts/sec-fin004-tralent-v1-check.test.mjs",
+<<<<<<< HEAD
 >>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
+=======
+    "test:fin005": "node --test scripts/sec-fin005-reconciliation-harness.test.mjs",
+>>>>>>> 294cd38 (FIN-005: Add in-process financial reconciliation harness)
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

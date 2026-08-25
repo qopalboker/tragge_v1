@@ -281,7 +281,28 @@ jobs:
       - name: FIN-004 regression suite
         run: node --test scripts/sec-fin004-tralent-v1-check.test.mjs
 
+<<<<<<< HEAD
 >>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
+=======
+  # FIN-005: financial reconciliation harness. Always-on until CI-003 path filters
+  # can require it only for contest/payout/settlement changes.
+  fin-005-reconciliation-harness:
+    name: FIN-005 financial reconciliation harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: FIN-005 harness + Power Law production guard
+        run: node --test scripts/sec-fin005-reconciliation-harness.test.mjs
+
+>>>>>>> 294cd38 (FIN-005: Add in-process financial reconciliation harness)
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)
