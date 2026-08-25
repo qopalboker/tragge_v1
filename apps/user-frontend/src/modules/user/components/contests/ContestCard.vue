@@ -128,17 +128,8 @@ const marketTypeIcon = computed(() => {
 
 // Participant count
 const participantCount = computed(() => props.contest.participant_count ?? 0);
-const maxParticipants = computed(() => props.contest.max_participants);
-const participantDisplay = computed(() => {
-  if (maxParticipants.value) {
-    return `${participantCount.value}/${maxParticipants.value}`;
-  }
-  return participantCount.value.toString();
-});
-const participantPercentage = computed(() => {
-  if (!maxParticipants.value) return 0;
-  return Math.min(100, (participantCount.value / maxParticipants.value) * 100);
-});
+// LIFECYCLE-002: product capacity removed — show count only (no max/slots).
+const participantDisplay = computed(() => participantCount.value.toString());
 
 // Authoritative prize pool only — never invent economics client-side.
 const estimatedPrizePool = computed(
@@ -390,16 +381,9 @@ defineExpose({ handleJoin });
       {{ contest.description }}
     </p>
 
-    <!-- Participant Progress Bar -->
-    <div v-if="maxParticipants && showDetails" class="participants-progress">
-      <div class="progress-bar">
-        <div
-          class="progress-fill"
-          :style="{ width: `${participantPercentage}%` }"
-          :class="{ 'progress-full': participantPercentage >= 90 }"
-        ></div>
-      </div>
-      <span class="progress-label">{{ participantDisplay }} {{ t('contests.slots') }}</span>
+    <!-- LIFECYCLE-002: no capacity / slots progress (policy §5.2). -->
+    <div v-if="showDetails" class="participants-progress">
+      <span class="progress-label">{{ participantDisplay }} {{ t('contests.participants') }}</span>
     </div>
 
     <!-- Stats Grid (collapsed by default) -->

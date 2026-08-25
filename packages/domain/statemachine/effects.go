@@ -1204,42 +1204,32 @@ func (sl *SchedulerLoop) processCandidate(ctx context.Context, candidate AutoTra
 		zap.String("to", result.ToStatus.String()))
 }
 
-// CheckRegistrationCapacity checks if a contest is at capacity.
+// CheckRegistrationCapacity reports whether a contest is at product capacity.
+// LIFECYCLE-002 / policy §5.2: product capacity does not exist — always false.
 func CheckRegistrationCapacity(ctx context.Context, pool *db.Pool, contestID string) (bool, error) {
-	var currentParticipants int
-	var maxParticipants sql.NullInt64
-
+	var exists bool
 	err := pool.Replica().QueryRowContext(ctx, `
-		SELECT current_participants, max_participants
-		FROM contests
-		WHERE id = $1
-	`, contestID).Scan(&currentParticipants, &maxParticipants)
-
+		SELECT EXISTS(SELECT 1 FROM contests WHERE id = $1)
+	`, contestID).Scan(&exists)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, ErrContestNotFound
-		}
-		return false, fmt.Errorf("failed to check capacity: %w", err)
+		return false, fmt.Errorf("failed to check contest: %w", err)
 	}
-
-	if !maxParticipants.Valid {
-		return false, nil // No limit
+	if !exists {
+		return false, ErrContestNotFound
 	}
-
-	return currentParticipants >= int(maxParticipants.Int64), nil
+	return false, nil
 }
 
 // ValidateRegistration checks if a user can register for a contest.
+// LIFECYCLE-002: does not enforce max_participants (policy §5.2).
 func ValidateRegistration(ctx context.Context, pool *db.Pool, contestID, userID string) error {
 	var status string
-	var currentParticipants int
-	var maxParticipants sql.NullInt64
 
 	err := pool.Replica().QueryRowContext(ctx, `
-		SELECT status, current_participants, max_participants
+		SELECT status
 		FROM contests
 		WHERE id = $1
-	`, contestID).Scan(&status, &currentParticipants, &maxParticipants)
+	`, contestID).Scan(&status)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1253,11 +1243,6 @@ func ValidateRegistration(ctx context.Context, pool *db.Pool, contestID, userID 
 	// Check if registration is allowed
 	if !contestStatus.AllowsRegistration() {
 		return ErrRegistrationClosed
-	}
-
-	// Check capacity
-	if maxParticipants.Valid && currentParticipants >= int(maxParticipants.Int64) {
-		return ErrMaxParticipants
 	}
 
 	// Check if user is already registered

@@ -808,10 +808,7 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		RETURNING joined_at, qty_available
 	`, contestID, userID, qtyTotal).Scan(&joinedAt, &qtyAvailable)
 	if err != nil {
-		if strings.Contains(err.Error(), "chk_current_participants_lte_max") {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": msg.ContestFull})
-			return
-		}
+		// LIFECYCLE-002: capacity constraint removed; treat legacy full errors as gone.
 		// Unique (contest_id, user_id): concurrent join already committed — idempotent success.
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
 			_ = tx.Rollback()

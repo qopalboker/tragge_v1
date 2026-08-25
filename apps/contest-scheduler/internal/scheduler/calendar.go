@@ -630,10 +630,8 @@ func (cp *CalendarProcessor) createContestFromTier(
 		commissionRate = *tier.CommissionRateOverride
 	}
 	isFree := tier.IsFree
-	maxParticipants := entry.MaxParticipants
-	if tier.MaxParticipantsOverride != nil {
-		maxParticipants = sql.NullInt32{Int32: *tier.MaxParticipantsOverride, Valid: true}
-	}
+	// LIFECYCLE-002 / policy §5.2: product capacity does not exist — always NULL on create.
+	var maxPart *int
 
 	// Build contest name with tier label
 	tierLabel := tier.Label
@@ -660,12 +658,6 @@ func (cp *CalendarProcessor) createContestFromTier(
 	description := ""
 	if entry.Description.Valid {
 		description = entry.Description.String
-	}
-
-	var maxPart *int
-	if maxParticipants.Valid {
-		val := int(maxParticipants.Int32)
-		maxPart = &val
 	}
 
 	contestType := "standard"
@@ -862,12 +854,8 @@ func (cp *CalendarProcessor) createContestFromTemplate(
 		description = entry.Description.String
 	}
 
-	// Get max participants
+	// LIFECYCLE-002 / policy §5.2: product capacity does not exist — always NULL on create.
 	var maxParticipants *int
-	if entry.MaxParticipants.Valid {
-		val := int(entry.MaxParticipants.Int32)
-		maxParticipants = &val
-	}
 
 	// Get contest type
 	contestType := "standard"

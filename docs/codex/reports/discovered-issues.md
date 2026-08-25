@@ -149,3 +149,29 @@ Policy §4.4 requires economics immutability when the **late-entry window closes
 | **Status** | Open — **not runtime-verified** |
 
 Full `go test ./apps/user-bff/server` was not run (host OOM). Policy tests execute in `packages/scoring/economics`. Do not claim user-bff package compile/runtime verification until reproduced.
+
+---
+
+## LIFECYCLE002-LOAD-TEST
+
+| Field | Value |
+|---|---|
+| **ID** | LIFECYCLE002-LOAD-TEST |
+| **Severity** | P1 (verification gap) |
+| **Found during** | LIFECYCLE-002 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+LIFECYCLE-002 removed product capacity enforcement (constraint, ValidateRegistration, create-path NULL, UI). A large synthetic participant join/load test against real Postgres (or Compose at target scale) was **not** run this session. Do **not** mark the load-test verify item as runtime-verified until reproduced at the agreed scale.
+
+---
+
+## LIFECYCLE002-STATEMACHINE-COMPILE
+
+| Field | Value |
+|---|---|
+| **ID** | LIFECYCLE002-STATEMACHINE-COMPILE |
+| **Severity** | P2 (verification gap) |
+| **Found during** | LIFECYCLE-002 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+`go test ./packages/domain/statemachine -run TestLIFECYCLE002` failed to link on this host (OOM). CI job still runs the suite; local/static locks cover source invariants. Do not claim domain package compile/runtime verification on constrained hosts until reproduced.
