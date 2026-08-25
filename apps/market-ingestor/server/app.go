@@ -50,6 +50,11 @@ const (
 	ProviderFinnhub    ProviderType = "finnhub"
 	ProviderDeriv      ProviderType = "deriv"
 	ProviderAuto       ProviderType = "auto"
+
+	// Crypto provider selection values (CRYPTO_PROVIDER / provider_config).
+	cryptoProviderNobitex = "nobitex"
+	cryptoProviderBinance = "binance"
+	cryptoProviderBoth    = "both"
 )
 
 // wsSentinelDropsTotal counts how many times a disconnect nil sentinel was
@@ -2014,8 +2019,8 @@ func loadConfig() *Config {
 		}
 	}
 
-	// Crypto provider selection: "nobitex" (default), "binance", "both"
-	cryptoProvider := config.GetEnvString("CRYPTO_PROVIDER", "nobitex")
+	// Crypto provider selection: nobitex (default), binance, both
+	cryptoProvider := config.GetEnvString("CRYPTO_PROVIDER", cryptoProviderNobitex)
 
 	return &Config{
 		Port:              port,
@@ -2352,7 +2357,8 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	cryptoProvider := cfg.CryptoProvider
 	if app.db != nil {
 		var dbProvider string
-		err := app.db.QueryRow("SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
+		err := app.db.QueryRowContext(context.Background(),
+			"SELECT active_provider FROM provider_config WHERE asset_class = 'crypto'").Scan(&dbProvider)
 		if err == nil && dbProvider != "" {
 			cryptoProvider = dbProvider
 			zapLog.Info("Loaded crypto provider from DB", zap.String("provider", cryptoProvider))
@@ -2360,8 +2366,8 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	}
 	// When primary market is Deriv, force crypto onto Nobitex (or explicit CRYPTO_PROVIDER),
 	// never onto Deriv — product rule: Forex=Deriv, Crypto=Nobitex.
-	if cfg.MarketProvider == ProviderDeriv && (cryptoProvider == "" || cryptoProvider == "deriv") {
-		cryptoProvider = "nobitex"
+	if cfg.MarketProvider == ProviderDeriv && (cryptoProvider == "" || cryptoProvider == string(ProviderDeriv)) {
+		cryptoProvider = cryptoProviderNobitex
 	}
 	app.activeCryptoProvider.Store(cryptoProvider)
 	zapLog.Info("Provider category split",
@@ -2385,18 +2391,18 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 			BaseURL:     cfg.BinanceBaseURL,
 			Symbols:     app.symbolRegistry.BinanceSubscriptions(),
 			USDTUSDRate: cfg.BinanceUSDTRate,
-			Enabled:     cfg.BinanceEnabled || cryptoProvider == "binance" || cryptoProvider == "both",
+			Enabled:     cfg.BinanceEnabled || cryptoProvider == cryptoProviderBinance || cryptoProvider == cryptoProviderBoth,
 		}
 		app.binanceFeed = NewBinanceCryptoFeed(binanceCfg, app.handleTick, app.symbolRegistry, zapLog)
 	}
 
 	switch cryptoProvider {
-	case "binance":
+	case cryptoProviderBinance:
 		if app.binanceFeed != nil {
 			app.binanceFeed.Start()
 		}
 		zapLog.Info("Crypto provider: binance (WebSocket)")
-	case "both":
+	case cryptoProviderBoth:
 		if app.nobitexFeed != nil {
 			app.nobitexFeed.Start()
 		}
@@ -2627,34 +2633,34 @@ func (a *App) handleTick(symbol string, price, bid, ask, volume float64, ts int6
 	if a.getSymbolCategory(symbol) == "crypto" {
 		activeCrypto, _ := a.activeCryptoProvider.Load().(string)
 		switch activeCrypto {
-		case "nobitex":
-			if source == "binance" {
+		case cryptoProviderNobitex:
+			if source == cryptoProviderBinance {
 				return // drop binance ticks when nobitex is active
 			}
 			// Also drop non-nobitex ticks when nobitex is connected (legacy behavior)
-			if source != "nobitex" && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
+			if source != cryptoProviderNobitex && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
 				return
 			}
-		case "binance":
-			if source == "nobitex" {
+		case cryptoProviderBinance:
+			if source == cryptoProviderNobitex {
 				return // drop nobitex ticks when binance is active
 			}
-			if source != "binance" && a.binanceFeed != nil && a.binanceFeed.IsConnected() {
+			if source != cryptoProviderBinance && a.binanceFeed != nil && a.binanceFeed.IsConnected() {
 				return
 			}
-		case "deriv":
+		case string(ProviderDeriv):
 			// Legacy: if somehow activeCrypto=deriv, accept deriv crypto ticks only.
-			if source != "deriv" {
+			if source != string(ProviderDeriv) {
 				return
 			}
-		case "both":
+		case cryptoProviderBoth:
 			// In "both" mode, nobitex takes priority when connected
-			if source == "binance" && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
+			if source == cryptoProviderBinance && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
 				return
 			}
 		default:
 			// Default to nobitex priority (legacy behavior)
-			if source != "nobitex" && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
+			if source != cryptoProviderNobitex && a.nobitexFeed != nil && a.nobitexFeed.IsConnected() {
 				return
 			}
 		}
@@ -3145,21 +3151,21 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 	}
 
 	switch provider {
-	case "nobitex":
+	case cryptoProviderNobitex:
 		if a.binanceFeed != nil {
 			a.binanceFeed.Stop()
 		}
 		if a.nobitexFeed != nil {
 			a.nobitexFeed.Start()
 		}
-	case "binance":
+	case cryptoProviderBinance:
 		if a.nobitexFeed != nil {
 			a.nobitexFeed.Stop()
 		}
 		if a.binanceFeed != nil {
 			a.binanceFeed.Start()
 		}
-	case "both":
+	case cryptoProviderBoth:
 		if a.nobitexFeed != nil {
 			a.nobitexFeed.Start()
 		}
@@ -3177,7 +3183,8 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 
 	// Persist to DB
 	if a.db != nil {
-		_, err := a.db.Exec("UPDATE provider_config SET active_provider=$1, updated_at=NOW() WHERE asset_class='crypto'", provider)
+		_, err := a.db.ExecContext(r.Context(),
+			"UPDATE provider_config SET active_provider=$1, updated_at=NOW() WHERE asset_class='crypto'", provider)
 		if err != nil {
 			a.log().Warn("Failed to persist crypto provider to DB", zap.Error(err))
 		}
@@ -3199,7 +3206,7 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 func (a *App) handleGetProviderConfig(w http.ResponseWriter, r *http.Request) {
 	activeCrypto, _ := a.activeCryptoProvider.Load().(string)
 	if activeCrypto == "" {
-		activeCrypto = "nobitex"
+		activeCrypto = cryptoProviderNobitex
 	}
 
 	nobitexStats := map[string]interface{}{"enabled": false}
@@ -3215,13 +3222,13 @@ func (a *App) handleGetProviderConfig(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"crypto": map[string]interface{}{
 			"active":    activeCrypto,
-			"available": []string{"nobitex", "binance", "both"},
+			"available": []string{cryptoProviderNobitex, cryptoProviderBinance, cryptoProviderBoth},
 			"nobitex":   nobitexStats,
 			"binance":   binanceStats,
 		},
 		"forex": map[string]interface{}{
 			"active":         string(a.providerManager.CurrentProvider()),
-			"available":      []string{"deriv", "massive", "twelvedata", "finnhub"},
+			"available":      []string{string(ProviderDeriv), string(ProviderMassive), string(ProviderTwelveData), string(ProviderFinnhub)},
 			"using_fallback": a.providerManager.UsingFallback(),
 		},
 	}
@@ -3326,7 +3333,7 @@ func (a *App) handleSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 
 	activeCrypto, _ := a.activeCryptoProvider.Load().(string)
 	if activeCrypto == "" {
-		activeCrypto = "nobitex"
+		activeCrypto = cryptoProviderNobitex
 	}
 
 	response := map[string]interface{}{
