@@ -35,6 +35,7 @@
     "test:data001": "node --test scripts/sec-data001-fixed-point.test.mjs",
     "test:md001": "node --test scripts/sec-md001-tick-v2.test.mjs",
     "test:arch007": "node --test scripts/sec-arch007-runtime-retirement.test.mjs",
+    "test:arch008": "node --test scripts/sec-arch008-standalone-fate.test.mjs",
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
