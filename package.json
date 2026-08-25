@@ -41,6 +41,7 @@
     "test:arch009": "node --test scripts/sec-arch009-docs-refresh.test.mjs",
     "test:ci002": "node --test scripts/sec-ci002-critical-coverage.test.mjs",
     "test:ci003": "node --test scripts/sec-ci003-branch-protection.test.mjs",
+    "test:ci004": "node --test scripts/sec-ci004-secret-scanning.test.mjs",
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

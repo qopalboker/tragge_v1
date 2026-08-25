@@ -370,6 +370,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
 
+  ci-004-secret-scanning:
+    name: CI-004 secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: CI-004 fixture catch verification
+        run: node --test scripts/sec-ci004-secret-scanning.test.mjs
+
 
 
 
@@ -675,14 +692,14 @@ jobs:
 
   ci-003-required-gate:
     name: CI required gate
-    needs: [go-ci-complete, frontend-ci-complete, ci-002-critical-go-coverage, sec-008-auth-regression, sec-009-admin-reauth-mfa]
+    needs: [go-ci-complete, frontend-ci-complete, ci-002-critical-go-coverage, sec-008-auth-regression, sec-009-admin-reauth-mfa, ci-004-secret-scanning]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require aggregate gates
         run: |
           set -e
-          for r in "${{ needs.go-ci-complete.result }}" "${{ needs.frontend-ci-complete.result }}" "${{ needs.ci-002-critical-go-coverage.result }}" "${{ needs.sec-008-auth-regression.result }}" "${{ needs.sec-009-admin-reauth-mfa.result }}"; do
+          for r in "${{ needs.go-ci-complete.result }}" "${{ needs.frontend-ci-complete.result }}" "${{ needs.ci-002-critical-go-coverage.result }}" "${{ needs.sec-008-auth-regression.result }}" "${{ needs.sec-009-admin-reauth-mfa.result }}" "${{ needs.ci-004-secret-scanning.result }}"; do
             echo "dep_result=$r"
             if [ "$r" != "success" ]; then
               echo "CI-003 required gate failed (dependency not success)"
