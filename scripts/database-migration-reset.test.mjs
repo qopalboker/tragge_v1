@@ -144,11 +144,12 @@ test("duplicate target migration identifiers are rejected", () => {
 
 test("target foundation is paired, ordered, owner-isolated, and domain-table free", () => {
   const plan = loadPlan();
-  assert.equal(plan.migrations.length, 4);
+  assert.equal(plan.migrations.length, 5);
   assert.equal(path.basename(plan.migrations[0]), "0001_schema_ownership.up.sql");
   assert.equal(path.basename(plan.migrations[1]), "0002_platform_outbox_inbox.up.sql");
   assert.equal(path.basename(plan.migrations[2]), "0003_engine_outbox_inbox.up.sql");
   assert.equal(path.basename(plan.migrations[3]), "0004_market_data_outbox_inbox.up.sql");
+  assert.equal(path.basename(plan.migrations[4]), "0005_shared_financial_type_policy.up.sql");
   assert.equal(plan.seeds.length, 1);
   const targetUp = read(targetUpPath);
   const targetDown = path.join(targetMigrationDirectory, "0001_schema_ownership.down.sql");

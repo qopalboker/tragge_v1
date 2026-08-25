@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** ARCH-001..006 on main. ENG-001 done on branch. Next: DATA-001. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** ENG-001 on main. DATA-001 done on branch. Next: MD-001. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 

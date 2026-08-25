@@ -318,3 +318,16 @@ Standalone Engine image/entrypoint exists. Default Compose still serves Engine v
 | **Status** | Open — **not runtime-verified** |
 
 `docker-compose.engine-standalone.yml` documents independent restart. Live Compose build/up/restart of `trading-engine` without Market Data provider credentials was not reproduced this session.
+
+---
+
+## DATA001-FLOAT-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | DATA001-FLOAT-CUTOVER |
+| **Severity** | P1 (verification gap) |
+| **Found during** | DATA-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+`packages/money` primitives exist and ban float64 internally. Legacy Engine/Market Data/contracts `float64` call sites remain until ENG-002/MD-001 cutover. Do not claim financial boundaries are float-free repo-wide.
