@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** FIN/LIFECYCLE on main. ARCH-001 done on branch (platform modular monolith skeleton). Next: ARCH-002. Gaps: FIN003-POSTGRES-DUAL-RACE, FIN005-*. Keep FIN-006/MD-005A separate. INFRA-002 on main.
+> **Status note (2026-08-25 continuity):** ARCH-001 on main. ARCH-002 done on branch (identity+admin). Next: ARCH-003. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -125,7 +125,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001 Done on branch `codex/arch-001-create-the-platform-modular-monolith-skele` (2026-08-25) — awaiting merge; ARCH-002..007 Not started |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Not started |
 | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
 | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
@@ -321,8 +321,9 @@ These were reported fixed internally but never personally verified — treat as 
 #### ARCH-001…007 — Execute the existing internal architecture roadmap
 **Subtasks**
 - [x] Pull exact scope from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` (authority).
-- [x] **ARCH-001** — Platform modular-monolith skeleton (`apps/platform`, modes api/realtime/worker, module stubs, boundary + smoke tests, one Dockerfile). See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
-- [ ] ARCH-002…007 — not started; each own branch/PR per source document.
+- [x] **ARCH-001** — Platform modular-monolith skeleton. See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
+- [x] **ARCH-002** — Identity/admin into Platform (services + API mount + BFF wrappers). See `docs/codex/reports/ARCH-002-identity-admin-migration.md`.
+- [ ] ARCH-003…007 — not started; each own branch/PR per source document.
 - [ ] Treat each as its own branch/PR, following §5 and §6.
 
 **Verify:** per-task, as specified in the source document.

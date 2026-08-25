@@ -35,6 +35,17 @@ type PasswordChangedAtFunc func(ctx context.Context, userID string) (*time.Time,
 // When the function is nil, middleware treats policy as OFF (MVP default).
 type SuperAdminMFAPolicyFunc func(ctx context.Context) (enabled bool, err error)
 
+// PermissionAuthorizer performs permission checks in an application service
+// (ARCH-002). When set on Middleware, RequirePermission delegates to it.
+type PermissionAuthorizer interface {
+	AuthorizePermission(claims *Claims, permissions ...string) error
+}
+
+// RoleAuthorizer performs role checks in an application service (ARCH-002).
+type RoleAuthorizer interface {
+	AuthorizeRole(claims *Claims, roles ...string) error
+}
+
 // Middleware provides HTTP middleware for authentication and authorization.
 type Middleware struct {
 	tokenService        *TokenService
@@ -43,6 +54,8 @@ type Middleware struct {
 	passwordChangedAtFn PasswordChangedAtFunc
 	logger              *log.Logger
 	superAdminMFAPolicy SuperAdminMFAPolicyFunc
+	permissionAuthz     PermissionAuthorizer
+	roleAuthz           RoleAuthorizer
 }
 
 // NewMiddleware creates a new authentication middleware.
@@ -76,6 +89,16 @@ func (m *Middleware) SetPasswordChangedAtFunc(fn PasswordChangedAtFunc) {
 // When set, errors from passwordChangedAtFn will be logged instead of silently ignored.
 func (m *Middleware) SetLogger(logger *log.Logger) {
 	m.logger = logger
+}
+
+// SetPermissionAuthorizer installs an application-layer permission authorizer (ARCH-002).
+func (m *Middleware) SetPermissionAuthorizer(a PermissionAuthorizer) {
+	m.permissionAuthz = a
+}
+
+// SetRoleAuthorizer installs an application-layer role authorizer (ARCH-002).
+func (m *Middleware) SetRoleAuthorizer(a RoleAuthorizer) {
+	m.roleAuthz = a
 }
 
 // SetSuperAdminMFAPolicy wires the Admin MFA policy lookup used by
@@ -236,7 +259,12 @@ func (m *Middleware) RequireRole(roles ...string) func(http.Handler) http.Handle
 				return
 			}
 
-			if !claims.HasAnyRole(roles...) {
+			if m.roleAuthz != nil {
+				if err := m.roleAuthz.AuthorizeRole(claims, roles...); err != nil {
+					writeForbidden(w, "insufficient permissions")
+					return
+				}
+			} else if !claims.HasAnyRole(roles...) {
 				writeForbidden(w, "insufficient permissions")
 				return
 			}
@@ -306,7 +334,12 @@ func (m *Middleware) RequirePermission(permissions ...string) func(http.Handler)
 				return
 			}
 
-			if !claims.IsSuperAdmin() && !claims.HasAnyPermission(permissions...) {
+			if m.permissionAuthz != nil {
+				if err := m.permissionAuthz.AuthorizePermission(claims, permissions...); err != nil {
+					writeForbidden(w, "insufficient permissions")
+					return
+				}
+			} else if !claims.IsSuperAdmin() && !claims.HasAnyPermission(permissions...) {
 				writeForbidden(w, "insufficient permissions")
 				return
 			}

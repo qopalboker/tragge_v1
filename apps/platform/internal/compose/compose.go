@@ -1,4 +1,4 @@
-// Package compose is the Platform composition root (ARCH-001).
+// Package compose is the Platform composition root.
 // It constructs modules and exposes only Service interfaces to adapters.
 package compose
 
@@ -18,6 +18,7 @@ import (
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/settlement"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/ticket"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/wallet"
+	"github.com/Parsaeffatravesh/tragge/packages/auth"
 )
 
 // Platform holds wired module Services for all runtime modes.
@@ -35,7 +36,8 @@ type Platform struct {
 	Scheduler    scheduler.Service
 }
 
-// New builds the skeleton Platform with stub module implementations.
+// New builds the Platform with memory stubs for non-migrated modules and
+// memory identity/admin services (no JWT secrets required for Ready/smoke).
 func New() *Platform {
 	return &Platform{
 		Identity:     identity.New(),
@@ -50,6 +52,31 @@ func New() *Platform {
 		Admin:        admin.New(),
 		Scheduler:    scheduler.New(),
 	}
+}
+
+// NewWithIsolatedAuth wires identity/admin to separate User/Admin Auth contexts (SEC-001/ARCH-002).
+func NewWithIsolatedAuth(userAuth, adminAuth *auth.Auth) (*Platform, error) {
+	if userAuth == nil || adminAuth == nil {
+		return nil, fmt.Errorf("compose: user and admin auth are required")
+	}
+	if userAuth.Context() != auth.ContextUser || adminAuth.Context() != auth.ContextAdmin {
+		return nil, fmt.Errorf("compose: auth contexts are not isolated")
+	}
+	if userAuth == adminAuth {
+		return nil, fmt.Errorf("compose: user and admin auth must be distinct instances")
+	}
+	idSvc, err := identity.NewWithAuth(userAuth, nil)
+	if err != nil {
+		return nil, err
+	}
+	admSvc, err := admin.NewWithAuth(adminAuth, nil)
+	if err != nil {
+		return nil, err
+	}
+	p := New()
+	p.Identity = idSvc
+	p.Admin = admSvc
+	return p, nil
 }
 
 // Modules returns all modules in stable order for readiness aggregation.

@@ -24,6 +24,7 @@ import (
 
 	"github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/service"
 	"github.com/Parsaeffatravesh/tragge/packages/audit"
+	platformidentity "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity"
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/config"
 	"github.com/Parsaeffatravesh/tragge/packages/db"
@@ -702,6 +703,11 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		if authErr != nil {
 			log.Fatal("Failed to construct User authentication context", zap.Error(authErr))
 		}
+	}
+
+	// ARCH-002: bind Platform identity module to the User trust domain (BFF wrapper).
+	if _, idErr := platformidentity.NewWithAuth(authService); idErr != nil {
+		log.Fatal("Failed to construct Platform identity service", zap.Error(idErr))
 	}
 
 	// Seed default admin and test users on startup
