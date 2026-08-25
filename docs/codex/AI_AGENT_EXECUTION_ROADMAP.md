@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** ARCH-007 on main. ARCH-008 done on branch. Next: ARCH-009. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** ARCH-008 on main. ARCH-009 done on branch. Stack land complete through ARCH-009. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -125,10 +125,10 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Done (merged to main) |
-| ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Done on branch - awaiting merge |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Done (merged) |
+| ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Done (merged) |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
-| ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
+| ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Done on branch - awaiting merge |
 | ENGINE-001 | `pricebook.go`: float64 → decimal | 4 | P1 | Not started |
 | ENGINE-002 | `position_management.go`: float64 → decimal | 4 | P1 | Not started |
 | ENGINE-003 | Regression-lock WAL fail-closed behavior | 4 | P1 | Not started |
@@ -359,12 +359,14 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### ARCH-009 — Refresh architecture docs/diagrams to final state
 **Subtasks**
-- [ ] Once ARCH-001…008 land, update `current-state-audit.md` and any architecture diagrams so documentation matches reality again.
+- [x] Once ARCH-001…008 land, update `current-state-audit.md` and topology/inventory diagrams for the **staged** architecture. See `docs/codex/reports/ARCH-009-docs-refresh.md`.
+- [x] Explicitly document local/no-user environment — **not** live-production topology.
+- [x] Point next infra work at **INFRA-002**.
 
 **Verify**
-- [ ] A new engineer reading only the architecture docs would correctly describe what's actually deployed.
+- [x] Docs describe target (`profile=target`) vs transitional wrappers; gaps remain listed.
 
-**Done when:** that's true.
+**Done when:** a new engineer reading architecture docs can describe staged vs transitional correctly without assuming live prod.
 
 ---
 

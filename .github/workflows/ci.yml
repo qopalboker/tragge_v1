@@ -518,6 +518,17 @@ jobs:
       - name: ARCH-008 fate inventory suite
         run: node --test scripts/sec-arch008-standalone-fate.test.mjs
 
+  arch-009-docs-refresh:
+    name: ARCH-009 architecture docs refresh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: ARCH-009 docs refresh suite
+        run: node --test scripts/sec-arch009-docs-refresh.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)

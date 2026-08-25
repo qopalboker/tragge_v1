@@ -1,33 +1,53 @@
 # Phase 3 — Production Runtime Architecture
 
 **Date:** 2026-08-16  
-**Status:** implementation (see Phase 3 report)
+**Status:** historical Phase 3 notes; **superseded for target topology by ARCH-007/009**
 
-## Launch runtime topology (minimal isolation)
+> **ARCH-009:** Prefer
+> [`staged-runtime-topology.md`](./staged-runtime-topology.md) and Compose
+> `profile=target` (Platform + standalone Engine + Market Data). Merged
+> wrappers remain **transitional rollback** only (`DEPRECATED`). This file’s
+> “keep merged for launch” tables are **not** the ADR-0001 end state.
+
+## Launch runtime topology (minimal isolation) — legacy transitional
 
 ```text
 Internet
   → gateway (nginx)
-      → api-server          [user-bff + admin-bff + payment]
-      → trading-core-lb     [StatefulSet trading-core]
+      → api-server          [user-bff + admin-bff + payment]   # DEPRECATED wrapper
+      → trading-core-lb     [StatefulSet trading-core]        # DEPRECATED wrapper
             ├ trade-bff :8082
             ├ market-ingestor :8084
             └ trading-engine :8085  + PVC wal-data
-      → worker              [leaderboard + settlement + scheduler + free-gen]
+      → worker              [leaderboard + settlement + scheduler + free-gen]  # DEPRECATED
   → PostgreSQL (+ PgBouncer)
   → Redis
   → Redpanda/Kafka
 ```
 
-### Why not full microservice split
+### Target path (ADR-0001 / ARCH-007)
 
-| Boundary | Decision | Reason |
+```text
+Internet
+  → gateway
+      → platform --mode=api
+      → platform --mode=realtime
+      → platform --mode=worker
+      → trading-engine (standalone)
+      → market-ingestor (standalone)
+  → PostgreSQL (platform / engine / market_data schemas)
+  → Redis / Redpanda
+```
+
+### Why wrappers still exist
+
+| Boundary | Decision (ARCH-007/008) | Reason |
 |---|---|---|
-| trading-core merged | **Keep** for launch | Shared pool/Redis; blast radius accepted if MD dies with engine |
-| WAL owner | **Isolate via StatefulSet PVC + replicas=1** | Prevents double-owner + ephemeral loss |
-| settlement in worker | **Keep merged** | Advisory lock + ledger idempotency; isolate from trading pod |
-| api-server | **Keep multi-replica** | Stateless request path |
-| scheduler | **Stay in worker, replicas=1** | Single calendar owner |
+| trading-core merged | DELETE_AFTER_CUTOVER | Still embeds Engine/MD/trade-bff; cutovers open |
+| WAL owner | Engine standalone + PVC strategy | Retain durability requirements from Phase 3 |
+| settlement in worker | REPLACE → Platform worker | Authority moved; HTTP/Kafka cutover open |
+| api-server | DELETE_AFTER_CUTOVER | Payment/identity HTTP cutover open |
+| scheduler / free-gen | DELETE_AFTER_CUTOVER | Still imported by worker |
 
 ## Durable WAL storage
 
