@@ -1,9 +1,11 @@
 # Tragge current-state production baseline
 
 **Original task:** `FND-001` (historical snapshot `2026-07-25`)  
-**Continuity refresh:** `ARCH-009` (`2026-08-25`)  
+**Continuity refresh:** `ARCH-009` (`2026-08-25`); post-land update `DOC-002` (`2026-08-25`)  
 **Policy version:** see `docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md`  
 **Paid-production decision:** **NO-GO**
+
+**Post-ARCH stack land (still NO-GO):** FIN-001…006, LIFECYCLE-001…003, ARCH-001…009, ENG-001, DATA-001, MD-001, MD-005A, CI-001…003 on `main` (CI-004 gitleaks pending/merged per roadmap). Open gaps remain in `docs/codex/reports/discovered-issues.md`. Do **not** treat this refresh as live runtime verification.
 
 This document describes a **local / no-user** repository archive. It is **not**
 evidence of live-production traffic, cluster health, or launch readiness.

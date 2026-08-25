@@ -23,6 +23,12 @@
 - Canonical glossary terms:
 - Documentation updated:
 
+### DOC-002 — Documentation sync (required when behavior/docs change)
+
+- [ ] If this PR changes documented behavior, APIs, topology, financial rules, or operator workflows, the matching docs were updated in the same PR (`CLAUDE.md`, `docs/architecture/current-state-audit.md`, and/or `docs/codex/AI_AGENT_EXECUTION_ROADMAP.md` as applicable).
+- [ ] If no docs update is needed, state why in the Implementation summary (doc-noop rationale).
+- [ ] Open verification gaps were recorded or left open in `docs/codex/reports/discovered-issues.md` (do not claim runtime/staging verification without evidence).
+
 ## Acceptance criteria
 
 - [ ] Every task acceptance criterion passes; evidence is listed below
