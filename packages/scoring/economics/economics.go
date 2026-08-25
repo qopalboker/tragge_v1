@@ -74,6 +74,17 @@ func ResolvePlatformFeeBps(platformFeeBps int, _ float64) int {
 	return DefaultPlatformFeeBps
 }
 
+// PlatformFeeBpsForPaidWrite returns the platform_fee_bps value that writers
+// must persist for a contest. Free / zero-entry contests store 0. Paid contests
+// use platformFeeBps when valid, otherwise DefaultPlatformFeeBps. Never derive
+// from commission_rate.
+func PlatformFeeBpsForPaidWrite(isFree bool, entryFeeCents int64, platformFeeBps int) int {
+	if isFree || entryFeeCents <= 0 {
+		return 0
+	}
+	return ResolvePlatformFeeBps(platformFeeBps, 0)
+}
+
 // CalculatePool computes gross, platform fee, and net distributable prize pool.
 // All amounts are integer cents. Net uses floor division so fee never underflows.
 func CalculatePool(participants int, entryFeeCents int64, platformFeeBps int) PoolResult {

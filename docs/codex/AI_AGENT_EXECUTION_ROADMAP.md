@@ -117,7 +117,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done on branch `codex/CI-001-frontend-tests-ci` (2026-08-25) — Vitest in CI; Playwright quarantined |
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch (merged to main with stack land) |
 | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch (stack land) |
-| FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch (stack land in progress) |
+| FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch (stack land) |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Not started |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Not started |
@@ -214,14 +214,14 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### FIN-001 — Single source of truth for platform fee
 **Subtasks**
-- [ ] Inventory every call site reading `platform_fee_bps` or `commission_rate` — e.g. the `COALESCE(platform_fee_bps,0), COALESCE(commission_rate,0)` pattern in `apps/user-bff/server/contest_handlers.go` is one instance, not the only one.
-- [ ] If the policy doc doesn't name the canonical field, ask which one is canonical (§4) before migrating anything.
-- [ ] Migrate every call site to the single canonical field.
-- [ ] Add a DB- or application-level guard (generated column, trigger, or field removal) so the deprecated field can't silently diverge again.
-- [ ] Write a migration/backfill plan for existing contests where the two fields currently disagree.
+- [x] Inventory every call site reading `platform_fee_bps` or `commission_rate` (see `docs/codex/reports/FIN-001-platform-fee-source.md`).
+- [x] Canonical field: `platform_fee_bps` (policy §4.2); human sign-off 2026-08-25.
+- [x] Migrate fee resolution + critical writers (economics resolver; scheduler/admin no longer derive bps from `commission_rate`).
+- [x] DB backfill + BEFORE INSERT/UPDATE trigger guard (`0109_fin001_platform_fee_bps_canonical`).
+- [x] Backfill plan: paid rows with unset/0 bps → 2000 (not commission→bps conversion).
 
 **Verify**
-- [ ] Automated test: seed a contest with intentionally conflicting legacy field values → system derives one deterministic fee regardless of history.
+- [x] Automated test `TestFIN001ConflictingLegacyFieldsDeterministic` + CI job `fin-001-platform-fee`.
 
 **Done when:** that test passes in CI.
 

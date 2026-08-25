@@ -27,6 +27,18 @@ func TestResolvePlatformFeeBps(t *testing.T) {
 	}
 }
 
+func TestPlatformFeeBpsForPaidWrite(t *testing.T) {
+	if got := PlatformFeeBpsForPaidWrite(true, 0, 5000); got != 0 {
+		t.Fatalf("free contest got %d want 0", got)
+	}
+	if got := PlatformFeeBpsForPaidWrite(false, 10000, 0); got != DefaultPlatformFeeBps {
+		t.Fatalf("paid unset bps got %d want %d", got, DefaultPlatformFeeBps)
+	}
+	if got := PlatformFeeBpsForPaidWrite(false, 10000, 2500); got != 2500 {
+		t.Fatalf("paid explicit bps got %d want 2500", got)
+	}
+}
+
 // FIN-001: conflicting legacy fields must resolve deterministically from
 // platform_fee_bps alone (numeric example: entry 100 USDT = 10000 cents).
 func TestFIN001ConflictingLegacyFieldsDeterministic(t *testing.T) {

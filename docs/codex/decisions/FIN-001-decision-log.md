@@ -21,3 +21,15 @@
 | `platform_fee_bps=0`, `commission_rate=17` | 1700 bps → 17/83 | **2000** default → 20/80 |
 
 **Financial sign-off required before merge** (roadmap §3 / §5).
+
+## 2026-08-25 — Human financial sign-off
+
+**Decision:** Numeric before/after table **approved** as intended production behavior.
+
+## 2026-08-25 — Backfill policy
+
+**Question:** For paid contests with `platform_fee_bps=0` that only had `commission_rate`, backfill to 2000 or convert commission→bps?
+
+**Answer (human):** **Backfill `platform_fee_bps=2000`** for paid rows with unset/0 bps. Do not convert `commission_rate` into bps.
+
+**Implemented:** migration `0109_fin001_platform_fee_bps_canonical.up.sql` + BEFORE INSERT/UPDATE trigger guard; scheduler/admin writers no longer derive bps from `commission_rate`.
