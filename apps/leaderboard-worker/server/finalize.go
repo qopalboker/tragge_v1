@@ -835,7 +835,7 @@ func (a *App) getContestInfo(ctx context.Context, contestID string) (*ContestInf
 		info.Type = "standard"
 	}
 
-	// Resolve effective fee using unified priority logic (platform_fee_bps > commission_rate > default)
+	// Resolve effective fee from platform_fee_bps only (FIN-001; commission_rate ignored).
 	var feeBps int
 	if platformFeeBps.Valid {
 		feeBps = int(platformFeeBps.Int32)

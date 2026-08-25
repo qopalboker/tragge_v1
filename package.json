@@ -31,7 +31,8 @@
     "e2e:install": "playwright install --with-deps",
     "test:sec008": "node --test scripts/sec-008-auth-regression-lock.test.mjs",
     "test:sec009": "node --test scripts/sec-009-admin-reauth-mfa.test.mjs",
-    "test:infra002": "node --test scripts/k8s-overlay-parity.test.mjs"
+    "test:infra002": "node --test scripts/k8s-overlay-parity.test.mjs",
+    "test:fin001": "node --test scripts/sec-fin001-platform-fee-check.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

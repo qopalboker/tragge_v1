@@ -677,13 +677,10 @@ func (cp *CalendarProcessor) createContestFromTier(
 
 	// Deterministic schedule identity: template/tier + start bucket.
 	schedKey := fmt.Sprintf("cal:%s:%s:%s", entry.ID, tier.ID, startsAt.UTC().Format("2006-01-02T15:04"))
+	// FIN-001: platform_fee_bps only (default 2000). Never derive from commission_rate.
 	feeBps := 0
 	if !isFree && entryFeeCents > 0 {
-		if commissionRate > 0 {
-			feeBps = int(commissionRate * 100)
-		} else {
-			feeBps = 2000
-		}
+		feeBps = 2000
 	}
 	// Skip if this logical schedule already materialised.
 	var already bool
@@ -885,14 +882,10 @@ func (cp *CalendarProcessor) createContestFromTemplate(
 	if contracts.IsAllowedTradingQty(entry.QtyTotal) {
 		qtyTotalLegacy = entry.QtyTotal
 	}
-	// Paid contests: ensure platform fee defaults to 20% when commission_rate is the source of truth.
+	// FIN-001: platform_fee_bps only (default 2000). Never derive from commission_rate.
 	platformFeeBpsLegacy := 0
 	if !entry.IsFree && entry.EntryFeeCents > 0 {
-		if entry.CommissionRate > 0 {
-			platformFeeBpsLegacy = int(entry.CommissionRate * 100)
-		} else {
-			platformFeeBpsLegacy = 2000
-		}
+		platformFeeBpsLegacy = 2000
 	}
 
 	// Insert the contest

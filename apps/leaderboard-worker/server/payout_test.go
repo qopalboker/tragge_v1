@@ -350,14 +350,15 @@ func TestResolveEffectiveFeeBps(t *testing.T) {
 		want           int
 	}{
 		{"platform_fee_bps takes priority when set", 2500, 20.0, 2500},
-		{"falls back to commission_rate when bps is 0", 0, 20.0, 2000},
-		{"commission_rate 17.0 converts to 1700 bps", 0, 17.0, 1700},
+		// FIN-001: commission_rate is ignored; unset/invalid bps → default 2000.
+		{"commission_rate ignored when bps is 0", 0, 20.0, DefaultPlatformFeeBps},
+		{"commission_rate 17.0 ignored", 0, 17.0, DefaultPlatformFeeBps},
 		{"both zero returns default 2000", 0, 0.0, DefaultPlatformFeeBps},
-		{"commission_rate with floating-point rounding", 0, 19.995, 2000},
-		{"negative platform_fee_bps ignored", -1, 20.0, 2000},
+		{"commission_rate float ignored", 0, 19.995, DefaultPlatformFeeBps},
+		{"negative platform_fee_bps ignored", -1, 20.0, DefaultPlatformFeeBps},
 		{"negative commission_rate ignored", 0, -5.0, DefaultPlatformFeeBps},
 		{"commission_rate over 100 ignored", 0, 150.0, DefaultPlatformFeeBps},
-		{"small commission_rate 0.5 converts to 50 bps", 0, 0.5, 50},
+		{"small commission_rate ignored", 0, 0.5, DefaultPlatformFeeBps},
 	}
 
 	for _, tt := range tests {

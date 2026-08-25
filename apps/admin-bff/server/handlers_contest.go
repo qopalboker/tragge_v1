@@ -107,9 +107,7 @@ func (a *App) handleCreateContest(w http.ResponseWriter, r *http.Request) {
 	if req.PlatformFeeBps < 0 || req.PlatformFeeBps > 10000 {
 		v.AddError("platform_fee_bps", "invalid_range", "platform_fee_bps must be 0-10000")
 	}
-	if req.CommissionRate < 0 || req.CommissionRate > 50 {
-		v.AddError("commission_rate", "invalid_range", "commission_rate must be 0-50%")
-	}
+	// FIN-001: commission_rate is not a fee authority; ignore client values.
 	if req.MinParticipants < 0 {
 		v.AddError("min_participants", "invalid_value", "min_participants must be >= 0")
 	}
@@ -158,9 +156,8 @@ func (a *App) handleCreateContest(w http.ResponseWriter, r *http.Request) {
 	if !req.IsFree {
 		req.AutoStart = true
 	}
-	if req.CommissionRate == 0 && !req.IsFree {
-		req.CommissionRate = 20.00
-	}
+	// FIN-001: do not treat commission_rate as fee authority; persist 0.
+	req.CommissionRate = 0
 	// Server-derived maximum trading QTY from duration type (product §5.5).
 	// Client qty is ignored so quantity cannot be inflated by the frontend.
 	req.QtyTotal = contracts.ContestDurationType(req.DurationType).DefaultQtyAllocation()
@@ -452,6 +449,12 @@ func (a *App) handleCreateContestFromTemplate(w http.ResponseWriter, r *http.Req
 		maxParticipantsPtr = &maxParticipants
 	}
 
+	// FIN-001: platform_fee_bps only (default 2000 for paid). Never derive from commission_rate.
+	platformFeeBps := 0
+	if !template.IsFree && entryFeeCents > 0 {
+		platformFeeBps = 2000
+	}
+
 	err = tx.QueryRowContext(ctx,
 		`INSERT INTO contests (
 			name, description, starts_at, ends_at, status, entry_fee_cents, platform_fee_bps, qty_total,
@@ -463,11 +466,12 @@ func (a *App) handleCreateContestFromTemplate(w http.ResponseWriter, r *http.Req
 		           registration_deadline, auto_start, commission_rate, is_free, auto_generated,
 		           template_id, created_at`,
 		req.Name, req.Description, req.StartsAt, endsAt, "draft", entryFeeCents,
-		int(template.CommissionRate*100), // Convert to basis points
+		platformFeeBps,
 		template.QtyAllocation,
 		string(template.DurationType), string(template.AssetClass), template.DurationMinutes,
 		template.MinParticipants, maxParticipantsPtr, regDeadline, template.AutoStart,
-		template.CommissionRate, template.IsFree, templateID,
+		0.0, // deprecated commission_rate column — not fee authority
+		template.IsFree, templateID,
 	).Scan(&contest.ID, &contest.Name, &contest.Description, &contest.StartsAt, &contest.EndsAt,
 		&contest.Status, &contest.EntryFeeCents, &contest.PlatformFeeBps, &contest.QtyTotal,
 		&contest.DurationType, &contest.AssetClass, &contest.DurationMinutes, &contest.MinParticipants,

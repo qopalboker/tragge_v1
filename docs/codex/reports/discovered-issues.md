@@ -43,3 +43,16 @@ postgres/pgbouncer objects without ConfigMap ID conflicts (`pgbouncer-config`).
 Production overlay remains on single-instance postgres from base until a
 conflict-free HA composition is designed. This is **desired-state** tracking
 only — not live-cluster evidence.
+
+---
+
+## FIN001-TEMPLATE-COMMISSION-UI
+
+| Field | Value |
+|---|---|
+| **ID** | FIN001-TEMPLATE-COMMISSION-UI |
+| **Severity** | P2 (non-authoritative leftover) |
+| **Found during** | FIN-001 (2026-08-25) |
+| **Status** | Open |
+
+Admin template handlers still accept/store `commission_rate` on `tournament_templates`. Contest materialization no longer derives `platform_fee_bps` from that field (always 2000 for paid). Remove template UI/API field in a follow-up cleanup PR.

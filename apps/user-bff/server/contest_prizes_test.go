@@ -16,16 +16,16 @@ func TestResolveEffectiveFeeBps(t *testing.T) {
 			want:           2500,
 		},
 		{
-			name:           "falls back to commission_rate when bps is 0",
+			name:           "commission_rate ignored when bps is 0",
 			platformFeeBps: 0,
 			commissionRate: 20.0,
-			want:           2000,
+			want:           DefaultPlatformFeeBps,
 		},
 		{
-			name:           "commission_rate 17.0 converts to 1700 bps",
+			name:           "commission_rate 17.0 ignored",
 			platformFeeBps: 0,
 			commissionRate: 17.0,
-			want:           1700,
+			want:           DefaultPlatformFeeBps,
 		},
 		{
 			name:           "both zero returns default 2000",
@@ -34,16 +34,16 @@ func TestResolveEffectiveFeeBps(t *testing.T) {
 			want:           DefaultPlatformFeeBps,
 		},
 		{
-			name:           "commission_rate with floating-point rounding",
+			name:           "commission_rate float ignored",
 			platformFeeBps: 0,
 			commissionRate: 19.995,
-			want:           2000, // math.Round(19.995 * 100) = 2000
+			want:           DefaultPlatformFeeBps,
 		},
 		{
 			name:           "negative platform_fee_bps ignored",
 			platformFeeBps: -1,
 			commissionRate: 20.0,
-			want:           2000,
+			want:           DefaultPlatformFeeBps,
 		},
 		{
 			name:           "negative commission_rate ignored",
@@ -58,10 +58,10 @@ func TestResolveEffectiveFeeBps(t *testing.T) {
 			want:           DefaultPlatformFeeBps,
 		},
 		{
-			name:           "small commission_rate 0.5 converts to 50 bps",
+			name:           "small commission_rate ignored",
 			platformFeeBps: 0,
 			commissionRate: 0.5,
-			want:           50,
+			want:           DefaultPlatformFeeBps,
 		},
 		{
 			name:           "platform_fee_bps at boundary 10000",

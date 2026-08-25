@@ -4,13 +4,12 @@
 //
 // Product policy (FIXED_PRODUCT_AND_TECHNICAL_POLICIES §4.2):
 //   - Canonical fee field: platform_fee_bps (default 2000 = 20%).
-//   - commission_rate is deprecated and is only used as a read-time fallback
-//     when platform_fee_bps is unset (0). New writes must set platform_fee_bps.
+//   - commission_rate is NOT a source of truth (FIN-001). It is ignored at
+//     resolution time so conflicting legacy rows cannot diverge fees.
 package economics
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
@@ -62,23 +61,28 @@ type RankedUser struct {
 
 // ResolvePlatformFeeBps returns the sole effective platform fee in basis points.
 //
-// Authority order (migration compatibility only):
-//  1. platform_fee_bps when > 0
-//  2. commission_rate percent (e.g. 20.0 → 2000 bps) when platform_fee_bps is 0
-//  3. DefaultPlatformFeeBps
+// FIN-001: platform_fee_bps is the only authority. commissionRatePercent is
+// accepted for call-site compatibility but intentionally ignored so legacy
+// rows with conflicting commission_rate cannot change economics.
 //
-// New contests must persist platform_fee_bps and leave commission_rate unused.
-func ResolvePlatformFeeBps(platformFeeBps int, commissionRatePercent float64) int {
+//  1. platform_fee_bps when in (0, 10000]
+//  2. otherwise DefaultPlatformFeeBps (2000)
+func ResolvePlatformFeeBps(platformFeeBps int, _ float64) int {
 	if platformFeeBps > 0 && platformFeeBps <= 10000 {
 		return platformFeeBps
 	}
-	if commissionRatePercent > 0 {
-		bps := int(math.Round(commissionRatePercent * 100))
-		if bps > 0 && bps <= 10000 {
-			return bps
-		}
-	}
 	return DefaultPlatformFeeBps
+}
+
+// PlatformFeeBpsForPaidWrite returns the platform_fee_bps value that writers
+// must persist for a contest. Free / zero-entry contests store 0. Paid contests
+// use platformFeeBps when valid, otherwise DefaultPlatformFeeBps. Never derive
+// from commission_rate.
+func PlatformFeeBpsForPaidWrite(isFree bool, entryFeeCents int64, platformFeeBps int) int {
+	if isFree || entryFeeCents <= 0 {
+		return 0
+	}
+	return ResolvePlatformFeeBps(platformFeeBps, 0)
 }
 
 // CalculatePool computes gross, platform fee, and net distributable prize pool.
