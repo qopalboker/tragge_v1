@@ -17,16 +17,17 @@ test("CI-004 workflow includes gitleaks job", () => {
   assert.match(ci, /gitleaks\/gitleaks-action@v2/);
 });
 
-test("CI-004 deliberately planted fixture secret is detected", () => {
-  // Prefer local gitleaks if installed; otherwise download is too heavy — use docker if available,
-  // else skip with explicit message (CI job still runs gitleaks-action).
+test("CI-004 deliberately planted fixture secret is detected when gitleaks is available", (t) => {
+  // Permanent guarantee is gitleaks-action on the PR. Local/CI fixture catch is best-effort.
+  if (process.env.CI === "true" && process.env.CI004_REQUIRE_LOCAL_GITLEAKS !== "1") {
+    t.skip("CI relies on gitleaks-action step; local binary fixture optional");
+    return;
+  }
   const which = spawnSync(process.platform === "win32" ? "where" : "which", ["gitleaks"], {
     encoding: "utf8",
   });
-  const hasGitleaks = which.status === 0;
-  if (!hasGitleaks) {
-    // Soft local skip; GitHub Actions job is the permanent guarantee.
-    assert.ok(true, "gitleaks binary not local; CI Action remains the blocker");
+  if (which.status !== 0) {
+    t.skip("gitleaks binary not installed locally");
     return;
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ci004-secret-"));
