@@ -333,6 +333,31 @@ jobs:
         run: node --test scripts/sec-md005a-provider-selection.test.mjs
 
 
+  ci-002-critical-go-coverage:
+    name: CI-002 critical Go coverage floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: CI-002 coverage floor
+        run: node --test scripts/sec-ci002-critical-coverage.test.mjs
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci002-coverage-summary
+          path: docs/codex/reports/CI-002-coverage-summary.json
+          if-no-files-found: warn
+
+
+
 
   lifecycle-001-late-entry:
     name: LIFECYCLE-001 late entry policy

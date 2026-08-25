@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -27,21 +26,11 @@ import (
 func main() {
 	observability.InstallStandardLoggerRedaction()
 	// ARCH-007: merged wrapper is transitional. Prefer platform --mode=worker.
-	log.Println("worker: DEPRECATED wrapper starting (leaderboard :8086, settlement :8087, scheduler :8088, generator :8089); prefer platform --mode=worker")
+	log.Println(workerDeprecationNotice())
 
 	// Create shared database pool (1 pool instead of 4, saving ~20 connections)
-	dbMaxOpen := 10
-	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			dbMaxOpen = n
-		}
-	}
-	dbMaxIdle := 4
-	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			dbMaxIdle = n
-		}
-	}
+	dbMaxOpen := positiveIntFromEnv(os.Getenv, "DB_MAX_OPEN_CONNS", 10)
+	dbMaxIdle := positiveIntFromEnv(os.Getenv, "DB_MAX_IDLE_CONNS", 4)
 
 	postgresDSN := secrets.BuildPostgresDSN()
 	var postgresReplicaDSNs []string
