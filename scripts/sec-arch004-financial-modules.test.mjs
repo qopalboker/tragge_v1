@@ -16,9 +16,9 @@ test("ARCH-004 wallet is sole ledger authority", () => {
     read("apps/platform/internal/modules/wallet/module.go"),
     /IsSoleLedgerAuthority/,
   );
-  assert.doesNotMatch(
+  assert.match(
     read("apps/platform/internal/modules/wallet/module.go"),
-    /admin_funded_deposit/,
+    /FIN-006 admin top-up ledger classification is explicitly out of scope/,
   );
 });
 

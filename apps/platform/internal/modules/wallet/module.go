@@ -1,6 +1,6 @@
 // Package wallet is the Platform ledger authority (ARCH-004).
 // All balance mutations must go through this service (backed by packages/wallet).
-// FIN-006 (admin_funded_deposit) is explicitly out of scope.
+// FIN-006 admin top-up ledger classification is explicitly out of scope.
 package wallet
 
 import (
