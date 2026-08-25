@@ -29,3 +29,17 @@ Issues found while executing the AI agent roadmap that are out of the current ta
 | **Status** | Open — intentionally not fixed in SEC-009 |
 
 `scripts/sec-004-sensitive-action-check.mjs` requires the exact comment fragment `Super Admin password verification establishes only the first factor` in `handlers_helpers.go`. Current helpers document policy-gated MFA instead. Behavioral reauth/MFA locks are covered by SEC-009; update the SEC-004 script separately.
+# Discovered issues / verification gaps
+This ledger tracks open verification gaps. Entries from the stacked architecture
+branches (ARCH-001…009, ENG/DATA/MD) remain open until those PRs merge and
+runtime evidence exists. **Do not treat documentation as gap closure.**
+## INFRA002-POSTGRES-HA-OVERLAY
+| **ID** | INFRA002-POSTGRES-HA-OVERLAY |
+| **Severity** | P2 (desired-state gap) |
+| **Found during** | INFRA-002 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+`base/postgres-ha` cannot be merged into the production overlay alongside base
+postgres/pgbouncer objects without ConfigMap ID conflicts (`pgbouncer-config`).
+Production overlay remains on single-instance postgres from base until a
+conflict-free HA composition is designed. This is **desired-state** tracking
+only — not live-cluster evidence.

@@ -14,47 +14,29 @@ namespace: tragge-staging
 # BASE RESOURCES
 # =============================================================================
 # Import all base manifests from the base directory
+# INFRA-002: do not also include namespace.yaml — `namespace:` below already
+# transforms base Namespace and would ID-conflict with a second Namespace object.
 resources:
   - ../../base
-  - namespace.yaml
 
 # =============================================================================
 # STAGING COMPONENTS
 # =============================================================================
 # Kustomize Components for staging-specific configurations
+# INFRA-002: components are directories (kustomize load-restrictor).
 components:
-  # Replica reduction - save resources in staging
-  - patches/replicas-patch.yaml
-  # Resource limits - 50% of production
-  - patches/resources-patch.yaml
-  # Ingress - staging domains and rate limits
-  - patches/ingress-patch.yaml
-  # TLS certificate issuer - Let's Encrypt staging
-  - patches/tls-patch.yaml
-  # Phase 5: WAL PVC storage class for trading-core StatefulSet
-  - patches/wal-storage-patch.yaml
+  - patches/replicas-patch
+  - patches/resources-patch
+  - patches/ingress-patch
+  - patches/tls-patch
+  - patches/wal-storage-patch
 
 # =============================================================================
 # STAGING PATCHES
 # =============================================================================
 # Apply staging-specific inline patches
 patches:
-  # ---------------------------------------------------------------------------
-  # DATABASE CONNECTION - Staging Database
-  # ---------------------------------------------------------------------------
-  # Override PostgreSQL DSN to use staging database
-  - patch: |-
-      - op: replace
-        path: /data/POSTGRES_DSN
-        value: cG9zdGdyZXM6Ly9hcHA6YXBwQHBvc3RncmVzLXN0YWdpbmc6NTQzMi9hcHBfc3RhZ2luZz9zc2xtb2RlPWRpc2FibGU=
-    target:
-      kind: Secret
-      name: tragge-secrets
-
-  # ---------------------------------------------------------------------------
-  # REDIS CONNECTION - Staging Redis
-  # ---------------------------------------------------------------------------
-  # Override Redis address to use staging Redis instance
+  # INFRA-002: only patch keys that exist on base ConfigMap tragge-config.
   - patch: |-
       - op: replace
         path: /data/REDIS_ADDR
@@ -63,10 +45,6 @@ patches:
       kind: ConfigMap
       name: tragge-config
 
-  # ---------------------------------------------------------------------------
-  # KAFKA BROKERS - Staging Redpanda
-  # ---------------------------------------------------------------------------
-  # Override Kafka brokers to use staging Redpanda instance
   - patch: |-
       - op: replace
         path: /data/KAFKA_BROKERS
@@ -80,31 +58,22 @@ patches:
 # =============================================================================
 # Use staging image tags (e.g., sha-abc123 or staging-latest)
 # IMPORTANT: Update these tags in your CI/CD pipeline
+# INFRA-002: image names must match base container images.
 images:
-  - name: tragge/user-bff
+  - name: tragge/api-server
     newTag: staging
-  - name: tragge/trade-bff
+  - name: tragge/trading-core
     newTag: staging
-  - name: tragge/admin-bff
-    newTag: staging
-  - name: tragge/market-ingestor
-    newTag: staging
-  - name: tragge/trading-engine
-    newTag: staging
-  - name: tragge/leaderboard-worker
+  - name: tragge/worker
     newTag: staging
   - name: tragge/frontend
     newTag: staging
-  - name: tragge/gateway
-    newTag: staging
 
-# =============================================================================
-# COMMON LABELS
-# =============================================================================
-# Add staging-specific labels to all resources
-commonLabels:
-  environment: staging
-  managed-by: kustomize
+labels:
+  - pairs:
+      environment: staging
+      managed-by: kustomize
+    includeSelectors: false
 
 # =============================================================================
 # COMMON ANNOTATIONS

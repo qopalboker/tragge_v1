@@ -4,71 +4,33 @@ kind: Kustomization
 metadata:
   name: tragge-production
 
-# =============================================================================
-# PRODUCTION NAMESPACE
-# =============================================================================
+# INFRA-002: desired-state production overlay.
+# Patches ONLY resources that exist in infra/k8s/base.
+# Not live-cluster parity proof — no production cluster assumed.
+#
+# NOTE: base/postgres-ha cannot be merged alongside base postgres/pgbouncer
+# without ID conflicts (shared ConfigMap names). Tracked as
+# INFRA002-POSTGRES-HA-OVERLAY.
+
 namespace: tragge
 
-# =============================================================================
-# BASE RESOURCES
-# =============================================================================
-# Import all base manifests from the base directory
-# postgres-ha.yaml provides Patroni HA cluster (replaces single-instance postgres)
 resources:
   - ../../base
-  - ../../base/postgres-ha.yaml
 
-# =============================================================================
-# COMPONENT PATCHES
-# =============================================================================
-# Modular production-specific configurations
 components:
-  # Anti-affinity rules for high availability
-  - patches/anti-affinity.yaml
-  # Enhanced resource allocations for production workloads
-  - patches/resources.yaml
-  # Container-level security contexts (least privilege)
-  - patches/security-contexts.yaml
-  # Production storage allocations (larger PVCs)
-  - patches/storage.yaml
+  - patches/anti-affinity
+  - patches/resources
+  - patches/security-contexts
+  - patches/storage
 
-# =============================================================================
-# REPLICA CONFIGURATION
-# =============================================================================
-# Production replica counts and resource overrides
 patches:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL - Remove single-instance, replaced by postgres-ha.yaml
-  # ---------------------------------------------------------------------------
-  - patch: |-
-      apiVersion: apps/v1
-      kind: StatefulSet
-      metadata:
-        name: postgres
-      $patch: delete
-    target:
-      kind: StatefulSet
-      name: postgres
-  - patch: |-
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: postgres
-      $patch: delete
-    target:
-      kind: Service
-      name: postgres
-
-  # ---------------------------------------------------------------------------
-  # Critical Services - 3 replicas minimum
-  # ---------------------------------------------------------------------------
   - patch: |-
       - op: replace
         path: /spec/replicas
         value: 3
     target:
       kind: Deployment
-      name: trade-bff
+      name: api-server
 
   - patch: |-
       - op: replace
@@ -78,55 +40,14 @@ patches:
       kind: Deployment
       name: gateway
 
-  # ---------------------------------------------------------------------------
-  # Important Services - 3 replicas
-  # ---------------------------------------------------------------------------
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 3
-    target:
-      kind: Deployment
-      name: user-bff
-
   - patch: |-
       - op: replace
         path: /spec/replicas
         value: 2
     target:
       kind: Deployment
-      name: admin-bff
+      name: worker
 
-  # ---------------------------------------------------------------------------
-  # Worker Services
-  # ---------------------------------------------------------------------------
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: market-ingestor
-
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: leaderboard-worker
-
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: payment-service
-
-  # ---------------------------------------------------------------------------
-  # Frontend Service - 2 replicas (CDN handles most traffic)
-  # ---------------------------------------------------------------------------
   - patch: |-
       - op: replace
         path: /spec/replicas
@@ -135,16 +56,14 @@ patches:
       kind: Deployment
       name: frontend
 
-  # ---------------------------------------------------------------------------
-  # Update HPA minimums to match replica counts
-  # ---------------------------------------------------------------------------
+  # trading-core remains single-active WAL owner
   - patch: |-
       - op: replace
-        path: /spec/minReplicas
-        value: 3
+        path: /spec/replicas
+        value: 1
     target:
-      kind: HorizontalPodAutoscaler
-      name: trade-bff-hpa
+      kind: StatefulSet
+      name: trading-core
 
   - patch: |-
       - op: replace
@@ -152,7 +71,7 @@ patches:
         value: 3
     target:
       kind: HorizontalPodAutoscaler
-      name: user-bff-hpa
+      name: api-server-hpa
 
   - patch: |-
       - op: replace
@@ -162,10 +81,22 @@ patches:
       kind: HorizontalPodAutoscaler
       name: gateway-hpa
 
-  # ---------------------------------------------------------------------------
-  # Production Domain Configuration
-  # ---------------------------------------------------------------------------
-  # Update Ingress hosts to use production domain
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+    target:
+      kind: HorizontalPodAutoscaler
+      name: worker-hpa
+
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+    target:
+      kind: HorizontalPodAutoscaler
+      name: frontend-hpa
+
   - patch: |-
       - op: replace
         path: /spec/rules/0/host
@@ -198,67 +129,38 @@ patches:
       kind: Ingress
       name: tragge-websocket-ingress
 
-# =============================================================================
-# IMAGE CONFIGURATION
-# =============================================================================
-# Use specific versioned tags in production - NEVER use :latest
-# Update these during deployments via CI/CD
 images:
-  - name: tragge/user-bff
+  - name: tragge/api-server
     newTag: v1.0.0
-  - name: tragge/trade-bff
+  - name: tragge/trading-core
     newTag: v1.0.0
-  - name: tragge/admin-bff
-    newTag: v1.0.0
-  - name: tragge/market-ingestor
-    newTag: v1.0.0
-  - name: tragge/trading-engine
-    newTag: v1.0.0
-  - name: tragge/leaderboard-worker
-    newTag: v1.0.0
-  - name: tragge/payment-service
-    newTag: v1.0.0
-  - name: tragge/settlement-service
-    newTag: v1.0.0
-  - name: tragge/free-contest-generator
+  - name: tragge/worker
     newTag: v1.0.0
   - name: tragge/frontend
     newTag: v1.0.0
 
-# =============================================================================
-# COMMON LABELS
-# =============================================================================
-commonLabels:
-  environment: production
-  managed-by: kustomize
+labels:
+  - pairs:
+      environment: production
+      managed-by: kustomize
+    includeSelectors: false
 
-# =============================================================================
-# COMMON ANNOTATIONS
-# =============================================================================
 commonAnnotations:
   deployment/environment: production
   deployment/managed-by: kustomize
+  infra002/desired-state: "true"
 
-# =============================================================================
-# CONFIGMAP GENERATOR
-# =============================================================================
-# Generate production-specific ConfigMap with environment overrides
 configMapGenerator:
   - name: production-config
-    behavior: merge
     literals:
       - ENVIRONMENT=production
       - LOG_LEVEL=info
       - ENABLE_METRICS=true
       - ENABLE_TRACING=true
-      # Production Redis mode (Sentinel for HA)
       - REDIS_MODE=sentinel
-      # OTEL configuration for production
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
       - OTEL_SERVICE_NAME_PREFIX=prod-
-      # Google OAuth redirect URI for production domain
       - GOOGLE_REDIRECT_URI=https://api.tragge.io/api/user/auth/google/callback
-      # Phase 3: durable trading WAL (must match StatefulSet mount)
       - WAL_PERSIST_PATH=/var/lib/tragge/wal/engine.jsonl
       - WAL_REQUIRE_PERSIST=true
       - WAL_SYNC_ON_WRITE=true
