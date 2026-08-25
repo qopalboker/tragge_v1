@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-08-25T06:41:07.594Z",
+  "services": [
+    {
+      "name": "admin-bff",
+      "maxPct": 0.3,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "api-server",
+      "maxPct": 14.1,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "contest-scheduler",
+      "maxPct": 1,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "free-contest-generator",
+      "maxPct": 4.2,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "settlement-service",
+      "maxPct": 3.5,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "trading-core",
+      "maxPct": 17.5,
+      "status": 0,
+      "saw": true
+    },
+    {
+      "name": "worker",
+      "maxPct": 14.8,
+      "status": 0,
+      "saw": true
+    }
+  ]
+}

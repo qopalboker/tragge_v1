@@ -477,3 +477,16 @@ Crypto dual mode `both` remains selectable. A strict reading of policy §9.2 (si
 
 Full AUTO / FORCE_PROVIDER / PAUSE_SYMBOL with 1h review remains MD-005 / MD-006.
 
+---
+
+## CI002-DEPTH
+
+| Field | Value |
+|---|---|
+| **ID** | CI002-DEPTH |
+| **Severity** | P2 (coverage depth) |
+| **Found during** | CI-002 (2026-08-25) |
+| **Status** | Open |
+
+CI-002 establishes a non-zero coverage floor for the original 7 services. Deep coverage of settlement/finalize financial paths and non-short admin-bff integrations remains follow-up work.
+

@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** FIN-006 on main. **MD-005A** on branch (Deriv/Nobitex admin selection + audit). Next after merge: **CI-002**. Keep MD-005 AUTO/FORCE/PAUSE deferred. Gaps tracked.
+> **Status note (2026-08-25 continuity):** FIN-006 + MD-005A on main. **CI-002** on branch (critical Go coverage floor). Next: **CI-003**. Gaps tracked.
 
 ### Task Tracker
 
@@ -123,7 +123,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) — in-process harness; Compose/staging follow-ups open |
 | FIN-006 | Classify admin wallet top-ups as admin_funded_deposit | 1 | P0 | Done (merged to main) — signed off; gaps FIN006-* open |
-| MD-005A | Admin Forex/Crypto provider selection with audit | 3 | P1 | Done on branch codex/md-005a-admin-provider-selection-audit (2026-08-25) — awaiting merge |
+| MD-005A | Admin Forex/Crypto provider selection with audit | 3 | P1 | Done (merged to main); MD-005 AUTO/FORCE/PAUSE deferred |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
@@ -134,7 +134,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | ENGINE-001 | `pricebook.go`: float64 → decimal | 4 | P1 | Not started |
 | ENGINE-002 | `position_management.go`: float64 → decimal | 4 | P1 | Not started |
 | ENGINE-003 | Regression-lock WAL fail-closed behavior | 4 | P1 | Not started |
-| CI-002 | Test coverage for the 7 untested critical Go services | 5 | P1 | Not started |
+| CI-002 | Test coverage for the 7 untested critical Go services | 5 | P1 | Done on branch codex/CI-002-critical-go-coverage (2026-08-25) — floor >0%; depth gap CI002-DEPTH |
 | CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Not started |
 | CI-004 | Continuous secret-scanning in CI | 5 | Nice-to-have | Not started |
 | DOC-002 | Ongoing documentation-sync process | 6 | — | Not started |

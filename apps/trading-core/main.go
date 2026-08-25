@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -27,21 +26,11 @@ func main() {
 	observability.InstallStandardLoggerRedaction()
 	// ARCH-007: merged wrapper violates Engine/Market Data failure separation.
 	// Prefer standalone trading-engine + market-ingestor images (compose profile target).
-	log.Println("trading-core: DEPRECATED wrapper starting (engine :8085, ingestor :8084, trade-bff :8082); prefer profile=target")
+	log.Println(tradingCoreDeprecationNotice())
 
 	// Create shared database pool (1 pool instead of 3, saving ~20 connections)
-	dbMaxOpen := 20
-	if v := os.Getenv("DB_MAX_OPEN_CONNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			dbMaxOpen = n
-		}
-	}
-	dbMaxIdle := 8
-	if v := os.Getenv("DB_MAX_IDLE_CONNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			dbMaxIdle = n
-		}
-	}
+	dbMaxOpen := positiveIntFromEnv(os.Getenv, "DB_MAX_OPEN_CONNS", 20)
+	dbMaxIdle := positiveIntFromEnv(os.Getenv, "DB_MAX_IDLE_CONNS", 8)
 
 	postgresDSN := secrets.BuildPostgresDSN()
 	var postgresReplicaDSNs []string
