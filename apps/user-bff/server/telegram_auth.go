@@ -49,7 +49,13 @@ func (a *App) handleTelegramMiniAppAuth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if a.telegramVerifier == nil {
+	verifier := a.telegramVerifierSnapshot()
+	if verifier == nil {
+		// Attempt one reload in case Admin just configured the token.
+		a.reloadTelegramVerifier(r.Context())
+		verifier = a.telegramVerifierSnapshot()
+	}
+	if verifier == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error": "telegram authentication is not configured",
 			"code":  "telegram_auth_unavailable",
@@ -57,7 +63,7 @@ func (a *App) handleTelegramMiniAppAuth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	verified, err := a.telegramVerifier.VerifyInitData(req.InitData)
+	verified, err := verifier.VerifyInitData(req.InitData)
 	if err != nil {
 		code := "telegram_auth_invalid"
 		if errors.Is(err, auth.ErrTelegramAuthExpired) {

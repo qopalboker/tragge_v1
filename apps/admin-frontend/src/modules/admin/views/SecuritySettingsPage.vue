@@ -3,7 +3,16 @@ import { ref, onMounted, computed } from 'vue';
 import { t } from '@/i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/composables/useToast';
-import { getAdminMFAPolicy, setAdminMFAPolicy, type AdminMFAPolicy } from '@/api/security';
+import {
+  getAdminMFAPolicy,
+  setAdminMFAPolicy,
+  getTelegramSettings,
+  setTelegramBotToken,
+  clearTelegramBotToken,
+  testTelegramBotToken,
+  type AdminMFAPolicy,
+  type TelegramSettings,
+} from '@/api/security';
 import { SensitiveAdminAction, withPasswordReauthentication } from '@/api/reauthentication';
 
 const auth = useAuthStore();
@@ -12,15 +21,24 @@ const toast = useToast();
 const loading = ref(true);
 const saving = ref(false);
 const policy = ref<AdminMFAPolicy | null>(null);
+const telegram = ref<TelegramSettings | null>(null);
+const telegramTokenInput = ref('');
+const telegramBusy = ref(false);
 const error = ref<string | null>(null);
 
 const canToggle = computed(() => policy.value?.can_toggle === true && auth.isSuperAdmin);
+const canManageTelegram = computed(() => auth.isSuperAdmin && auth.hasPermission('settings.manage'));
 
 async function load() {
   loading.value = true;
   error.value = null;
   try {
     policy.value = await getAdminMFAPolicy();
+    try {
+      telegram.value = await getTelegramSettings();
+    } catch {
+      telegram.value = { configured: false, source: 'none' };
+    }
   } catch {
     error.value = t('securitySettings.loadError') || 'Failed to load security settings';
   } finally {
@@ -68,15 +86,110 @@ async function toggleMFA() {
   }
 }
 
+async function promptReauthPassword(): Promise<string> {
+  return window.prompt(t('securitySettings.reauthPrompt') || 'Confirm your admin password:') || '';
+}
+
+async function saveTelegramToken() {
+  if (!canManageTelegram.value || telegramBusy.value) return;
+  const token = telegramTokenInput.value.trim();
+  if (!token) {
+    toast.error(t('securitySettings.telegramTokenRequired') || 'Bot token is required');
+    return;
+  }
+  const password = await promptReauthPassword();
+  if (!password) return;
+  telegramBusy.value = true;
+  try {
+    telegram.value = await withPasswordReauthentication(
+      {
+        password,
+        action: SensitiveAdminAction.TelegramBotToken,
+        resourceId: 'telegram_bot_token',
+      },
+      (grant) => setTelegramBotToken(token, grant),
+    );
+    telegramTokenInput.value = '';
+    toast.success(t('securitySettings.telegramSaved') || 'Telegram bot token updated');
+  } catch (e: unknown) {
+    const msg =
+      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+      t('securitySettings.telegramSaveError') ||
+      'Could not update Telegram bot token';
+    toast.error(String(msg));
+  } finally {
+    telegramBusy.value = false;
+  }
+}
+
+async function clearTelegramToken() {
+  if (!canManageTelegram.value || telegramBusy.value) return;
+  const password = await promptReauthPassword();
+  if (!password) return;
+  telegramBusy.value = true;
+  try {
+    telegram.value = await withPasswordReauthentication(
+      {
+        password,
+        action: SensitiveAdminAction.TelegramBotToken,
+        resourceId: 'telegram_bot_token',
+      },
+      (grant) => clearTelegramBotToken(grant),
+    );
+    telegramTokenInput.value = '';
+    toast.success(t('securitySettings.telegramCleared') || 'Telegram bot token cleared');
+  } catch (e: unknown) {
+    const msg =
+      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+      t('securitySettings.telegramSaveError') ||
+      'Could not clear Telegram bot token';
+    toast.error(String(msg));
+  } finally {
+    telegramBusy.value = false;
+  }
+}
+
+async function testTelegramConnection() {
+  if (!canManageTelegram.value || telegramBusy.value) return;
+  const password = await promptReauthPassword();
+  if (!password) return;
+  telegramBusy.value = true;
+  try {
+    const result = await withPasswordReauthentication(
+      {
+        password,
+        action: SensitiveAdminAction.TelegramBotToken,
+        resourceId: 'telegram_bot_token',
+      },
+      (grant) => testTelegramBotToken(grant),
+    );
+    toast.success(
+      (t('securitySettings.telegramTestOk') || 'Connected') +
+        (result.bot_user ? `: @${result.bot_user}` : ''),
+    );
+  } catch (e: unknown) {
+    const msg =
+      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+      t('securitySettings.telegramTestError') ||
+      'Telegram connection test failed';
+    toast.error(String(msg));
+  } finally {
+    telegramBusy.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
 <template>
   <div class="security-page" dir="auto">
     <header class="page-header">
-      <h1>{{ t('securitySettings.title') || 'Security' }}</h1>
+      <h1>{{ t('securitySettings.title') || 'System Security' }}</h1>
       <p class="sub">
-        {{ t('securitySettings.subtitle') || 'Admin panel security policy for the current MVP environment.' }}
+        {{
+          t('securitySettings.subtitle') ||
+          'Protected system settings: Admin MFA policy and Telegram Mini App credentials.'
+        }}
       </p>
     </header>
 
@@ -128,6 +241,62 @@ onMounted(load);
         </button>
       </div>
     </section>
+
+    <section v-if="!loading && !error" class="card telegram-card">
+      <div class="copy">
+        <h2>{{ t('securitySettings.telegramTitle') || 'Telegram Mini App' }}</h2>
+        <p>
+          {{
+            t('securitySettings.telegramDesc') ||
+            'Bot token is required to verify Telegram.WebApp initData (HMAC). Stored encrypted. Raw token is never returned by the API.'
+          }}
+        </p>
+        <p class="status">
+          <span class="label">{{ t('securitySettings.current') || 'Current state' }}:</span>
+          <strong :class="telegram?.configured ? 'on' : 'off'">
+            {{
+              telegram?.configured
+                ? (t('securitySettings.telegramConfigured') || 'Configured') +
+                  (telegram?.masked ? ` (${telegram.masked})` : '') +
+                  (telegram?.source ? ` · ${telegram.source}` : '')
+                : t('securitySettings.telegramMissing') || 'Not configured (auth returns 503)'
+            }}
+          </strong>
+        </p>
+        <div v-if="canManageTelegram" class="telegram-form">
+          <label class="token-label" for="tg-bot-token">
+            {{ t('securitySettings.telegramTokenLabel') || 'Bot token' }}
+          </label>
+          <input
+            id="tg-bot-token"
+            v-model="telegramTokenInput"
+            class="token-input"
+            type="password"
+            autocomplete="new-password"
+            :placeholder="t('securitySettings.telegramTokenPlaceholder') || '123456:ABC…'"
+          />
+          <div class="telegram-actions">
+            <button type="button" class="btn primary" :disabled="telegramBusy" @click="saveTelegramToken">
+              {{ telegramBusy ? '…' : t('securitySettings.telegramSave') || 'Save / rotate token' }}
+            </button>
+            <button type="button" class="btn" :disabled="telegramBusy" @click="testTelegramConnection">
+              {{ t('securitySettings.telegramTest') || 'Test connection' }}
+            </button>
+            <button
+              type="button"
+              class="btn danger"
+              :disabled="telegramBusy || !telegram?.configured"
+              @click="clearTelegramToken"
+            >
+              {{ t('securitySettings.telegramClear') || 'Clear' }}
+            </button>
+          </div>
+        </div>
+        <p v-else class="hint">
+          {{ t('securitySettings.telegramSuperAdminOnly') || 'Only Super Admin with settings.manage can change the token.' }}
+        </p>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -174,6 +343,41 @@ onMounted(load);
   line-height: 1.5;
   color: var(--color-text-secondary, #a0aabe);
   font-size: 0.92rem;
+}
+.telegram-card {
+  margin-top: 16px;
+}
+.telegram-form {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.token-label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #a0aabe);
+}
+.token-input {
+  width: min(100%, 420px);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+}
+.telegram-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.btn.danger {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+.hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #8b95a8);
 }
 .status .label {
   margin-inline-end: 8px;

@@ -41,6 +41,7 @@ This directory contains Docker secrets that are mounted into containers at `/run
 | `nowpayments_ipn_secret.txt` | NOWPayments IPN webhook secret | `xxxxxxxxx` |
 | `google_client_id.txt` | Google OAuth Client ID | `xxx.apps.googleusercontent.com` |
 | `google_client_secret.txt` | Google OAuth Client Secret | `GOCSPX-xxxxxxxxx` |
+| `telegram_bot_token.txt` | Telegram BotFather token for Mini App HMAC auth | `123456789:AAH…` (never commit real values) |
 | `grafana_admin_password.txt` | Grafana admin dashboard password | Strong random password |
 
 ## File Format

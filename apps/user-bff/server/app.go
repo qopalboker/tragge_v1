@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -152,8 +153,10 @@ type App struct {
 	verifyCodeRateLimiter        *verifyCodeRateLimiter        // Rate limiter for verify-email code attempts
 	passwordChangeRateLimiter    *passwordChangeRateLimiter    // Rate limiter for password change requests
 
-	// Telegram Mini App initData verifier (nil when TELEGRAM_BOT_TOKEN unset).
-	telegramVerifier *auth.TelegramWebAppVerifier
+	// Telegram Mini App initData verifier (nil when no Admin DB / env token).
+	// Hot-reloaded when Admin rotates the encrypted system setting.
+	telegramVerifier atomic.Pointer[auth.TelegramWebAppVerifier]
+	systemSecretKey  []byte
 	telegramBot      *TelegramBot
 }
 
@@ -863,20 +866,12 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		}
 	}
 
-	telegramVerifier, telegramErr := loadTelegramWebAppVerifier()
-	if telegramErr != nil {
-		log.Fatal("Invalid Telegram authentication configuration", zap.Error(telegramErr))
-	}
-	if telegramVerifier != nil {
-		log.Info("Telegram Mini App authentication enabled")
-	} else {
-		log.Info("Telegram Mini App authentication not configured (TELEGRAM_BOT_TOKEN unset)")
-	}
+	systemSecretKey := loadSystemSecretKey()
 	telegramBot := loadTelegramBot(log.Logger)
 	if telegramBot != nil {
 		log.Info("Telegram Bot launch handler enabled")
 	} else {
-		log.Info("Telegram Bot not configured (TELEGRAM_BOT_TOKEN unset)")
+		log.Info("Telegram Bot not configured (no Admin DB / env token)")
 	}
 
 	app := &App{
@@ -904,9 +899,11 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		emailVerificationRateLimiter: newEmailVerificationRateLimiter(),
 		verifyCodeRateLimiter:        newVerifyCodeRateLimiter(),
 		passwordChangeRateLimiter:    newPasswordChangeRateLimiter(),
-		telegramVerifier:             telegramVerifier,
+		systemSecretKey:              systemSecretKey,
 		telegramBot:                  telegramBot,
 	}
+	app.reloadTelegramVerifier(context.Background())
+	app.startTelegramTokenReloadListener(context.Background())
 
 	// Initialize security audit logger
 	app.auditLogger = audit.New(audit.Config{
