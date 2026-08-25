@@ -93,7 +93,8 @@ func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
 		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE) as participant_count,
 		       COALESCE(c.prize_pool_net_cents, 0)
 		FROM contests c
-		WHERE c.status IN ('registration_open', 'scheduled', 'running')
+		WHERE c.archived_at IS NULL
+		  AND c.status IN ('registration_open', 'scheduled', 'running')
 		  AND (
 		        c.status = 'running'
 		        OR (c.starts_at > NOW() AND c.starts_at <= NOW() + ($1::text || ' minutes')::interval)
@@ -303,7 +304,7 @@ func (a *App) handleGetContestDetails(w http.ResponseWriter, r *http.Request) {
 		       (SELECT COUNT(*) FROM contest_participants cp
 		         WHERE cp.contest_id = c.id AND COALESCE(cp.is_system, FALSE) = FALSE)
 		FROM contests c
-		WHERE c.id = $1
+		WHERE c.id = $1 AND c.archived_at IS NULL
 	`, contestID).Scan(
 		&resp.ID, &resp.Name, &resp.Description, &resp.Status, &resp.MarketType, &resp.DurationType,
 		&startsAt, &endsAt, &resp.EntryFeeCents, &resp.IsFree, &resp.QtyTotal,

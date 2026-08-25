@@ -445,7 +445,7 @@ func (a *App) handleListTournaments(w http.ResponseWriter, r *http.Request) {
 		       c.max_participants, c.commission_rate, COALESCE(c.platform_fee_bps, 0),
 		       (SELECT COUNT(*) FROM contest_participants cp WHERE cp.contest_id = c.id) as participant_count
 		FROM contests c
-		WHERE 1=1`
+		WHERE c.archived_at IS NULL`
 
 	var args []interface{}
 	argIdx := 1
@@ -729,7 +729,7 @@ func (a *App) handleListTournamentsGrouped(w http.ResponseWriter, r *http.Reques
 		FROM contests c
 		LEFT JOIN template_entry_tiers tet ON tet.id = c.tier_id
 		LEFT JOIN tournament_templates tt ON tt.id = c.template_id
-		WHERE 1=1`
+		WHERE c.archived_at IS NULL`
 
 	var args []interface{}
 	argIdx := 1
@@ -946,7 +946,7 @@ func (a *App) handleGetTournamentDetails(w http.ResponseWriter, r *http.Request)
 		       COALESCE(c.min_participants, 2),
 		       (SELECT COUNT(*) FROM contest_participants cp WHERE cp.contest_id = c.id)
 		FROM contests c
-		WHERE c.id = $1
+		WHERE c.id = $1 AND c.archived_at IS NULL
 	`, contestID).Scan(
 		&resp.ID, &resp.Name, &resp.Description, &resp.Status, &resp.MarketType, &resp.DurationType,
 		&resp.DurationMinutes, &startsAt, &endsAt, &resp.EntryFeeCents, &resp.IsFree,
@@ -1108,7 +1108,8 @@ func (a *App) handleTournamentCalendar(w http.ResponseWriter, r *http.Request) {
 			(SELECT COUNT(*) FROM contest_participants cp WHERE cp.contest_id = c.id) as participant_count,
 			%s
 		FROM contests c
-		WHERE c.starts_at >= $%d AND c.starts_at <= $%d
+		WHERE c.archived_at IS NULL
+		  AND c.starts_at >= $%d AND c.starts_at <= $%d
 		  AND c.status IN ('scheduled', 'registration_open', 'running')`,
 		userRegisteredClause, dateStartIdx, dateStartIdx+1)
 

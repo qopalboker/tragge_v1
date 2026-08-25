@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** FIN-001..005 and LIFECYCLE-001 on main. LIFECYCLE-002 done on branch (capacity limits removed). Next: **LIFECYCLE-003**. Open gaps: FIN003-POSTGRES-DUAL-RACE, FIN005-*. INFRA-001 parked; INFRA-002 desired-state gate on main. Keep FIN-006 / MD-005A separate.
+> **Status note (2026-08-25 continuity):** FIN-001..005 and LIFECYCLE-001..002 on main. LIFECYCLE-003 done on branch (audit-safe archival). Next: **ARCH-001**. Open gaps: FIN003-POSTGRES-DUAL-RACE, FIN005-*, LIFECYCLE*. INFRA-001 parked; INFRA-002 on main. Keep FIN-006 / MD-005A separate.
 
 ### Task Tracker
 
@@ -123,8 +123,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-004 | Reconcile prize distribution algorithm vs. 	ralent_v1 | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) — in-process harness; Compose/staging follow-ups open |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
-| LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done on branch codex/LIFECYCLE-002-remove-capacity-limits (2026-08-25) — awaiting merge |
-| LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Not started |
+| LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
+| LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done on branch codex/LIFECYCLE-003-audit-safe-archival (2026-08-25) — awaiting merge |
 | ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Not started |
 | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
@@ -303,13 +303,15 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### LIFECYCLE-003 — Replace hard-delete cleanup with audit-safe archival
 **Subtasks**
-- [ ] Change `contest-scheduler`'s cleanup from a destructive `DELETE` to a soft-delete/archive-table pattern or immutable cold-storage export.
-- [ ] Define and document a retention policy — ask what retention period compliance/product actually requires if it isn't already specified (§4).
+- [x] Soft-delete via `contests.archived_at` + cold copies to archive tables; **no** hard-DELETE contests.
+- [x] Retention policy documented: **7 years** (`AuditRetentionYears` / `retain_until`).
+- [x] Hot-path listings filter `archived_at IS NULL`; audit query via `tournaments_archive`.
 
 **Verify**
-- [ ] Test proves running cleanup removes archived data from the hot path, but the data remains queryable/exportable for audit purposes afterward.
+- [x] CI `lifecycle-003-archival` locks no hard-delete + soft-delete + migration + hot-path filter.
+- [ ] Postgres E2E archive then cold-query — **not runtime-verified** (`LIFECYCLE003-POSTGRES-E2E`).
 
-**Done when:** that test passes.
+**Done when:** static/unit verify green; full Postgres E2E remains an open verification gap until reproduced.
 
 ---
 

@@ -175,3 +175,16 @@ LIFECYCLE-002 removed product capacity enforcement (constraint, ValidateRegistra
 | **Status** | Open — **not runtime-verified** |
 
 `go test ./packages/domain/statemachine -run TestLIFECYCLE002` failed to link on this host (OOM). CI job still runs the suite; local/static locks cover source invariants. Do not claim domain package compile/runtime verification on constrained hosts until reproduced.
+
+---
+
+## LIFECYCLE003-POSTGRES-E2E
+
+| Field | Value |
+|---|---|
+| **ID** | LIFECYCLE003-POSTGRES-E2E |
+| **Severity** | P1 (verification gap) |
+| **Found during** | LIFECYCLE-003 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+LIFECYCLE-003 soft-delete + archive copies are locked via static/unit tests. A full Postgres integration run (archive completed contest → absent from hot listings → present in `tournaments_archive` / audit query until `retain_until`) was **not** reproduced this session. Do **not** mark archival as runtime-verified until that E2E passes.
