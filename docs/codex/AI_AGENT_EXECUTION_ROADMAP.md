@@ -106,12 +106,17 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
+<<<<<<< HEAD
 > **Status note (2026-08-25 continuity):** FIN-001..005 signed off and landing onto main (FIN-003 code restack in progress; Postgres dual-race gap tracked as FIN003-POSTGRES-DUAL-RACE). Next: **LIFECYCLE-001**. INFRA-001 parked; INFRA-002 desired-state gate on main. Keep FIN-006 / MD-005A separate.
+=======
+> **Status note (2026-08-25 continuity):** Phase 1 FIN-* signed off. LIFECYCLE-001 done on branch (late-entry policy regression-locked). Next: **LIFECYCLE-002**. Open verification gaps remain tracked (FIN003-POSTGRES-DUAL-RACE, FIN005-*, not runtime-verified). INFRA-001 parked.
+>>>>>>> b83c686 (LIFECYCLE-001: Regression-lock paid late entry to running contests)
 
 ### Task Tracker
 
 | ID | Task | Phase | Priority | Status |
 |---|---|---|---|---|
+<<<<<<< HEAD
 | DOC-001 | Correct CLAUDE.md status | 0 | Quick win | Done (merged to main) |
 | INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Blocked — awaiting live cluster / kubeconfig (decision 2026-08-25) |
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done (merged to main) — Vitest in CI; Playwright quarantined |
@@ -123,6 +128,19 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-004 | Reconcile prize distribution algorithm vs. 	ralent_v1 | 1 | P0 | Done (merged to main) — signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) — in-process harness; Compose/staging follow-ups open |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Not started |
+=======
+| DOC-001 | Correct `CLAUDE.md` status | 0 | Quick win | Done on branch `codex/DOC-001-correct-claude-status` (2026-08-25) — awaiting merge |
+| INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Parked — no production cluster yet; treat overlay as desired-state only (decision 2026-08-25) |
+| CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done on branch `codex/CI-001-frontend-tests-ci` (2026-08-25) — Vitest in CI; Playwright quarantined |
+| SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch `codex/SEC-008-auth-regression-lock` (2026-08-25) — awaiting merge |
+| SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch `codex/SEC-009-admin-reauth-mfa` (2026-08-25) — awaiting merge |
+| FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch `codex/FIN-001-platform-fee-source` (2026-08-25) — signed off; awaiting merge |
+| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch `codex/FIN-002-prize-calculation-path` (2026-08-25) — signed off; awaiting merge |
+| FIN-003 | Single owner for contest finalization | 1 | P0 | Done on branch `codex/FIN-003-single-finalization-owner` (2026-08-25) — signed off; Postgres dual-race NOT runtime-verified (FIN003-POSTGRES-DUAL-RACE) |
+| FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done on branch `codex/FIN-004-tralent-v1-reconcile` (2026-08-25) — signed off; Power Law divergence-only |
+| FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done on branch `codex/FIN-005-financial-reconciliation-harness` (2026-08-25) — signed off; Compose/staging gaps tracked |
+| LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done on branch `codex/LIFECYCLE-001-late-entry` (2026-08-25) — awaiting merge |
+>>>>>>> b83c686 (LIFECYCLE-001: Regression-lock paid late entry to running contests)
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Not started |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Not started |
 | ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Not started |
@@ -279,12 +297,12 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### LIFECYCLE-001 — Support valid late entry to running contests
 **Subtasks**
-- [ ] Confirm the exact product rule for late entry (cutoff time? pro-rated vs. full-duration scoring?) — ask if the policy doc doesn't fully specify it (§4).
-- [ ] Extend `handleJoinContest`'s accepted-status check beyond `registration_open` to cover the approved late-entry window.
-- [ ] Confirm downstream scoring/leaderboard logic correctly and fairly handles a participant who joined mid-contest.
+- [x] Confirmed §5.6 / §4.3: cutoff = start+min(10% dur, 30m); prize contribution not pro-rata; scoring = filled trades after join (decision log).
+- [x] `economics.JoinAllowed` + handler already/reconfirmed; join response exposes late surcharge fields.
+- [x] Documented: scores accumulate only from fills after join; prize eligibility still requires a filled trade.
 
 **Verify**
-- [ ] Integration test suite covers entry at start, mid-contest, and past the cutoff (which should still correctly fail) — all behaving per the confirmed rule.
+- [x] `TestJoinAllowed` + cutoff examples + charge tests in economics; CI `lifecycle-001-late-entry`.
 
 **Done when:** that suite passes.
 

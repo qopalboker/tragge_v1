@@ -123,3 +123,29 @@ Scheduled staging-like reconciliation guard not configured (no staging environme
 | **Status** | Open |
 
 `fin-005-reconciliation-harness` CI job exists (always-on). Making it a GitHub required check (optionally path-filtered) is owned by CI-003.
+
+---
+
+## P0-FIN-06-ECONOMICS-LOCK-AT-CUTOFF
+
+| Field | Value |
+|---|---|
+| **ID** | P0-FIN-06-ECONOMICS-LOCK-AT-CUTOFF |
+| **Severity** | P0 (audit) / deferred from LIFECYCLE-001 |
+| **Found during** | LIFECYCLE-001 (2026-08-25) |
+| **Status** | Open — **not implemented in LIFECYCLE-001** |
+
+Policy §4.4 requires economics immutability when the **late-entry window closes**. Current code locks fee fields on first join and still allows late joiners to increment `prize_pool_net_cents` until cutoff. A dedicated cutoff-time economics snapshot freeze remains outstanding (audit P0-FIN-06).
+
+---
+
+## LIFECYCLE001-USERBFF-COMPILE
+
+| Field | Value |
+|---|---|
+| **ID** | LIFECYCLE001-USERBFF-COMPILE |
+| **Severity** | P2 (verification gap) |
+| **Found during** | LIFECYCLE-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Full `go test ./apps/user-bff/server` was not run (host OOM). Policy tests execute in `packages/scoring/economics`. Do not claim user-bff package compile/runtime verification until reproduced.

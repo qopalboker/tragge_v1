@@ -304,6 +304,22 @@ jobs:
       - name: FIN-005 harness + Power Law production guard
         run: node --test scripts/sec-fin005-reconciliation-harness.test.mjs
 
+  lifecycle-001-late-entry:
+    name: LIFECYCLE-001 late entry policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: LIFECYCLE-001 regression suite
+        run: node --test scripts/sec-lifecycle001-late-entry.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)

@@ -22,6 +22,7 @@
     "test:fin003": "node --test scripts/sec-fin003-finalization-owner.test.mjs",
     "test:fin004": "node --test scripts/sec-fin004-tralent-v1-check.test.mjs",
     "test:fin005": "node --test scripts/sec-fin005-reconciliation-harness.test.mjs",
+    "test:lifecycle001": "node --test scripts/sec-lifecycle001-late-entry.test.mjs",
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

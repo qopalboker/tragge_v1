@@ -27,34 +27,9 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 )
 
-// contestJoinAllowed implements product policy §5.6.
-// Free contests: registration_open only (no late entry).
-// Paid contests: registration_open, or running until late_join_cutoff when enabled.
+// contestJoinAllowed delegates to economics.JoinAllowed (LIFECYCLE-001 / §5.6).
 func contestJoinAllowed(status string, isFree, lateJoinEnabled bool, startsAt, endsAt, now time.Time) (ok bool, isLate bool, reason string) {
-	switch status {
-	case contestStatusRegistrationOpen, contestStatusScheduled:
-		// Scheduled+open registration are pre-start joins.
-		if status == contestStatusScheduled {
-			// Prefer explicit registration_open; scheduled alone is not open unless product opens it.
-			// Keep compatibility: only registration_open for pre-start unless already open.
-			return false, false, "contest_not_open"
-		}
-		return true, false, ""
-	case contestStatusRunning:
-		if isFree {
-			return false, false, "free_contest_no_late_join"
-		}
-		if !lateJoinEnabled {
-			return false, false, "late_join_disabled"
-		}
-		cutoff := economics.LateJoinCutoff(startsAt, endsAt)
-		if !now.Before(cutoff) {
-			return false, false, "late_join_cutoff_passed"
-		}
-		return true, true, ""
-	default:
-		return false, false, "contest_not_open"
-	}
+	return economics.JoinAllowed(status, isFree, lateJoinEnabled, startsAt, endsAt, now)
 }
 
 func (a *App) handleListContests(w http.ResponseWriter, r *http.Request) {
@@ -943,14 +918,18 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, JoinContestResponse{
-		ContestID:      contestID,
-		UserID:         userID,
-		JoinedAt:       joinedAt,
-		QtyTotal:       qtyTotal,
-		QtyAvailable:   qtyAvailable,
-		EntryFeeCents:  entryFeeCents,
-		PlatformFeeBps: effectiveFeeBps,
-		NetPrizeCents:  netPool,
+		ContestID:              contestID,
+		UserID:                 userID,
+		JoinedAt:               joinedAt,
+		QtyTotal:               qtyTotal,
+		QtyAvailable:           qtyAvailable,
+		EntryFeeCents:          entryFeeCents,
+		PlatformFeeBps:         effectiveFeeBps,
+		IsLateJoin:             isLateJoin,
+		LateSurchargeCents:     charge.SurchargeCents,
+		TotalChargedCents:      charge.TotalCents,
+		PrizeContributionCents: charge.PrizeCents,
+		NetPrizeCents:          netPool,
 	})
 }
 
