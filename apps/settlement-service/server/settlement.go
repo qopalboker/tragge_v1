@@ -136,10 +136,18 @@ func (s *SettlementService) settleContestAttempt(ctx context.Context, contestID 
 	}
 
 	if len(participants) == 0 {
-		s.app.log().Info("No participants in contest, marking as completed",
+		s.app.log().Info("No participants in contest, marking as cancelled",
 			zap.String("contest_id", contestID))
 		s.app.updateSettlementCompleted(ctx, settlement.ID)
-		s.app.updateContestStatus(ctx, contestID, "completed")
+		s.app.updateContestStatus(ctx, contestID, "cancelled")
+		return nil
+	}
+
+	// FIN-003: sole owner of single-participant refunds (moved off leaderboard).
+	if len(participants) == 1 && contestInfo.EntryFeeCents > 0 {
+		if err := s.refundSingleParticipant(ctx, contestID, settlement.ID, participants[0], contestInfo); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -664,6 +672,56 @@ func (s *SettlementService) calculatePrizes(rankings []contracts.FinalRanking, c
 	}
 
 	return pool, prizes
+}
+
+// refundSingleParticipant refunds the sole paid entrant and cancels the contest.
+// FIN-003: settlement is the sole wallet/status owner for this path.
+func (s *SettlementService) refundSingleParticipant(
+	ctx context.Context,
+	contestID, settlementID string,
+	participant Participant,
+	contestInfo *ContestInfo,
+) error {
+	s.app.log().Info("Single participant contest — refunding entry fee",
+		zap.String("contest_id", contestID),
+		zap.String("user_id", participant.UserID),
+		zap.Int64("entry_fee_cents", contestInfo.EntryFeeCents))
+
+	if err := s.app.updateSettlementStarted(ctx, settlementID, 1); err != nil {
+		return fmt.Errorf("update settlement started: %w", err)
+	}
+
+	tx, err := s.app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin refund tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := s.app.wallet.RefundContestEntryFeeIdempotent(
+		ctx, tx, participant.UserID, contestID, contestInfo.Name,
+		contestInfo.EntryFeeCents, wallet.ReasonCodeContestRefundQuorum,
+	); err != nil {
+		return fmt.Errorf("refund single participant: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE contests SET prize_pool_net_cents = 0, commission_amount = 0 WHERE id = $1
+	`, contestID); err != nil {
+		s.app.log().Warn("Failed to reset prize pool after single-participant refund",
+			zap.String("contest_id", contestID), zap.Error(err))
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit refund tx: %w", err)
+	}
+
+	s.app.updateSettlementCompleted(ctx, settlementID)
+	s.app.updateContestStatus(ctx, contestID, "cancelled")
+	s.app.logSettlementEvent(ctx, settlementID, contestID, "single_participant_refunded", map[string]interface{}{
+		"user_id":         participant.UserID,
+		"entry_fee_cents": contestInfo.EntryFeeCents,
+	}, nil)
+	return nil
 }
 
 // distributePrizes distributes prizes to winners' wallets.

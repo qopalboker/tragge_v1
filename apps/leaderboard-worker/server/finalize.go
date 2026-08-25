@@ -17,7 +17,6 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/notification"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
-	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/shopspring/decimal"
@@ -418,15 +417,11 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 		return err
 	}
 
-	// Edge case: 0 participants — mark as cancelled, no payouts
+	// Edge case: 0 participants — projection only. FIN-003: settlement owns
+	// status (cancel/complete) and must not race leaderboard Cancel/Complete.
 	if count == 0 {
-		a.log().Info("No participants in contest, marking as cancelled",
+		a.log().Info("No participants in contest; leaving status to settlement-service",
 			zap.String("contest_id", contestID))
-		if _, err := a.stateMachine.Cancel(ctx, contestID, nil, "No participants in contest"); err != nil {
-			a.log().Warn("Failed to mark empty contest as cancelled via state machine",
-				zap.String("contest_id", contestID),
-				zap.Error(err))
-		}
 		if err := a.markFinalizationCompleted(ctx, contestID); err != nil {
 			a.log().Warn("Failed to mark empty contest finalization complete",
 				zap.String("contest_id", contestID),
@@ -443,70 +438,27 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 		return err
 	}
 
-	// Edge case: 1 participant — refund entry fee (no competition occurred)
-	if count == 1 && contestInfo.EntryFeeCents > 0 && !contestInfo.IsFree {
-		a.log().Info("Only 1 participant in contest, refunding entry fee",
+	// Edge case: 1 participant — write ranks only. FIN-003: settlement-service
+	// is the sole owner of entry-fee refunds and contest cancel/complete.
+	if count == 1 {
+		a.log().Info("Only 1 participant; ranks projection only — refund/status owned by settlement",
 			zap.String("contest_id", contestID))
-		user := rankedUsers[0]
-
-		// Store original prize pool data before modifying, so retries can recover
-		refundMeta := map[string]interface{}{
-			"type":                 "single_participant_refund",
-			jsonKeyUserID:          user.UserID,
-			"entry_fee_cents":      contestInfo.EntryFeeCents,
-			"prize_pool_net_cents": contestInfo.PrizePoolNetCents,
-			"commission_amount":    contestInfo.CommissionAmount,
-		}
-		if metaErr := a.markPayoutsCalculated(ctx, contestID, refundMeta); metaErr != nil {
-			a.log().Warn("Failed to store refund metadata before transaction",
-				zap.String("contest_id", contestID),
-				zap.Error(metaErr))
-		}
-
-		refundTx, txErr := a.db.BeginTx(ctx, nil)
-		if txErr != nil {
-			a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to begin refund transaction: %v", txErr))
-			return txErr
-		}
-		defer refundTx.Rollback()
-
-		_, refundErr := a.wallet.RefundContestEntryFeeWithReason(ctx, refundTx, user.UserID, contestID,
-			contestInfo.Name, contestInfo.EntryFeeCents, wallet.ReasonCodeContestRefundQuorum)
-		if refundErr != nil {
-			a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to refund entry fee to user %s: %v", user.UserID, refundErr))
-			return refundErr
-		}
-
-		// Reset prize pool and commission on contest since we refunded
-		_, err = refundTx.ExecContext(ctx, `
-			UPDATE contests SET prize_pool_net_cents = 0, commission_amount = 0 WHERE id = $1
-		`, contestID)
-		if err != nil {
-			a.log().Warn("Failed to reset prize pool after refund",
-				zap.String("contest_id", contestID),
-				zap.Error(err))
-		}
-
-		if err := refundTx.Commit(); err != nil {
-			a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to commit refund transaction: %v", err))
-			return err
-		}
-
-		if _, err := a.stateMachine.Cancel(ctx, contestID, nil, "Single participant - entry fee refunded"); err != nil {
-			a.log().Warn("Failed to cancel contest via state machine after refund",
-				zap.String("contest_id", contestID),
-				zap.Error(err))
+		if !finState.RanksWritten {
+			if _, err := a.writeFinalRanksAndPrizesWithTracking(ctx, contestID, rankedUsers, &ContestPayout{
+				ContestID:         contestID,
+				ParticipantsCount: 1,
+				Payouts:           nil,
+			}, contestInfo); err != nil {
+				a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to write single-participant rank: %v", err))
+				return err
+			}
+			_ = a.markRanksAndWalletsCredited(ctx, contestID)
 		}
 		if err := a.markFinalizationCompleted(ctx, contestID); err != nil {
-			a.log().Warn("Failed to mark finalization complete after refund",
+			a.log().Warn("Failed to mark finalization complete after single-participant projection",
 				zap.String("contest_id", contestID),
 				zap.Error(err))
 		}
-
-		a.log().Info("Contest finalized with single participant refund",
-			zap.String("contest_id", contestID),
-			zap.String(jsonKeyUserID, user.UserID),
-			zap.Int64("refund_cents", contestInfo.EntryFeeCents))
 		return nil
 	}
 
@@ -675,21 +627,18 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 			zap.String("contest_id", contestID))
 	}
 
-	// STEP 4: Update contest status to completed (skip if already done)
+	// STEP 4: FIN-003 — contest status (settling→completed) is owned exclusively
+	// by settlement-service. Leaderboard must not call stateMachine.Complete.
 	if !finState.StatusUpdated {
-		if _, err := a.stateMachine.Complete(ctx, contestID); err != nil {
-			a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to complete contest via state machine: %v", err))
-			a.sendLeaderboardCalculationError(contestID, fmt.Errorf("failed to complete contest via state machine: %w", err))
-			return err
-		}
-
+		a.log().Info("Skipping contest Complete — settlement-service is sole status owner",
+			zap.String("contest_id", contestID))
 		if err := a.markStatusUpdated(ctx, contestID); err != nil {
-			a.log().Warn("Failed to mark status updated",
+			a.log().Warn("Failed to mark status-updated flag (projection only)",
 				zap.String("contest_id", contestID),
 				zap.Error(err))
 		}
 	} else {
-		a.log().Info("Status already updated, skipping",
+		a.log().Info("Status flag already set, skipping",
 			zap.String("contest_id", contestID))
 	}
 
@@ -1396,106 +1345,8 @@ func formatPnL(pnl float64) string {
 	return fmt.Sprintf("-$%.2f", -pnl)
 }
 
-// recordSettlementAndPrizeDistributions records the settlement and individual prize
-// distributions in the database for audit purposes.
-func (a *App) recordSettlementAndPrizeDistributions(ctx context.Context, contestID string, payout *ContestPayout, rankedUsers []LeaderboardEntry) {
-	if payout == nil {
-		return
-	}
-
-	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil {
-		a.log().Error("Failed to begin settlement recording transaction",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		return
-	}
-	defer tx.Rollback()
-
-	// Create or update contest_settlements record
-	var settlementID string
-	err = tx.QueryRowContext(ctx, `
-		INSERT INTO contest_settlements (
-			contest_id, status, started_at, completed_at,
-			total_participants, total_winners,
-			prize_pool_gross_cents, prize_pool_net_cents,
-			total_distributed_cents, platform_fee_cents
-		) VALUES ($1, 'completed', NOW(), NOW(), $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (contest_id) DO UPDATE SET
-			status = 'completed',
-			completed_at = NOW(),
-			total_participants = EXCLUDED.total_participants,
-			total_winners = EXCLUDED.total_winners,
-			prize_pool_gross_cents = EXCLUDED.prize_pool_gross_cents,
-			prize_pool_net_cents = EXCLUDED.prize_pool_net_cents,
-			total_distributed_cents = EXCLUDED.total_distributed_cents,
-			platform_fee_cents = EXCLUDED.platform_fee_cents
-		RETURNING id
-	`, contestID,
-		payout.ParticipantsCount,
-		payout.WinnersCount,
-		payout.PrizePoolGross,
-		payout.PrizePoolNet,
-		payout.TotalPaidOut,
-		payout.PrizePoolGross-payout.PrizePoolNet,
-	).Scan(&settlementID)
-	if err != nil {
-		a.log().Error("Failed to create settlement record",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		return
-	}
-
-	// Build score lookup map for O(1) access instead of O(n) per winner
-	scoreMap := make(map[string]float64, len(rankedUsers))
-	for _, ru := range rankedUsers {
-		scoreMap[ru.UserID] = ru.Score
-	}
-
-	// Record individual prize distributions
-	for _, p := range payout.Payouts {
-		score := scoreMap[p.UserID]
-
-		var percentage float64
-		if payout.PrizePoolNet > 0 {
-			percentage = float64(p.PayoutCents) / float64(payout.PrizePoolNet) * 100.0
-		}
-
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO prize_distributions (
-				settlement_id, contest_id, user_id, rank, final_score,
-				prize_amount_cents, prize_percentage, status, credited_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, 'credited', NOW())
-			ON CONFLICT (contest_id, user_id) DO UPDATE SET
-				rank = EXCLUDED.rank,
-				final_score = EXCLUDED.final_score,
-				prize_amount_cents = EXCLUDED.prize_amount_cents,
-				prize_percentage = EXCLUDED.prize_percentage,
-				status = 'credited',
-				credited_at = NOW()
-		`, settlementID, contestID, p.UserID, p.Rank, score,
-			p.PayoutCents, percentage)
-		if err != nil {
-			a.log().Warn("Failed to record prize distribution",
-				zap.String("contest_id", contestID),
-				zap.String(jsonKeyUserID, p.UserID),
-				zap.Int("rank", p.Rank),
-				zap.Error(err))
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		a.log().Error("Failed to commit settlement recording",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		return
-	}
-
-	a.log().Info("Recorded settlement and prize distributions",
-		zap.String("contest_id", contestID),
-		zap.String("settlement_id", settlementID),
-		zap.Int("prize_count", len(payout.Payouts)))
-}
+// FIN-003: leaderboard must not write contest_settlements or prize_distributions;
+// settlement-service is the sole writer of those tables.
 
 // globalLeaderboardKey is the Redis sorted set key for the platform-wide T-Point leaderboard.
 const globalLeaderboardKey = "leaderboard:global"

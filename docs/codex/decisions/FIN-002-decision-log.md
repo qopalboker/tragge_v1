@@ -22,3 +22,7 @@
 | Authority | preview only | payout authority | preview helpers |
 
 Post-fix: all three use economics net + prizedistribution shares.
+
+## 2026-08-25 — Human financial sign-off
+
+**Decision:** FIN-002 prize-math consolidation **approved** for production behavior. Proceed to FIN-003.
