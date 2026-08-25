@@ -227,3 +227,29 @@ ARCH-003 adds an in-process outbox port for notification/ticket. Full DB outbox/
 | **Status** | Open — **not runtime-verified** |
 
 Affiliate commission crediting still lives in `apps/leaderboard-worker`. ARCH-003 gated wallet-credit *flags* on projection finalize but did not relocate the affiliate job. Track until wallet/settlement ownership absorbs it.
+
+---
+
+## ARCH004-PAYMENT-HTTP-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH004-PAYMENT-HTTP-CUTOVER |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-004 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Platform mounts payment/wallet/kyc boundary APIs and owns orchestration modules. Full cutover of every `payment-service` HTTP route onto Platform-only serving was not completed. Do not claim all payment/withdrawal traffic runs exclusively on Platform until route cutover is verified.
+
+---
+
+## ARCH004-WEBHOOK-POSTGRES-E2E
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH004-WEBHOOK-POSTGRES-E2E |
+| **Severity** | P1 (verification gap) |
+| **Found during** | ARCH-004 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Webhook idempotency + ledger credit paths are unit/contract tested in Platform memory backends. Live Postgres webhook E2E against real provider fixtures was not reproduced this session.

@@ -16,6 +16,9 @@ import (
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
 	platformadmin "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin"
 	platformidentity "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity"
+	platformkyc "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/kyc"
+	platformpayment "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/payment"
+	platformwallet "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/wallet"
 )
 
 // Server is the api-mode HTTP process.
@@ -54,6 +57,10 @@ func New(platform *compose.Platform, addr, version string) *Server {
 	// ARCH-002: identity + admin endpoints run from Platform API mode.
 	platformidentity.RegisterRoutes(mux, platform.Identity)
 	platformadmin.RegisterRoutes(mux, platform.Admin)
+	// ARCH-004: wallet / payment / kyc APIs run from Platform API mode.
+	platformwallet.RegisterRoutes(mux, platform.Wallet)
+	platformpayment.RegisterRoutes(mux, platform.Payment)
+	platformkyc.RegisterRoutes(mux, platform.KYC)
 
 	return &Server{
 		platform: platform,
