@@ -27,6 +27,7 @@ use (
 	./packages/domain // statemachine + traggepoint
 	./packages/infra // shard + wsregistry
 	./packages/kyc
+	./packages/money
 	./packages/notification // + inapp
 	./packages/observability
 	./packages/redis
