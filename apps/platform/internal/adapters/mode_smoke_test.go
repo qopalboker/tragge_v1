@@ -79,6 +79,9 @@ func TestModeStartupSmokeHealthAndReady(t *testing.T) {
 				"/v1/platform/modules",
 				"/api/user/auth/v1/boundary",
 				"/api/admin/auth/v1/boundary",
+				"/api/wallet/v1/boundary",
+				"/api/payments/v1/boundary",
+				"/api/kyc/v1/boundary",
 			} {
 				resp, err := client.Get(base + path)
 				if err != nil {

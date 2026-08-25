@@ -36,14 +36,15 @@ type Platform struct {
 	Scheduler    scheduler.Service
 }
 
-// New builds the Platform with ARCH-003 contest-support modules wired.
+// New builds the Platform with ARCH-003/004 modules wired.
 func New() *Platform {
 	notif := notification.New()
+	wallets := wallet.New()
 	return &Platform{
 		Identity:     identity.New(),
 		Contest:      contest.New(),
-		Wallet:       wallet.New(),
-		Payment:      payment.New(),
+		Wallet:       wallets,
+		Payment:      payment.New(wallets),
 		KYC:          kyc.New(),
 		Settlement:   settlement.New(),
 		Leaderboard:  leaderboard.New(),
@@ -54,12 +55,13 @@ func New() *Platform {
 	}
 }
 
-// WorkerJobs returns background jobs for platform --mode=worker (ARCH-003).
+// WorkerJobs returns background jobs for platform --mode=worker (ARCH-003/004).
 func (p *Platform) WorkerJobs() []modules.Job {
 	var jobs []modules.Job
 	jobs = append(jobs, p.Scheduler.Jobs()...)
 	jobs = append(jobs, p.Leaderboard.Jobs()...)
 	jobs = append(jobs, p.Notification.Jobs()...)
+	jobs = append(jobs, p.Payment.Jobs()...)
 	return jobs
 }
 

@@ -241,6 +241,9 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	}
 
 	// Initialize wallet service
+	// ARCH-004: packages/wallet is the sole ledger mutator (Platform wallet boundary).
+	// Deposit/withdraw orchestration migrates to apps/platform/internal/modules/payment;
+	// this service remains a compatibility HTTP/worker host. FIN-006 is out of scope.
 	walletService := wallet.NewService(pool.Primary())
 
 	// Initialize KYC service
