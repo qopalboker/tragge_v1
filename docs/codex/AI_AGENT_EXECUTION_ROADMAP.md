@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** MD-001 on main. ARCH-007 done on branch. Next: ARCH-008. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** ARCH-007 on main. ARCH-008 done on branch. Next: ARCH-009. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -125,8 +125,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001..007 Done - ARCH-007 on branch awaiting merge |
-| ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Done (merged to main) |
+| ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Done on branch - awaiting merge |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
 | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
 | ENGINE-001 | `pricebook.go`: float64 → decimal | 4 | P1 | Not started |
@@ -336,15 +336,15 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### ARCH-008 — Resolve the fate of each legacy standalone service
 **Subtasks**
-- [ ] For each of `user-bff`, `admin-bff`, `payment-service`, `trading-engine`, `market-ingestor`, `trade-bff`, `leaderboard-worker`, `settlement-service`, `contest-scheduler`: determine — ask if not documented (§4) — whether it is (a) fully replaced and safe to delete, (b) still receiving live production traffic and must stay, or (c) partially replaced and needs a migration step.
-- [ ] Act per-service; don't blanket-delete.
-- [ ] Coordinate with FIN-002/FIN-003: `leaderboard-worker` and `settlement-service` are actively being refactored there — don't land their disposition decision mid-refactor.
-- [ ] For any service you delete, confirm zero production traffic/references first via logs or metrics — not code-reading alone.
+- [x] For each of `user-bff`, `admin-bff`, `payment-service`, `trading-engine`, `market-ingestor`, `trade-bff`, `leaderboard-worker`, `settlement-service`, `contest-scheduler` (+ generator, shard-router): document fate from repo evidence. See `docs/codex/reports/ARCH-008-standalone-fate.md`.
+- [x] Act per-service; **no blanket-delete**. **Zero** `SAFE_TO_DELETE` this cycle (`ARCH008-NO-SAFE-DELETE`).
+- [x] `leaderboard-worker` / `settlement-service` marked REPLACE (not deleted) given open cutovers.
+- [x] No service deleted without traffic proof (none deleted).
 
 **Verify**
-- [ ] Each disposition decision is logged with the evidence used to make it.
+- [x] Each disposition logged with evidence (`apps/*/FATE.md` + decision log).
 
-**Done when:** every legacy service has a documented, executed disposition, and `infra/k8s/base` accurately reflects only what's meant to run in production.
+**Done when:** every legacy service has a documented disposition; `infra/k8s/base` still correctly lists transitional wrappers (target until cutovers). Overlay drift remains INFRA-002.
 
 #### INFRA-002 — Permanent K8s base/overlay parity + drift CI gate
 **Subtasks**

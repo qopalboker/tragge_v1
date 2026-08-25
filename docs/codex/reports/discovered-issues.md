@@ -383,3 +383,16 @@ Wrappers are deprecated and inventoried as `DELETE_AFTER_CUTOVER`, but source/im
 | **Status** | Open — **not runtime-verified** |
 
 Compose profile `target` defines Platform + Engine + Market Data. Live up/smoke against public routes was not reproduced this session.
+
+---
+
+## ARCH008-NO-SAFE-DELETE
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH008-NO-SAFE-DELETE |
+| **Severity** | P2 (inventory outcome) |
+| **Found during** | ARCH-008 (2026-08-25) |
+| **Status** | Open — **no service proven safe to delete** |
+
+ARCH-008 documented KEEP/REPLACE/DELETE_AFTER_CUTOVER for all listed standalones. Zero services met SAFE_TO_DELETE (proven zero callers/traffic/refs). Wrapper imports and/or ingress/gateway names remain. Do not delete `apps/*` trees without closing cutover gaps and producing traffic evidence.

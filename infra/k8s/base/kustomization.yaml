@@ -25,9 +25,13 @@ resources:
   - redpanda.yaml
 
   # Backend services (consolidated)
-  - api-server.yaml       # user-bff + admin-bff + payment-service
-  - trading-core.yaml     # trading-engine + market-ingestor + trade-bff
-  - worker.yaml           # leaderboard-worker + settlement-service + contest-scheduler + free-contest-generator
+  # ARCH-008: base correctly deploys transitional wrappers until cutovers close.
+  # Standalone package fates: docs/codex/reports/ARCH-008-standalone-fate.md
+  # Overlay patches that name obsolete Deployments are INFRA-001/INFRA-002 drift,
+  # not a license to delete apps/* source (no SAFE_TO_DELETE this cycle).
+  - api-server.yaml       # embeds user-bff + admin-bff + payment-service (REPLACE packages)
+  - trading-core.yaml     # embeds trading-engine + market-ingestor + trade-bff (KEEP/REPLACE)
+  - worker.yaml           # embeds leaderboard + settlement + scheduler + generator
 
   # Frontend service (unified)
   - frontend.yaml
