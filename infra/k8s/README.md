@@ -29,9 +29,24 @@ Equivalent safety must be proven with:
 
 ```
 k8s/
-├── base/           # legacy base manifests
+├── base/           # desired-state base (consolidated api-server/trading-core/worker)
 ├── overlays/       # staging/production kustomize (optional)
 └── cronjobs/       # backup job templates (adapt to VM cron + object storage)
 ```
+
+### INFRA-002 desired-state parity gate
+
+Overlays must only patch workloads that exist in `base` (`api-server`,
+`trading-core`, `worker`, `frontend`, `gateway`, plus data-plane objects).
+
+```bash
+kubectl kustomize infra/k8s/base
+kubectl kustomize infra/k8s/overlays/production
+kubectl kustomize infra/k8s/overlays/staging
+pnpm test:infra002   # or: node --test scripts/k8s-overlay-parity.test.mjs
+```
+
+This gate proves **manifest consistency**, not live-cluster parity. No production
+Kubernetes cluster is assumed.
 
 If you intentionally run Kubernetes in a future program, treat it as a **separate** platform project—not a silent dual production path.

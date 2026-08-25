@@ -1,0 +1,85 @@
+# INFRA-002: anti-affinity patches for resources that exist in base.
+# Desired-state only - not live-cluster proof.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: api-server
+                  topologyKey: kubernetes.io/hostname
+    target:
+      kind: Deployment
+      name: api-server
+
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: trading-core
+                  topologyKey: kubernetes.io/hostname
+    target:
+      kind: StatefulSet
+      name: trading-core
+
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: worker
+                  topologyKey: kubernetes.io/hostname
+    target:
+      kind: Deployment
+      name: worker
+
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: gateway
+                  topologyKey: kubernetes.io/hostname
+    target:
+      kind: Deployment
+      name: gateway
+
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: frontend
+                  topologyKey: kubernetes.io/hostname
+    target:
+      kind: Deployment
+      name: frontend

@@ -15,9 +15,9 @@ resources:
   - secrets.yaml
 
   # Infrastructure
-  # PostgreSQL: single instance for dev/staging; production overlay adds postgres-ha.yaml
-  - postgres.yaml           # Single instance (development/staging)
-  # postgres-ha.yaml is added by the production overlay (not included here)
+  # PostgreSQL: single instance for staging/base; production overlay also includes
+  # ./postgres-ha/ and deletes the single-instance StatefulSet/Service.
+  - postgres.yaml
   - pgbouncer-config.yaml   # PgBouncer connection pooler configuration
   - pgbouncer-secrets.yaml  # PgBouncer authentication
   - pgbouncer.yaml          # PgBouncer deployment

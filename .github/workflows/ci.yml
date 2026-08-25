@@ -207,6 +207,22 @@ jobs:
       - name: SEC-009 regression suite
         run: node --test scripts/sec-009-admin-reauth-mfa.test.mjs
 
+  infra-002-k8s-parity:
+    name: INFRA-002 K8s base/overlay desired-state parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install kubectl
+        run: |
+          curl -fsSL -o kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client
+      - name: INFRA-002 overlay parity suite
+        run: node --test scripts/k8s-overlay-parity.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)
