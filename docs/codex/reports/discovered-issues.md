@@ -56,3 +56,31 @@ only — not live-cluster evidence.
 | **Status** | Open |
 
 Admin template handlers still accept/store `commission_rate` on `tournament_templates`. Contest materialization no longer derives `platform_fee_bps` from that field (always 2000 for paid). Remove template UI/API field in a follow-up cleanup PR.
+
+---
+
+## FIN003-POSTGRES-DUAL-RACE
+
+| Field | Value |
+|---|---|
+| **ID** | FIN003-POSTGRES-DUAL-RACE |
+| **Severity** | P1 (verification gap) |
+| **Found during** | FIN-003 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+FIN-003 ownership/idempotency is locked via static guards + wallet idempotency-key concurrency tests. A full dual-consumer race (leaderboard finalize + settlement settle) against **real PostgreSQL** was not reproduced (host linker OOM / no integration env in session).
+
+**Do not mark FIN-003 fully runtime-verified until this gap is closed** with a Postgres integration test that fires both paths concurrently and asserts exactly one payout / one settlement completion.
+
+---
+
+## FIN004-TRALENT-LIKE-JSON
+
+| Field | Value |
+|---|---|
+| **ID** | FIN004-TRALENT-LIKE-JSON |
+| **Severity** | P2 (legacy fixture drift) |
+| **Found during** | FIN-004 (2026-08-25) |
+| **Status** | Open |
+
+`packages/contracts/prize_distribution/tralent_like_v1.json` is **not** the policy `tralent_v1` algorithm (different fixed brackets). Production now uses policy §11 via `CalculateForContest`. Retire or rewrite this JSON in a docs/contracts cleanup PR.

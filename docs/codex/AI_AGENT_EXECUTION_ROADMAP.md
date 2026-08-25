@@ -106,7 +106,11 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
+<<<<<<< HEAD
 > **Status note (2026-08-25 continuity):** DOC-001 + CI-001 on stacked branch `codex/CI-001-frontend-tests-ci` (includes DOC-001 commits; awaiting push/merge). INFRA-001 **blocked** pending kubeconfig (`docs/codex/decisions/INFRA-001-decision-log.md`). Playwright E2E quarantined (`discovered-issues.md`). Next unblocked Phase 0: SEC-008.
+=======
+> **Status note (2026-08-25 continuity):** FIN-001..003 signed off (FIN-003 Postgres dual-race gap tracked). FIN-004 done on branch (`tralent_v1` production) — awaiting financial sign-off. Next after sign-off: **FIN-005**. INFRA-001 parked.
+>>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
 
 ### Task Tracker
 
@@ -115,12 +119,21 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | DOC-001 | Correct `CLAUDE.md` status | 0 | Quick win | Done on branch `codex/DOC-001-correct-claude-status` (2026-08-25) — awaiting merge |
 | INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Blocked — awaiting live cluster / kubeconfig (decision 2026-08-25) |
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done on branch `codex/CI-001-frontend-tests-ci` (2026-08-25) — Vitest in CI; Playwright quarantined |
+<<<<<<< HEAD
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch (merged to main with stack land) |
 | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch (stack land) |
 | FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch (stack land) |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch (stack land) |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Not started |
+=======
+| SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch `codex/SEC-008-auth-regression-lock` (2026-08-25) — awaiting merge |
+| SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch `codex/SEC-009-admin-reauth-mfa` (2026-08-25) — awaiting merge |
+| FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch `codex/FIN-001-platform-fee-source` (2026-08-25) — signed off; awaiting merge |
+| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch `codex/FIN-002-prize-calculation-path` (2026-08-25) — signed off; awaiting merge |
+| FIN-003 | Single owner for contest finalization | 1 | P0 | Done on branch `codex/FIN-003-single-finalization-owner` (2026-08-25) — signed off; Postgres dual-race NOT runtime-verified (FIN003-POSTGRES-DUAL-RACE) |
+| FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done on branch `codex/FIN-004-tralent-v1-reconcile` (2026-08-25) — awaiting financial sign-off/merge |
+>>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Not started |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Not started |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Not started |
@@ -252,9 +265,9 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### FIN-004 — Reconcile prize distribution algorithm vs. `tralent_v1`
 **Subtasks**
-- [ ] Obtain the authoritative spec or reference implementation of the approved `tralent_v1` algorithm; if it isn't in the repo, ask for it (§4) rather than reverse-engineering from the name.
-- [ ] Write a test comparing the current Power Law implementation (`packages/scoring/distribution`) against `tralent_v1`'s expected outputs across a representative range of pool sizes and participant counts, to quantify the actual divergence in dollar terms.
-- [ ] Based on that evidence, either implement `tralent_v1` to match approved policy, or — only with explicit sign-off — keep Power Law and get the policy document updated to match reality. Don't assume which direction is correct; ask.
+- [x] Spec = FIXED_PRODUCT_AND_TECHNICAL_POLICIES §11; implemented in `tralent_v1.go`.
+- [x] `TestFIN004PowerLawVsTralentV1Divergence` (dollar deltas logged).
+- [x] Human chose implement `tralent_v1`; production callers use `CalculateForContest`.
 
 **Verify**
 - [ ] Implemented algorithm's output matches the approved reference within an explicitly agreed tolerance across all tested scenarios.

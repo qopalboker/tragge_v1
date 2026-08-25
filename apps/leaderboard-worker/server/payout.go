@@ -36,19 +36,11 @@ func CalculatePrizePoolNet(prizePoolGross int64, platformFeeBps int) int64 {
 	return net
 }
 
-// CalculateWinnersCount calculates the number of winners using the shared formula.
+// CalculateWinnersCount returns tralent_v1 planned winners (FIN-004).
+// winnersPercentage is ignored (signature retained for callers).
 func CalculateWinnersCount(participantsCount int, winnersPercentage int) int {
-	if participantsCount <= 0 {
-		return 0
-	}
-	wp := float64(winnersPercentage) / 100.0
-	if wp <= 0 {
-		wp = prizedistribution.DefaultWinnerPercent
-	}
-	if wp > 1.0 {
-		wp = 1.0
-	}
-	return prizedistribution.GetWinnersCount(participantsCount, wp)
+	_ = winnersPercentage
+	return prizedistribution.GetWinnersCount(participantsCount, 0)
 }
 
 // AllocatePayouts allocates prize payouts to winners based on their ranks
@@ -62,18 +54,13 @@ func AllocatePayouts(
 		return nil, nil
 	}
 
-	cfg := prizedistribution.ConfigFromEnv()
 	participantsCount := len(rankedUsers)
-	winnersCount := prizedistribution.GetWinnersCount(participantsCount, cfg.WinnerPercent)
-	if winnersCount == 0 {
-		return nil, nil
-	}
-
-	// Calculate distribution using shared Power Law formula
-	shares := prizedistribution.CalculatePrizeDistribution(prizePoolNet, winnersCount, cfg.Alpha)
+	// FIN-004: tralent_v1 production path.
+	shares := prizedistribution.CalculateForContest(prizePoolNet, participantsCount)
 	if len(shares) == 0 {
 		return nil, nil
 	}
+	winnersCount := len(shares)
 
 	// Build rank → amount map
 	rankAmount := make(map[int]int64, len(shares))
@@ -158,10 +145,9 @@ func CalculateContestPayouts(
 		}, nil
 	}
 
-	cfg := prizedistribution.ConfigFromEnv()
 	prizePoolGross := CalculatePrizePoolGross(participantsCount, entryFeeCents)
 	prizePoolNet := CalculatePrizePoolNet(prizePoolGross, platformFeeBps)
-	winnersCount := prizedistribution.GetWinnersCount(participantsCount, cfg.WinnerPercent)
+	winnersCount := prizedistribution.GetWinnersCount(participantsCount, 0)
 
 	payouts, err := AllocatePayouts(rankedUsers, prizePoolNet, platformFeeBps)
 	if err != nil {
@@ -203,9 +189,8 @@ func CalculateContestPayoutsWithStoredPool(
 		}, nil
 	}
 
-	cfg := prizedistribution.ConfigFromEnv()
 	prizePoolGross := CalculatePrizePoolGross(participantsCount, entryFeeCents)
-	winnersCount := prizedistribution.GetWinnersCount(participantsCount, cfg.WinnerPercent)
+	winnersCount := prizedistribution.GetWinnersCount(participantsCount, 0)
 
 	// Use the stored prize pool instead of recalculating
 	payouts, err := AllocatePayouts(rankedUsers, storedPrizePoolNet, platformFeeBps)

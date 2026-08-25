@@ -622,17 +622,14 @@ func (s *SettlementService) calculatePrizes(rankings []contracts.FinalRanking, c
 		PlatformFee: platformFee,
 	}
 
-	// Use shared formula for winners count and distribution
-	cfg := prizedistribution.ConfigFromEnv()
-	winnersCount := prizedistribution.GetWinnersCount(participantsCount, cfg.WinnerPercent)
-	if winnersCount == 0 {
-		winnersCount = 1
-	}
-
-	// Calculate distribution using shared Power Law formula
-	shares := prizedistribution.CalculatePrizeDistribution(prizePoolNet, winnersCount, cfg.Alpha)
+	// FIN-004: tralent_v1 is the sole production distribution.
+	shares := prizedistribution.CalculateForContest(prizePoolNet, participantsCount)
 	if len(shares) == 0 {
 		return pool, nil
+	}
+	winnersCount := len(shares)
+	if winnersCount == 0 {
+		winnersCount = 1
 	}
 
 	// Map shares to rankings (by rank)

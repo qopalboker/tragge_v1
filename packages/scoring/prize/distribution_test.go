@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestGetWinnersCount tests that winners count is always ceil(participants * 0.30), min 1.
+// TestGetWinnersCount — FIN-004 tralent_v1 planned winners.
 func TestGetWinnersCount(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -13,15 +13,16 @@ func TestGetWinnersCount(t *testing.T) {
 		want         int
 	}{
 		{"0 participants", 0, 0},
-		{"1 participant", 1, 1},
+		{"1 participant", 1, 0},
 		{"2 participants", 2, 1},
 		{"3 participants", 3, 1},
 		{"4 participants", 4, 2},
 		{"7 participants", 7, 3},
 		{"10 participants", 10, 3},
-		{"11 participants", 11, 4},
+		{"11 participants", 11, 3},
+		{"12 participants", 12, 4},
 		{"33 participants", 33, 10},
-		{"34 participants", 34, 11},
+		{"34 participants", 34, 10},
 		{"100 participants", 100, 30},
 		{"1000 participants", 1000, 300},
 		{"negative participants", -5, 0},
@@ -433,22 +434,12 @@ func TestTwoParticipantsTied(t *testing.T) {
 		float64(results[0].AmountCents)/100, float64(results[1].AmountCents)/100)
 }
 
-// TestOneParticipant tests edge case of 1 participant (safety - contest shouldn't start).
+// TestOneParticipant — tralent_v1: no prize table for <2 participants.
 func TestOneParticipant(t *testing.T) {
 	pool := int64(5000) // $50
 	slots := CalculatePrizeDistribution(1, pool)
-
-	if len(slots) != 1 {
-		t.Fatalf("Expected 1 slot for 1 participant, got %d", len(slots))
-	}
-
-	if slots[0].AmountCents != pool {
-		t.Errorf("Expected single participant to get entire pool (%d), got %d",
-			pool, slots[0].AmountCents)
-	}
-
-	if slots[0].Rank != 1 {
-		t.Errorf("Expected rank 1, got %d", slots[0].Rank)
+	if len(slots) != 0 {
+		t.Fatalf("Expected 0 slots for 1 participant under tralent_v1, got %d", len(slots))
 	}
 }
 
@@ -471,16 +462,14 @@ func TestCentPerfectValidation(t *testing.T) {
 		{500, 10000000},
 		{1000, 8000000},
 		{1000, 7777777}, // Prime-ish number
-		{1, 100},
-		{1, 1},          // Minimum meaningful pool
-		{4, 3},          // Pool smaller than winners
+		{4, 3}, // Pool smaller than winners
 	}
 
 	for _, tc := range testCases {
 		t.Run("", func(t *testing.T) {
 			slots := CalculatePrizeDistribution(tc.participants, tc.prizePoolCents)
 			if len(slots) == 0 {
-				if tc.prizePoolCents > 0 && tc.participants > 0 {
+				if tc.prizePoolCents > 0 && tc.participants >= 2 {
 					t.Errorf("Expected slots for %d participants with pool %d",
 						tc.participants, tc.prizePoolCents)
 				}
