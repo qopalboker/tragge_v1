@@ -35,6 +35,7 @@
     "test:eng001": "node --test scripts/sec-eng001-engine-runtime.test.mjs",
     "test:data001": "node --test scripts/sec-data001-fixed-point.test.mjs",
     "test:md001": "node --test scripts/sec-md001-tick-v2.test.mjs",
+    "test:md005a": "node --test scripts/sec-md005a-provider-selection.test.mjs",
     "test:arch007": "node --test scripts/sec-arch007-runtime-retirement.test.mjs",
     "test:arch008": "node --test scripts/sec-arch008-standalone-fate.test.mjs",
     "test:arch009": "node --test scripts/sec-arch009-docs-refresh.test.mjs",

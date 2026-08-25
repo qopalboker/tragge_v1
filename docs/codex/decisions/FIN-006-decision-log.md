@@ -23,4 +23,4 @@
 
 ### Sign-off
 
-**Awaiting financial sign-off before merge.**
+**Approved and merged to main** (PR #29, 2026-08-25). Gaps `FIN006-*` remain open.

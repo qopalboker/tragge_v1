@@ -438,3 +438,42 @@ Double-entry account mapping for dmin_funded_deposit (manual adjustment clearin
 
 Static/unit locks cover charge path + metrics SQL predicate. Live Admin charge → dashboard metric against real Postgres was not run in this session.
 
+---
+
+## MD005A-RUNTIME-SWITCH
+
+| Field | Value |
+|---|---|
+| **ID** | MD005A-RUNTIME-SWITCH |
+| **Severity** | P1 (verification gap) |
+| **Found during** | MD-005A (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Static guards cover Deriv allow-list, forex DB persistence/reload hooks, and audit wiring. Live Admin UI switch → provider_config row → process restart was not exercised against a running market-ingestor.
+
+---
+
+## MD005A-CRYPTO-BOTH
+
+| Field | Value |
+|---|---|
+| **ID** | MD005A-CRYPTO-BOTH |
+| **Severity** | P2 (product ambiguity) |
+| **Found during** | MD-005A (2026-08-25) |
+| **Status** | Open |
+
+Crypto dual mode `both` remains selectable. A strict reading of policy §9.2 (single active provider per asset group) may require removing it in a follow-up.
+
+---
+
+## MD005-AUTO-FORCE-PAUSE
+
+| Field | Value |
+|---|---|
+| **ID** | MD005-AUTO-FORCE-PAUSE |
+| **Severity** | P0 (deferred roadmap) |
+| **Found during** | MD-005A (2026-08-25) |
+| **Status** | Open — out of MD-005A scope |
+
+Full AUTO / FORCE_PROVIDER / PAUSE_SYMBOL with 1h review remains MD-005 / MD-006.
+
