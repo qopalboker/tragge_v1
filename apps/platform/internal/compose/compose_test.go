@@ -10,6 +10,7 @@ func TestNewWiresRequiredModules(t *testing.T) {
 	want := []string{
 		"identity", "contest", "wallet", "payment", "kyc",
 		"settlement", "leaderboard", "notification", "ticket", "admin", "scheduler",
+		"events",
 	}
 	mods := p.Modules()
 	if len(mods) != len(want) {

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tragge.local/contracts/envelope.v1.json",
+  "title": "Envelope v1",
+  "description": "ARCH-006 cross-system command/event envelope (ADR-0001).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "correlation_id",
+    "schema_name",
+    "schema_version",
+    "aggregate_type",
+    "aggregate_id",
+    "aggregate_version",
+    "ordering_key",
+    "occurred_at",
+    "payload"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "correlation_id": { "type": "string", "minLength": 1 },
+    "causation_id": { "type": "string" },
+    "schema_name": { "type": "string", "minLength": 1 },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "aggregate_type": { "type": "string", "minLength": 1 },
+    "aggregate_id": { "type": "string", "minLength": 1 },
+    "aggregate_version": { "type": "integer", "minimum": 0 },
+    "ordering_key": { "type": "string", "minLength": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  }
+}
