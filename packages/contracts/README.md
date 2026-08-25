@@ -8,8 +8,9 @@ Versioned contracts for the tragge event-driven trading platform.
 > [canonical domain glossary and version catalog](../../docs/product/canonical-domain-glossary-and-version-catalog.md)
 > and the
 > [fixed product and technical policies](../../docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md).
-> `DATA-001`, `MD-001`, `ENG-001`, and `ARCH-006` own the target fixed-point and
-> envelope-complete replacements.
+> `DATA-001`, `MD-001`, and `ENG-001` own the target fixed-point replacements.
+> ARCH-006 introduced `envelope.v1` (`packages/contracts/envelope/v1` and
+> `schemas/envelope.v1.json`) for cross-system command/event metadata.
 
 ## Structure
 

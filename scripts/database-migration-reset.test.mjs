@@ -144,8 +144,11 @@ test("duplicate target migration identifiers are rejected", () => {
 
 test("target foundation is paired, ordered, owner-isolated, and domain-table free", () => {
   const plan = loadPlan();
-  assert.equal(plan.migrations.length, 1);
+  assert.equal(plan.migrations.length, 4);
   assert.equal(path.basename(plan.migrations[0]), "0001_schema_ownership.up.sql");
+  assert.equal(path.basename(plan.migrations[1]), "0002_platform_outbox_inbox.up.sql");
+  assert.equal(path.basename(plan.migrations[2]), "0003_engine_outbox_inbox.up.sql");
+  assert.equal(path.basename(plan.migrations[3]), "0004_market_data_outbox_inbox.up.sql");
   assert.equal(plan.seeds.length, 1);
   const targetUp = read(targetUpPath);
   const targetDown = path.join(targetMigrationDirectory, "0001_schema_ownership.down.sql");
@@ -171,6 +174,28 @@ test("target foundation is paired, ordered, owner-isolated, and domain-table fre
   assert.match(squash, /REFUSED: the legacy schema-squash workflow is retired/);
   assert.match(squash, /exit 1/);
   assert.ok(squash.indexOf("exit 1") < squash.indexOf("pg_dump"));
+});
+
+test("ARCH-006 target outbox/inbox migrations are owner-local and grant-safe", () => {
+  const expected = [
+    ["0002_platform_outbox_inbox", "platform"],
+    ["0003_engine_outbox_inbox", "engine"],
+    ["0004_market_data_outbox_inbox", "market_data"],
+  ];
+  for (const [base, schema] of expected) {
+    const up = read(`packages/db/migrations/target/${base}.up.sql`);
+    const down = `packages/db/migrations/target/${base}.down.sql`;
+    assert.ok(fs.existsSync(path.join(repositoryRoot, down)));
+    assert.match(up, new RegExp(`CREATE TABLE ${schema}\\.outbox`));
+    assert.match(up, new RegExp(`CREATE TABLE ${schema}\\.inbox`));
+    assert.match(up, new RegExp(`CREATE TABLE ${schema}\\.dead_letter`));
+    assert.match(up, new RegExp(`CREATE TABLE ${schema}\\.schema_migrations`));
+    assert.match(up, /PRIMARY KEY \(consumer_name, event_id\)/);
+    assert.match(up, /ordering_key/);
+    assert.match(up, /aggregate_version/);
+    assert.doesNotMatch(up, /\b(?:users|wallets|orders|fills|positions|contests)\b/i);
+    assert.doesNotMatch(up, /GRANT\s+USAGE\s+ON\s+SCHEMA/i);
+  }
 });
 
 test("psql options precede the URL and failures redact credentials", () => {

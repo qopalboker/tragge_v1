@@ -9,6 +9,7 @@ import (
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/admin"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/contest"
+	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/identity"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/kyc"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/leaderboard"
@@ -34,12 +35,17 @@ type Platform struct {
 	Ticket       ticket.Service
 	Admin        admin.Service
 	Scheduler    scheduler.Service
+	Events       events.Service
 }
 
-// New builds the Platform with ARCH-003/004 modules wired.
+// New builds the Platform with ARCH-003/004/006 modules wired.
 func New() *Platform {
 	notif := notification.New()
 	wallets := wallet.New()
+	ev, err := events.New()
+	if err != nil {
+		panic(err)
+	}
 	return &Platform{
 		Identity:     identity.New(),
 		Contest:      contest.New(),
@@ -52,10 +58,11 @@ func New() *Platform {
 		Ticket:       ticket.New(notif),
 		Admin:        admin.New(),
 		Scheduler:    scheduler.New(),
+		Events:       ev,
 	}
 }
 
-// WorkerJobs returns background jobs for platform --mode=worker (ARCH-003/004).
+// WorkerJobs returns background jobs for platform --mode=worker (ARCH-003/004/006).
 func (p *Platform) WorkerJobs() []modules.Job {
 	var jobs []modules.Job
 	jobs = append(jobs, p.Scheduler.Jobs()...)
@@ -63,6 +70,7 @@ func (p *Platform) WorkerJobs() []modules.Job {
 	jobs = append(jobs, p.Notification.Jobs()...)
 	jobs = append(jobs, p.Payment.Jobs()...)
 	jobs = append(jobs, p.Settlement.Jobs()...)
+	jobs = append(jobs, p.Events.Jobs()...)
 	return jobs
 }
 
@@ -105,6 +113,7 @@ func (p *Platform) Modules() []modules.Module {
 		p.Ticket,
 		p.Admin,
 		p.Scheduler,
+		p.Events,
 	}
 }
 

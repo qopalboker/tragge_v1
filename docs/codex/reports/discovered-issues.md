@@ -213,7 +213,7 @@ ARCH-001 added `apps/platform/Dockerfile` (one image, three modes) and `infra/do
 | **Found during** | ARCH-003 (2026-08-25) |
 | **Status** | Open — **not runtime-verified** |
 
-ARCH-003 adds an in-process outbox port for notification/ticket. Full DB outbox/inbox schema ownership remains ARCH-006. Do not claim production transactional outbox until ARCH-006 lands.
+ARCH-003 adds an in-process outbox port for notification/ticket. ARCH-006 added target SQL + durable store ports; live Postgres permission/crash E2E remains open (`ARCH006-POSTGRES-PERMISSIONS-E2E`).
 
 ---
 
@@ -266,3 +266,29 @@ Webhook idempotency + ledger credit paths are unit/contract tested in Platform m
 | **Status** | Open — **not runtime-verified** |
 
 Platform settlement module owns finalization authority in-process. Full cutover of `settlement-service` Kafka/HTTP serving onto Platform-only was not completed this session.
+
+---
+
+## ARCH006-POSTGRES-PERMISSIONS-E2E
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH006-POSTGRES-PERMISSIONS-E2E |
+| **Severity** | P1 (verification gap) |
+| **Found during** | ARCH-006 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Target SQL defines per-owner outbox/inbox and schema grants. Live PostgreSQL tests that runtime roles cannot SELECT/DML other schemas, and crash-window outbox durability after process kill, were not reproduced this session.
+
+---
+
+## ARCH006-BROKER-RELAY
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH006-BROKER-RELAY |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-006 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Outbox relay jobs exist as Platform worker ports. Publishing committed outbox rows to the broker with retry/dead-letter evidence was not runtime-verified.

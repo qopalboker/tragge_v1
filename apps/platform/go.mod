@@ -7,6 +7,8 @@ toolchain go1.24.7
 require (
 	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
+	github.com/Parsaeffatravesh/tragge/packages/contracts v0.0.0
+	github.com/Parsaeffatravesh/tragge/packages/db v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/wallet v0.0.0
 )
 
@@ -52,5 +54,9 @@ replace github.com/Parsaeffatravesh/tragge/packages/auth => ../../packages/auth
 replace github.com/Parsaeffatravesh/tragge/packages/wallet => ../../packages/wallet
 
 replace github.com/Parsaeffatravesh/tragge/packages/config => ../../packages/config
+
+replace github.com/Parsaeffatravesh/tragge/packages/contracts => ../../packages/contracts
+
+replace github.com/Parsaeffatravesh/tragge/packages/db => ../../packages/db
 
 replace github.com/Parsaeffatravesh/tragge/packages/observability => ../../packages/observability

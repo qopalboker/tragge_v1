@@ -8,9 +8,11 @@ They are legacy evidence, not the approved target database. Their complete
 classification is in the
 [migration inventory](../../docs/architecture/migration-inventory.md).
 
-The isolated `migrations/target` chain establishes only the Platform, Trading
-Engine, and Market Data schema/role boundary approved by ADR-0001. It does not
-yet contain domain tables and must not be mixed with the top-level chain. The
+The isolated `migrations/target` chain establishes the Platform, Trading
+Engine, and Market Data schema/role boundary approved by ADR-0001, plus
+ARCH-006 per-owner `outbox` / `inbox` / `dead_letter` / `schema_migrations`
+tables. It does not yet contain domain business tables and must not be mixed
+with the top-level chain. The
 [reset strategy](../../docs/architecture/database-migration-reset-strategy.md)
 defines guards, migration policy, future task ownership, and the exact
 fresh-install command.
