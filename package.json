@@ -29,6 +29,7 @@
     "test:arch002": "node --test scripts/sec-arch002-identity-admin.test.mjs",
     "test:arch003": "node --test scripts/sec-arch003-contest-modules.test.mjs",
     "test:arch004": "node --test scripts/sec-arch004-financial-modules.test.mjs",
+    "test:arch005": "node --test scripts/sec-arch005-settlement-owner.test.mjs",
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

@@ -333,9 +333,14 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		}
 	})
 
-	// Start affiliate commission crediting job (runs every hour, processes commissions older than 7 days)
-	app.wg.Add(1)
-	go app.runCommissionCreditingJob()
+	// ARCH-005: leaderboard must not credit wallets. Affiliate commission
+	// crediting is disabled unless explicitly re-enabled for emergency ops.
+	if os.Getenv("ALLOW_LEADERBOARD_AFFILIATE_CREDITS") == "true" {
+		app.wg.Add(1)
+		go app.runCommissionCreditingJob()
+	} else {
+		log.Info("Skipping affiliate commission job (ARCH-005: settlement/wallet own money credits)")
+	}
 
 	// Mark as ready
 	app.ready.Store(true)

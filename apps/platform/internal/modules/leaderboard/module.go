@@ -15,11 +15,13 @@ var ErrNoSettlementAuthority = errors.New("leaderboard: no settlement authority"
 // Service is the projection surface. Settlement APIs are intentionally absent.
 type Service interface {
 	modules.Service
-	// HasSettlementAuthority is always false (acceptance criterion).
+	// HasSettlementAuthority is always false (ARCH-003/005 acceptance).
 	HasSettlementAuthority() bool
+	// MayCompleteContest is always false — settlement module owns completion.
+	MayCompleteContest() bool
 	// ProjectRanks records a projection-only finalize step (ranks/scores).
 	ProjectRanks(ctx context.Context, contestID string) error
-	// CreditWallets is rejected — settlement-service owns credits.
+	// CreditWallets is rejected — settlement owns credits.
 	CreditWallets(ctx context.Context, contestID string) error
 	Jobs() []modules.Job
 }
@@ -54,6 +56,8 @@ func (s *service) Name() string { return "leaderboard" }
 func (s *service) Ready(ctx context.Context) error { return s.repo.Ping(ctx) }
 
 func (s *service) HasSettlementAuthority() bool { return false }
+
+func (s *service) MayCompleteContest() bool { return false }
 
 func (s *service) ProjectRanks(ctx context.Context, contestID string) error {
 	return s.repo.WriteRanks(ctx, contestID)
