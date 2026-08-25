@@ -2350,6 +2350,33 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	// Start provider manager
 	app.providerManager.Start()
 
+	// MD-005A: restore durable forex selection from provider_config when present.
+	// Env MARKET_PROVIDER remains the bootstrap default for fresh installs / empty DB.
+	if app.db != nil {
+		var dbForex string
+		err := app.db.QueryRowContext(context.Background(),
+			"SELECT active_provider FROM provider_config WHERE asset_class = 'forex'").Scan(&dbForex)
+		if err == nil && dbForex != "" {
+			pt := ProviderType(dbForex)
+			switch pt {
+			case ProviderDeriv, ProviderMassive, ProviderTwelveData, ProviderFinnhub:
+				if app.providerManager.CurrentProvider() != pt {
+					if swErr := app.providerManager.SwitchToProvider(pt); swErr != nil {
+						zapLog.Warn("Failed to apply forex provider from DB",
+							zap.String("provider", dbForex), zap.Error(swErr))
+					} else {
+						cfg.MarketProvider = pt
+						zapLog.Info("Loaded forex provider from DB", zap.String("provider", dbForex))
+					}
+				} else {
+					zapLog.Info("Forex provider already matches DB", zap.String("provider", dbForex))
+				}
+			default:
+				zapLog.Warn("Ignoring invalid forex provider in DB", zap.String("provider", dbForex))
+			}
+		}
+	}
+
 	// Category split:
 	//   Forex/commodity → MARKET_PROVIDER (deriv default)
 	//   Crypto → CRYPTO_PROVIDER (nobitex default)
@@ -3086,6 +3113,38 @@ func (a *App) requireControlAPIKey(next http.Handler) http.Handler {
 	})
 }
 
+// persistProviderConfig writes active provider selection for an asset class.
+// actorUserID is optional (UUID string from admin-bff X-Actor-User-Id).
+func (a *App) persistProviderConfig(ctx context.Context, assetClass, provider, actorUserID string) {
+	if a.db == nil {
+		return
+	}
+	var err error
+	if actorUserID != "" {
+		_, err = a.db.ExecContext(ctx,
+			`UPDATE provider_config
+			 SET active_provider=$1, updated_at=NOW(), updated_by=$2::uuid
+			 WHERE asset_class=$3`,
+			provider, actorUserID, assetClass)
+		if err != nil {
+			// Retry without actor if UUID cast fails (malformed header).
+			_, err = a.db.ExecContext(ctx,
+				`UPDATE provider_config SET active_provider=$1, updated_at=NOW() WHERE asset_class=$2`,
+				provider, assetClass)
+		}
+	} else {
+		_, err = a.db.ExecContext(ctx,
+			`UPDATE provider_config SET active_provider=$1, updated_at=NOW() WHERE asset_class=$2`,
+			provider, assetClass)
+	}
+	if err != nil {
+		a.log().Warn("Failed to persist provider_config",
+			zap.String("asset_class", assetClass),
+			zap.String("provider", provider),
+			zap.Error(err))
+	}
+}
+
 // handleSwitchProvider handles POST /control/switch-provider?provider=<name>
 func (a *App) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 	provider := r.URL.Query().Get("provider")
@@ -3113,6 +3172,9 @@ func (a *App) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "provider switch failed"})
 		return
 	}
+
+	// MD-005A: persist forex/commodity active provider for restart durability.
+	a.persistProviderConfig(r.Context(), "forex", provider, r.Header.Get("X-Actor-User-Id"))
 
 	a.log().Info("Provider switched via control API",
 		zap.String("new_provider", provider))
@@ -3181,14 +3243,8 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 
 	a.activeCryptoProvider.Store(provider)
 
-	// Persist to DB
-	if a.db != nil {
-		_, err := a.db.ExecContext(r.Context(),
-			"UPDATE provider_config SET active_provider=$1, updated_at=NOW() WHERE asset_class='crypto'", provider)
-		if err != nil {
-			a.log().Warn("Failed to persist crypto provider to DB", zap.Error(err))
-		}
-	}
+	// MD-005A: persist crypto active provider (+ optional actor from admin-bff).
+	a.persistProviderConfig(r.Context(), "crypto", provider, r.Header.Get("X-Actor-User-Id"))
 
 	a.log().Info("Crypto provider switched via control API",
 		zap.String("new_provider", provider))

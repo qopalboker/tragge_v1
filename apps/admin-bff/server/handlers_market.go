@@ -102,7 +102,8 @@ func (a *App) handleSwitchMarketProvider(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if body.Provider != "massive" && body.Provider != "twelvedata" {
+	// MD-005A: Deriv is the product default forex provider; legacy providers remain selectable.
+	if body.Provider != "deriv" && body.Provider != "massive" && body.Provider != "twelvedata" && body.Provider != "finnhub" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": adminMsg.InvalidProvider})
 		return
 	}
@@ -120,6 +121,10 @@ func (a *App) handleSwitchMarketProvider(w http.ResponseWriter, r *http.Request)
 	if a.config.MarketIngestorAPIKey != "" {
 		req.Header.Set("X-API-Key", a.config.MarketIngestorAPIKey)
 	}
+	actorUserID := auth.GetUserID(ctx)
+	if actorUserID != "" {
+		req.Header.Set("X-Actor-User-Id", actorUserID)
+	}
 
 	resp, err := a.marketIngestorClient.Do(req)
 	if err != nil {
@@ -136,10 +141,9 @@ func (a *App) handleSwitchMarketProvider(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Log the admin action
-	actorUserID := auth.GetUserID(ctx)
+	// Log the admin action (MD-005A: actor + after provider)
 	a.logAuditEvent(ctx, actorUserID, "market.switch_provider", "market", body.Provider,
-		map[string]string{"provider": body.Provider})
+		map[string]string{"provider": body.Provider, "asset_class": "forex"})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -213,6 +217,10 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 	if a.config.MarketIngestorAPIKey != "" {
 		req.Header.Set("X-API-Key", a.config.MarketIngestorAPIKey)
 	}
+	actorUserID := auth.GetUserID(ctx)
+	if actorUserID != "" {
+		req.Header.Set("X-Actor-User-Id", actorUserID)
+	}
 
 	resp, err := a.marketIngestorClient.Do(req)
 	if err != nil {
@@ -229,10 +237,8 @@ func (a *App) handleSwitchCryptoProvider(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Log the admin action
-	actorUserID := auth.GetUserID(ctx)
 	a.logAuditEvent(ctx, actorUserID, "market.switch_crypto_provider", "market", body.Provider,
-		map[string]string{"provider": body.Provider})
+		map[string]string{"provider": body.Provider, "asset_class": "crypto"})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -251,7 +257,8 @@ func (a *App) handleSwitchForexProvider(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if body.Provider != "massive" && body.Provider != "twelvedata" && body.Provider != "finnhub" {
+	// MD-005A: allow Deriv (product §9.2 default) plus legacy forex providers.
+	if body.Provider != "deriv" && body.Provider != "massive" && body.Provider != "twelvedata" && body.Provider != "finnhub" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": adminMsg.InvalidProvider})
 		return
 	}
@@ -269,6 +276,10 @@ func (a *App) handleSwitchForexProvider(w http.ResponseWriter, r *http.Request) 
 	if a.config.MarketIngestorAPIKey != "" {
 		req.Header.Set("X-API-Key", a.config.MarketIngestorAPIKey)
 	}
+	actorUserID := auth.GetUserID(ctx)
+	if actorUserID != "" {
+		req.Header.Set("X-Actor-User-Id", actorUserID)
+	}
 
 	resp, err := a.marketIngestorClient.Do(req)
 	if err != nil {
@@ -285,9 +296,8 @@ func (a *App) handleSwitchForexProvider(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	actorUserID := auth.GetUserID(ctx)
 	a.logAuditEvent(ctx, actorUserID, "market.switch_forex_provider", "market", body.Provider,
-		map[string]string{"provider": body.Provider})
+		map[string]string{"provider": body.Provider, "asset_class": "forex"})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)

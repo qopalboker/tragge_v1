@@ -536,7 +536,7 @@ onUnmounted(() => {
           </div>
           <div class="provider-options">
             <label
-              v-for="prov in (providerConfig.forex.available.length ? providerConfig.forex.available : ['massive', 'twelvedata', 'finnhub'])"
+              v-for="prov in (providerConfig.forex.available.length ? providerConfig.forex.available : ['deriv', 'massive', 'twelvedata', 'finnhub'])"
               :key="prov"
               :class="['provider-option', { 'provider-option-active': providerConfig.forex.active === prov }]"
             >

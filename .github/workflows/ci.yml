@@ -321,6 +321,19 @@ jobs:
         run: node --test scripts/sec-fin006-admin-funded-deposit.test.mjs
 
 
+  md-005a-provider-selection:
+    name: MD-005A admin provider selection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: MD-005A regression suite
+        run: node --test scripts/sec-md005a-provider-selection.test.mjs
+
+
+
   lifecycle-001-late-entry:
     name: LIFECYCLE-001 late entry policy
     runs-on: ubuntu-latest
