@@ -320,6 +320,22 @@ jobs:
       - name: LIFECYCLE-001 regression suite
         run: node --test scripts/sec-lifecycle001-late-entry.test.mjs
 
+  lifecycle-002-capacity:
+    name: LIFECYCLE-002 no product capacity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: LIFECYCLE-002 capacity removal suite
+        run: node --test scripts/sec-lifecycle002-capacity.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)

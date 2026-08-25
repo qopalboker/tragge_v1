@@ -111,9 +111,8 @@ func (a *App) handleCreateContest(w http.ResponseWriter, r *http.Request) {
 	if req.MinParticipants < 0 {
 		v.AddError("min_participants", "invalid_value", "min_participants must be >= 0")
 	}
-	if req.MaxParticipants != nil && *req.MaxParticipants <= 0 {
-		v.AddError("max_participants", "invalid_value", "max_participants must be > 0")
-	}
+	// LIFECYCLE-002 / policy §5.2: ignore client max_participants; product capacity does not exist.
+	req.MaxParticipants = nil
 	if req.AssetClass != "" && !contracts.AssetClass(req.AssetClass).IsValid() {
 		v.AddError("asset_class", "invalid_value", "asset_class must be one of: forex, crypto, stocks, mixed")
 	}
@@ -389,11 +388,7 @@ func (a *App) handleCreateContestFromTemplate(w http.ResponseWriter, r *http.Req
 		entryFeeCents = *req.EntryFeeCents
 	}
 
-	maxParticipants := template.MaxParticipants
-	if req.MaxParticipants != nil {
-		maxParticipants = *req.MaxParticipants
-	}
-
+	// LIFECYCLE-002 / policy §5.2: product capacity does not exist — always NULL on create.
 	regDeadline := req.StartsAt.Add(-1 * time.Second)
 	if req.RegistrationDeadline != nil {
 		regDeadline = *req.RegistrationDeadline
@@ -444,10 +439,7 @@ func (a *App) handleCreateContestFromTemplate(w http.ResponseWriter, r *http.Req
 
 	// Insert contest from template
 	var contest ContestResponse
-	var maxParticipantsPtr *int
-	if maxParticipants > 0 {
-		maxParticipantsPtr = &maxParticipants
-	}
+	var maxParticipantsPtr *int // LIFECYCLE-002: always NULL
 
 	// FIN-001: platform_fee_bps only (default 2000 for paid). Never derive from commission_rate.
 	platformFeeBps := 0

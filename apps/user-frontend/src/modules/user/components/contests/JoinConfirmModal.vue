@@ -54,7 +54,7 @@ const duration = computed(() => {
 });
 
 const participantCount = computed(() => props.contest.participant_count ?? 0);
-const maxParticipants = computed(() => props.contest.max_participants);
+// LIFECYCLE-002: no product capacity — display count only.
 
 const estimatedPrizePool = computed(() => props.contest.estimated_prize_pool_cents ?? 0);
 
@@ -164,7 +164,7 @@ async function handleConfirmJoin(): Promise<void> {
             <div class="detail-item">
               <span class="detail-label">{{ t('contests.participants') }}</span>
               <span class="detail-value">
-                {{ participantCount }}{{ maxParticipants ? `/${maxParticipants}` : '' }}
+                {{ participantCount }}
               </span>
             </div>
             <div class="detail-item">

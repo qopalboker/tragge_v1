@@ -181,9 +181,7 @@ async function handleTemplateSubmit(): Promise<void> {
     if (templateOverrides.value.entry_fee_cents !== null && templateOverrides.value.entry_fee_cents >= 0) {
       payload.entry_fee_cents = templateOverrides.value.entry_fee_cents;
     }
-    if (templateOverrides.value.max_participants !== null && templateOverrides.value.max_participants > 0) {
-      payload.max_participants = templateOverrides.value.max_participants;
-    }
+    // LIFECYCLE-002: do not send max_participants (product capacity removed).
 
     await api.post('/api/admin/contests/from-template', payload);
     toast.success(t('contestForm.templates.createSuccess'));
@@ -292,9 +290,7 @@ function buildCreatePayload() {
   if (form.value.description.trim()) {
     payload.description = form.value.description.trim();
   }
-  if (form.value.max_participants && form.value.max_participants > 0) {
-    payload.max_participants = form.value.max_participants;
-  }
+  // LIFECYCLE-002: do not send max_participants (product capacity removed).
   if (form.value.commission_rate > 0) {
     payload.commission_rate = form.value.commission_rate;
   }
@@ -320,9 +316,7 @@ function buildUpdatePayload() {
   if (form.value.description.trim()) {
     payload.description = form.value.description.trim();
   }
-  if (form.value.max_participants && form.value.max_participants > 0) {
-    payload.max_participants = form.value.max_participants;
-  }
+  // LIFECYCLE-002: do not send max_participants (product capacity removed).
   if (form.value.commission_rate > 0) {
     payload.commission_rate = form.value.commission_rate;
   }
@@ -497,18 +491,6 @@ onMounted(() => {
                   min="0"
                   step="1"
                   :placeholder="t('contestForm.entryFeeHint')"
-                />
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="tpl-max_participants">{{ t('contestForm.maxParticipants') }}</label>
-                <input
-                  id="tpl-max_participants"
-                  v-model.number="templateOverrides.max_participants"
-                  type="number"
-                  class="input"
-                  min="1"
-                  :placeholder="t('contestForm.maxParticipantsPlaceholder')"
                 />
               </div>
 
@@ -736,17 +718,7 @@ onMounted(() => {
             />
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="max_participants">{{ t('contestForm.maxParticipants') }}</label>
-            <input
-              id="max_participants"
-              v-model.number="form.max_participants"
-              type="number"
-              class="input"
-              min="1"
-              :placeholder="t('contestForm.maxParticipantsPlaceholder')"
-            />
-          </div>
+          <!-- LIFECYCLE-002: max_participants input removed (no product capacity). -->
 
         </div>
       </fieldset>

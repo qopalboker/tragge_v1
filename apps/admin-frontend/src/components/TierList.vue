@@ -104,10 +104,7 @@ onMounted(fetchTiers);
           <label>{{ t('tiers.qtyOverride') }}</label>
           <input v-model.number="newTier.qty_total_override" type="number" min="0" class="input" placeholder="پیش‌فرض از قالب" />
         </div>
-        <div class="form-group">
-          <label>{{ t('tiers.maxParticipantsOverride') }}</label>
-          <input v-model.number="newTier.max_participants_override" type="number" min="0" class="input" placeholder="پیش‌فرض از قالب" />
-        </div>
+        <!-- LIFECYCLE-002: participant capacity override input removed (policy §5.2). -->
         <div class="form-group">
           <label>{{ t('tiers.commissionOverride') }}</label>
           <input v-model.number="newTier.commission_rate_override" type="number" min="0" max="50" step="0.01" class="input" placeholder="پیش‌فرض از قالب" />

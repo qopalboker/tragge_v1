@@ -120,12 +120,7 @@ const participantDisplay = computed(() => {
   return `${props.participantCount} / ${minRequired.value}`;
 });
 
-// Available slots
-const availableSlots = computed(() => {
-  if (!props.maxParticipants) return null;
-  return props.maxParticipants - props.participantCount;
-});
-
+// LIFECYCLE-002: product capacity removed — no "slots remaining" UX.
 const isRunning = computed(() => props.status === 'running');
 const isCompleted = computed(() => props.status === 'completed' || props.status === 'settling');
 const isPreStart = computed(
@@ -277,14 +272,6 @@ function handleViewResults(): void {
       </template>
     </div>
 
-    <!-- Available Slots Notice -->
-    <div v-if="availableSlots !== null && availableSlots < 10 && canJoin" class="slots-notice">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-      <span>{{ t('contestDetails.slotsRemaining', { count: availableSlots }) }}</span>
-    </div>
   </div>
 </template>
 

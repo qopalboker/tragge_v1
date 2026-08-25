@@ -236,18 +236,9 @@ const participantCount = computed(() => {
   return contestState.value?.participant_count ?? contest.value?.participant_count ?? 0;
 });
 
-const maxParticipants = computed(() => {
-  return contestState.value?.max_participants ?? contest.value?.max_participants ?? null;
-});
+// LIFECYCLE-002: product capacity removed — no max / progress bar.
 
 // --- Computed info cards ---
-
-const participantProgress = computed(() => {
-  const count = participantCount.value;
-  const max = maxParticipants.value;
-  if (!max || max <= 0) return 0;
-  return Math.min((count / max) * 100, 100);
-});
 
 const prizePool = computed(() => {
   if (!contest.value) return 0;
@@ -775,12 +766,8 @@ onUnmounted(() => {
         <div class="info-card">
           <span class="info-card-label">{{ t('contestDetail.cards.participants') }}</span>
           <span class="info-card-value">
-            {{ participantCount }}<span v-if="maxParticipants" class="info-card-secondary"> / {{ maxParticipants }}</span>
-            <span v-else class="info-card-secondary"> / &infin;</span>
+            {{ participantCount }}
           </span>
-          <div v-if="maxParticipants" class="progress-bar">
-            <div class="progress-fill" :style="{ width: `${participantProgress}%` }"></div>
-          </div>
         </div>
 
         <!-- Prize Pool Card -->
@@ -883,7 +870,7 @@ onUnmounted(() => {
                 </div>
                 <div class="info-row">
                   <span class="info-label">{{ t('contestDetail.overview.maxParticipants') }}</span>
-                  <span class="info-value">{{ contest.max_participants ?? t('contestDetail.overview.unlimited') }}</span>
+                  <span class="info-value">{{ t('contestDetail.overview.unlimited') }}</span>
                 </div>
               </div>
             </div>
