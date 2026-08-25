@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	platformadmin "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin"
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/config"
 	"github.com/Parsaeffatravesh/tragge/packages/db"
@@ -465,6 +466,13 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		app.auth.Middleware.SetSuperAdminMFAPolicy(func(ctx context.Context) (bool, error) {
 			return app.isAdminMFAEnabled(ctx)
 		})
+		// ARCH-002: role/permission enforcement via Platform admin application service.
+		adminSvc, adminErr := platformadmin.NewWithAuth(app.auth)
+		if adminErr != nil {
+			log.Fatal("Failed to construct Platform admin authorization service", zap.Error(adminErr))
+		}
+		app.auth.Middleware.SetPermissionAuthorizer(adminSvc)
+		app.auth.Middleware.SetRoleAuthorizer(adminSvc)
 	}
 
 	// Initialize ban expiry sweeper to auto-unban expired temporary bans

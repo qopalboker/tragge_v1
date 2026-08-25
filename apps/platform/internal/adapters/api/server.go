@@ -14,6 +14,8 @@ import (
 
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
+	platformadmin "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin"
+	platformidentity "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity"
 )
 
 // Server is the api-mode HTTP process.
@@ -48,6 +50,10 @@ func New(platform *compose.Platform, addr, version string) *Server {
 			"modules": names,
 		})
 	})
+
+	// ARCH-002: identity + admin endpoints run from Platform API mode.
+	platformidentity.RegisterRoutes(mux, platform.Identity)
+	platformadmin.RegisterRoutes(mux, platform.Admin)
 
 	return &Server{
 		platform: platform,

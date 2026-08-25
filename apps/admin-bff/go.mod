@@ -6,6 +6,7 @@ toolchain go1.24.7
 
 require (
 	github.com/IBM/sarama v1.43.1
+	github.com/Parsaeffatravesh/tragge/apps/platform v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/contracts v0.0.0
@@ -97,6 +98,8 @@ require (
 	google.golang.org/grpc v1.67.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
+
+replace github.com/Parsaeffatravesh/tragge/apps/platform => ../platform
 
 replace github.com/Parsaeffatravesh/tragge/packages/auth => ../../packages/auth
 

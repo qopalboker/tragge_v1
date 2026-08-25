@@ -75,14 +75,20 @@ func TestModeStartupSmokeHealthAndReady(t *testing.T) {
 			if tc.mode != mode.API {
 				return
 			}
-			resp, err := client.Get(base + "/v1/platform/modules")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
+			for _, path := range []string{
+				"/v1/platform/modules",
+				"/api/user/auth/v1/boundary",
+				"/api/admin/auth/v1/boundary",
+			} {
+				resp, err := client.Get(base + path)
+				if err != nil {
+					t.Fatal(err)
+				}
 				body, _ := io.ReadAll(resp.Body)
-				t.Fatalf("modules status=%d body=%s", resp.StatusCode, body)
+				resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("%s status=%d body=%s", path, resp.StatusCode, body)
+				}
 			}
 		})
 	}
