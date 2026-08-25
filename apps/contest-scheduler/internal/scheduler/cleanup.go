@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -9,9 +10,9 @@ import (
 	"time"
 
 	"github.com/Parsaeffatravesh/tragge/packages/db"
+	"github.com/Parsaeffatravesh/tragge/packages/domain/statemachine"
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
-	"github.com/Parsaeffatravesh/tragge/packages/domain/statemachine"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redis/go-redis/v9"
@@ -61,6 +62,11 @@ var (
 		Help: "Number of contests stuck in running state beyond twice their duration",
 	})
 )
+
+// AuditRetentionYears is the product/compliance retention for archived contests
+// (LIFECYCLE-003 human decision: 7 years). Archive rows must remain queryable
+// until retain_until (= archived_at + AuditRetentionYears).
+const AuditRetentionYears = 7
 
 // CleanupConfig holds configuration for the cleanup service.
 type CleanupConfig struct {
@@ -396,13 +402,67 @@ type CleanupSummary struct {
 	NotificationsDeleted  int64
 }
 
-// archiveCompletedTournaments moves completed tournaments older than the configured
-// number of days to the tournaments_archive table.
+// archiveCompletedTournaments copies completed tournaments (and related audit rows)
+// into archive tables, then soft-deletes them from the hot path via contests.archived_at.
+// LIFECYCLE-003: never hard-DELETE contests (CASCADE would destroy trading/audit history).
 func (cs *CleanupService) archiveCompletedTournaments(ctx context.Context) (int, error) {
 	archiveBefore := time.Now().AddDate(0, 0, -cs.config.ArchiveAfterDays)
 
-	// Insert into archive (skip already archived)
-	result, err := cs.pool.Primary().ExecContext(ctx, `
+	tx, err := cs.pool.Primary().BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin archive tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Candidate set: completed, settled, old enough, not yet soft-archived.
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id FROM contests
+		WHERE status = 'completed'
+		  AND settled_at IS NOT NULL
+		  AND settled_at < $1
+		  AND archived_at IS NULL
+	`, archiveBefore)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query archive candidates: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			rows.Close()
+			return 0, scanErr
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	for _, contestID := range ids {
+		if err := archiveOneContest(ctx, tx, contestID); err != nil {
+			return 0, fmt.Errorf("archive contest %s: %w", contestID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit archive tx: %w", err)
+	}
+
+	cleanupArchivesTotal.Add(float64(len(ids)))
+	cs.logger.Info("Archived completed tournaments (soft-delete)",
+		zap.Int("count", len(ids)),
+		zap.Time("before", archiveBefore),
+		zap.Int("retention_years", AuditRetentionYears))
+	return len(ids), nil
+}
+
+// archiveOneContest copies contest + related rows into archive tables and soft-deletes.
+func archiveOneContest(ctx context.Context, tx *sql.Tx, contestID string) error {
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO tournaments_archive (
 			id, name, description, starts_at, ends_at, status,
 			entry_fee_cents, platform_fee_bps, qty_total, rules_json, created_at,
@@ -412,7 +472,9 @@ func (cs *CleanupService) archiveCompletedTournaments(ctx context.Context) (int,
 			registration_deadline, registration_opens_at,
 			auto_start, commission_rate,
 			paused_at, total_paused_duration,
-			archived_at
+			archived_at, retain_until,
+			prize_pool_net_cents, is_free,
+			economics_locked_at, locked_entry_fee_cents, locked_platform_fee_bps
 		)
 		SELECT
 			id, name, description, starts_at, ends_at, status,
@@ -423,76 +485,74 @@ func (cs *CleanupService) archiveCompletedTournaments(ctx context.Context) (int,
 			registration_deadline, registration_opens_at,
 			auto_start, commission_rate,
 			paused_at, total_paused_duration,
-			NOW()
+			NOW(), NOW() + ($2::int * INTERVAL '1 year'),
+			COALESCE(prize_pool_net_cents, 0), COALESCE(is_free, FALSE),
+			economics_locked_at, locked_entry_fee_cents, locked_platform_fee_bps
 		FROM contests
-		WHERE status = 'completed'
-		  AND settled_at IS NOT NULL
-		  AND settled_at < $1
-		  AND id NOT IN (SELECT id FROM tournaments_archive)
-	`, archiveBefore)
-
+		WHERE id = $1
+		ON CONFLICT (id) DO NOTHING
+	`, contestID, AuditRetentionYears)
 	if err != nil {
-		return 0, fmt.Errorf("failed to archive tournaments: %w", err)
+		return fmt.Errorf("tournaments_archive insert: %w", err)
 	}
 
-	archived, _ := result.RowsAffected()
-	if archived > 0 {
-		cleanupArchivesTotal.Add(float64(archived))
-
-		// Delete archived contest status history
-		_, err = cs.pool.Primary().ExecContext(ctx, `
-			DELETE FROM contest_status_history
-			WHERE contest_id IN (
-				SELECT id FROM tournaments_archive
-				WHERE archived_at > NOW() - INTERVAL '5 minutes'
-			)
-		`)
-		if err != nil {
-			cs.logger.Warn("Failed to clean up status history for archived contests", zap.Error(err))
-		}
-
-		// Delete archived contest participants
-		_, err = cs.pool.Primary().ExecContext(ctx, `
-			DELETE FROM contest_participants
-			WHERE contest_id IN (
-				SELECT id FROM tournaments_archive
-				WHERE archived_at > NOW() - INTERVAL '5 minutes'
-			)
-		`)
-		if err != nil {
-			cs.logger.Warn("Failed to clean up participants for archived contests", zap.Error(err))
-		}
-
-		// Delete archived contest symbols
-		_, err = cs.pool.Primary().ExecContext(ctx, `
-			DELETE FROM contest_symbols
-			WHERE contest_id IN (
-				SELECT id FROM tournaments_archive
-				WHERE archived_at > NOW() - INTERVAL '5 minutes'
-			)
-		`)
-		if err != nil {
-			cs.logger.Warn("Failed to clean up symbols for archived contests", zap.Error(err))
-		}
-
-		// Delete the contests themselves
-		_, err = cs.pool.Primary().ExecContext(ctx, `
-			DELETE FROM contests
-			WHERE id IN (
-				SELECT id FROM tournaments_archive
-				WHERE archived_at > NOW() - INTERVAL '5 minutes'
-			)
-		`)
-		if err != nil {
-			return int(archived), fmt.Errorf("failed to delete archived contests: %w", err)
-		}
-
-		cs.logger.Info("Archived completed tournaments",
-			zap.Int64("count", archived),
-			zap.Time("before", archiveBefore))
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contest_participants_archive (
+			contest_id, user_id, joined_at, qty_total, qty_available,
+			total_score, final_rank, final_prize_cents, archived_at
+		)
+		SELECT contest_id, user_id, joined_at, qty_total, qty_available,
+			total_score, final_rank, final_prize_cents, NOW()
+		FROM contest_participants
+		WHERE contest_id = $1
+		ON CONFLICT (contest_id, user_id) DO NOTHING
+	`, contestID)
+	if err != nil {
+		return fmt.Errorf("participants_archive insert: %w", err)
 	}
 
-	return int(archived), nil
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contest_symbols_archive (
+			contest_id, symbol, provider_symbol_twelvedata, provider_symbol_finnhub,
+			enabled, created_at, archived_at
+		)
+		SELECT contest_id, symbol, provider_symbol_twelvedata, provider_symbol_finnhub,
+			enabled, created_at, NOW()
+		FROM contest_symbols
+		WHERE contest_id = $1
+		ON CONFLICT (contest_id, symbol) DO NOTHING
+	`, contestID)
+	if err != nil {
+		return fmt.Errorf("symbols_archive insert: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contest_status_history_archive (
+			id, contest_id, from_status, to_status, changed_by, reason, metadata, created_at, archived_at
+		)
+		SELECT id, contest_id, from_status::text, to_status::text, changed_by, reason, metadata, created_at, NOW()
+		FROM contest_status_history
+		WHERE contest_id = $1
+		ON CONFLICT (id) DO NOTHING
+	`, contestID)
+	if err != nil {
+		return fmt.Errorf("status_history_archive insert: %w", err)
+	}
+
+	// Soft-delete: leave row + children for FK integrity; exclude from hot path via archived_at.
+	res, err := tx.ExecContext(ctx, `
+		UPDATE contests
+		SET archived_at = NOW()
+		WHERE id = $1 AND archived_at IS NULL
+	`, contestID)
+	if err != nil {
+		return fmt.Errorf("soft-delete contest: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("contest %s already archived or missing", contestID)
+	}
+	return nil
 }
 
 // cancelStaleTournaments cancels scheduled or registration_open tournaments
@@ -656,5 +716,41 @@ func isUndefinedTableError(err error) bool {
 	}
 	// PostgreSQL error code 42P01 = undefined_table
 	return false // Non-critical, just skip
+}
+
+// ArchivedContestAuditRow is a cold-path audit projection (queryable after soft-archive).
+type ArchivedContestAuditRow struct {
+	ID               string
+	Name             string
+	Status           string
+	EntryFeeCents    int
+	PlatformFeeBps   int
+	PrizePoolNetCents int64
+	ParticipantCount int
+	ArchivedAt       time.Time
+	RetainUntil      time.Time
+}
+
+// QueryArchivedContestForAudit loads a soft-archived contest from tournaments_archive.
+// Hot-path listings exclude archived_at IS NOT NULL; this is the audit/export path.
+func (cs *CleanupService) QueryArchivedContestForAudit(ctx context.Context, contestID string) (*ArchivedContestAuditRow, error) {
+	var row ArchivedContestAuditRow
+	err := cs.pool.Replica().QueryRowContext(ctx, `
+		SELECT id::text, name, status::text,
+		       COALESCE(entry_fee_cents, 0), COALESCE(platform_fee_bps, 0),
+		       COALESCE(prize_pool_net_cents, 0), COALESCE(current_participants, 0),
+		       archived_at, COALESCE(retain_until, archived_at + INTERVAL '7 years')
+		FROM tournaments_archive
+		WHERE id = $1
+	`, contestID).Scan(
+		&row.ID, &row.Name, &row.Status,
+		&row.EntryFeeCents, &row.PlatformFeeBps,
+		&row.PrizePoolNetCents, &row.ParticipantCount,
+		&row.ArchivedAt, &row.RetainUntil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
 

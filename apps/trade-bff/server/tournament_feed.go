@@ -408,7 +408,8 @@ func (c *FeedClient) sendFeedSnapshot() {
 		       COUNT(cp.contest_id) as participant_count
 		FROM contests c
 		LEFT JOIN contest_participants cp ON cp.contest_id = c.id
-		WHERE c.status IN ('registration_open', 'scheduled', 'running')
+		WHERE c.archived_at IS NULL
+		  AND c.status IN ('registration_open', 'scheduled', 'running')
 		GROUP BY c.id, c.name, c.status, c.asset_class, c.duration_type,
 		         c.starts_at, c.ends_at, c.entry_fee_cents, c.is_free,
 		         c.commission_rate, c.platform_fee_bps, c.max_participants
@@ -499,7 +500,7 @@ func (c *FeedClient) sendTournamentSnapshot(contestID string) {
 		       COUNT(cp.contest_id) as participant_count
 		FROM contests c
 		LEFT JOIN contest_participants cp ON cp.contest_id = c.id
-		WHERE c.id = $1
+		WHERE c.id = $1 AND c.archived_at IS NULL
 		GROUP BY c.id, c.name, c.status, c.asset_class, c.duration_type,
 		         c.starts_at, c.ends_at, c.entry_fee_cents, c.is_free,
 		         c.commission_rate, c.platform_fee_bps, c.max_participants
