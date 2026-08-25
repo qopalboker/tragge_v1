@@ -201,3 +201,29 @@ LIFECYCLE-003 soft-delete + archive copies are locked via static/unit tests. A f
 | **Status** | Open — **not runtime-verified** |
 
 ARCH-001 added `apps/platform/Dockerfile` (one image, three modes) and `infra/docker/docker-compose.platform.yml`. The Docker image build / multi-mode container smoke was **not** run this session. Local `go test ./apps/platform/...` and binary build passed. Do **not** claim the versioned image acceptance criterion as runtime-verified until `docker build` succeeds and each mode responds on `/healthz` + `/readyz` in a container.
+
+---
+
+## ARCH003-OUTBOX-SCHEMA
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH003-OUTBOX-SCHEMA |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-003 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+ARCH-003 adds an in-process outbox port for notification/ticket. Full DB outbox/inbox schema ownership remains ARCH-006. Do not claim production transactional outbox until ARCH-006 lands.
+
+---
+
+## ARCH003-AFFILIATE-JOB
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH003-AFFILIATE-JOB |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-003 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Affiliate commission crediting still lives in `apps/leaderboard-worker`. ARCH-003 gated wallet-credit *flags* on projection finalize but did not relocate the affiliate job. Track until wallet/settlement ownership absorbs it.

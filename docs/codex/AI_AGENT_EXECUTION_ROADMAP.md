@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** ARCH-001 on main. ARCH-002 done on branch (identity+admin). Next: ARCH-003. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** ARCH-001..002 on main. ARCH-003 done on branch. Next: ARCH-004. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -322,8 +322,9 @@ These were reported fixed internally but never personally verified — treat as 
 **Subtasks**
 - [x] Pull exact scope from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` (authority).
 - [x] **ARCH-001** — Platform modular-monolith skeleton. See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
-- [x] **ARCH-002** — Identity/admin into Platform (services + API mount + BFF wrappers). See `docs/codex/reports/ARCH-002-identity-admin-migration.md`.
-- [ ] ARCH-003…007 — not started; each own branch/PR per source document.
+- [x] **ARCH-002** — Identity/admin into Platform. See `docs/codex/reports/ARCH-002-identity-admin-migration.md`.
+- [x] **ARCH-003** — Contest/scheduler/leaderboard/notification/ticket. See `docs/codex/reports/ARCH-003-contest-support-modules.md`.
+- [ ] ARCH-004…007 — not started; each own branch/PR per source document.
 - [ ] Treat each as its own branch/PR, following §5 and §6.
 
 **Verify:** per-task, as specified in the source document.

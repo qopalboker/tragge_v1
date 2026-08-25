@@ -180,27 +180,17 @@ func (a *App) markRanksWritten(ctx context.Context, contestID string) error {
 	return err
 }
 
-// markWalletsCredited records that wallet credits have been processed.
+// markWalletsCredited is retained for call-site compatibility but is a no-op.
+// ARCH-003 / FIN-003: leaderboard projection must not claim wallet-credit authority;
+// settlement-service owns prize ledger credits and wallets_credited semantics.
 func (a *App) markWalletsCredited(ctx context.Context, contestID string) error {
-	_, err := a.db.ExecContext(ctx, `
-		UPDATE contest_finalization_state
-		SET wallets_credited = TRUE, wallets_credited_at = NOW()
-		WHERE contest_id = $1
-	`, contestID)
-	return err
+	return nil
 }
 
-// markRanksAndWalletsCredited atomically records that both ranks have been written
-// and wallet credits have been processed. This prevents crash-recovery issues where
-// one flag could be set without the other.
+// markRanksAndWalletsCredited writes ranks only. It does not set wallets_credited
+// (ARCH-003: leaderboard has no settlement authority).
 func (a *App) markRanksAndWalletsCredited(ctx context.Context, contestID string) error {
-	_, err := a.db.ExecContext(ctx, `
-		UPDATE contest_finalization_state
-		SET ranks_written = TRUE, ranks_written_at = NOW(),
-		    wallets_credited = TRUE, wallets_credited_at = NOW()
-		WHERE contest_id = $1
-	`, contestID)
-	return err
+	return a.markRanksWritten(ctx, contestID)
 }
 
 // markStatusUpdated records that contest status has been updated.

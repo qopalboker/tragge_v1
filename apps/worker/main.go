@@ -112,9 +112,17 @@ func main() {
 		contestscheduler.RunWithSharedDeps(ctx, pool, redisClient) // default :8088
 	})
 
-	infra.SafeGoWg(&wg, logger, "free-contest-generator", func() {
-		freecontestgenerator.RunWithSharedDeps(ctx, pool) // default :8089, no Redis needed
-	})
+	// ARCH-003: free-practice generation is owned by Platform scheduler module.
+	// Do not start the standalone free-contest-generator alongside the scheduler
+	// (duplicate generation owner). Compatibility binary remains for one-off ops
+	// when PLATFORM_ALLOW_STANDALONE_FREE_GENERATOR=true.
+	if os.Getenv("PLATFORM_ALLOW_STANDALONE_FREE_GENERATOR") == "true" {
+		infra.SafeGoWg(&wg, logger, "free-contest-generator", func() {
+			freecontestgenerator.RunWithSharedDeps(ctx, pool) // default :8089
+		})
+	} else {
+		log.Println("worker: skipping free-contest-generator (ARCH-003: Platform scheduler owns generation)")
+	}
 
 	<-ctx.Done()
 	log.Println("worker: shutdown signal received, waiting for workers...")
