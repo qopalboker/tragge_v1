@@ -84,3 +84,42 @@ FIN-003 ownership/idempotency is locked via static guards + wallet idempotency-k
 | **Status** | Open |
 
 `packages/contracts/prize_distribution/tralent_like_v1.json` is **not** the policy `tralent_v1` algorithm (different fixed brackets). Production now uses policy §11 via `CalculateForContest`. Retire or rewrite this JSON in a docs/contracts cleanup PR.
+
+---
+
+## FIN005-COMPOSE-LIFECYCLE
+
+| Field | Value |
+|---|---|
+| **ID** | FIN005-COMPOSE-LIFECYCLE |
+| **Severity** | P1 (verification gap) |
+| **Found during** | FIN-005 (2026-08-25) |
+| **Status** | Open |
+
+In-process economics/tralent_v1/ledger conservation harness is green. Full multi-service join/trade/finalize/settle against Compose Postgres/Redis was not run this session.
+
+---
+
+## FIN005-STAGING-SCHEDULE
+
+| Field | Value |
+|---|---|
+| **ID** | FIN005-STAGING-SCHEDULE |
+| **Severity** | P2 |
+| **Found during** | FIN-005 (2026-08-25) |
+| **Status** | Open |
+
+Scheduled staging-like reconciliation guard not configured (no staging environment / cron in this session).
+
+---
+
+## FIN005-BRANCH-PROTECTION
+
+| Field | Value |
+|---|---|
+| **ID** | FIN005-BRANCH-PROTECTION |
+| **Severity** | P2 |
+| **Found during** | FIN-005 (2026-08-25) |
+| **Status** | Open |
+
+`fin-005-reconciliation-harness` CI job exists (always-on). Making it a GitHub required check (optionally path-filtered) is owned by CI-003.

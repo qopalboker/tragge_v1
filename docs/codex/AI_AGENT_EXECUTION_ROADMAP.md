@@ -107,10 +107,14 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 ## 8. The Roadmap
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 > **Status note (2026-08-25 continuity):** DOC-001 + CI-001 on stacked branch `codex/CI-001-frontend-tests-ci` (includes DOC-001 commits; awaiting push/merge). INFRA-001 **blocked** pending kubeconfig (`docs/codex/decisions/INFRA-001-decision-log.md`). Playwright E2E quarantined (`discovered-issues.md`). Next unblocked Phase 0: SEC-008.
 =======
 > **Status note (2026-08-25 continuity):** FIN-001..003 signed off (FIN-003 Postgres dual-race gap tracked). FIN-004 done on branch (`tralent_v1` production) — awaiting financial sign-off. Next after sign-off: **FIN-005**. INFRA-001 parked.
 >>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
+=======
+> **Status note (2026-08-25 continuity):** FIN-001..004 signed off. FIN-005 in-process reconciliation harness on branch — awaiting financial sign-off. Compose/staging lifecycle tracked as follow-ups. Next after Phase 1 sign-off: **LIFECYCLE-001**. INFRA-001 parked; FIN003-POSTGRES-DUAL-RACE still open.
+>>>>>>> 294cd38 (FIN-005: Add in-process financial reconciliation harness)
 
 ### Task Tracker
 
@@ -132,9 +136,14 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch `codex/FIN-001-platform-fee-source` (2026-08-25) — signed off; awaiting merge |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch `codex/FIN-002-prize-calculation-path` (2026-08-25) — signed off; awaiting merge |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Done on branch `codex/FIN-003-single-finalization-owner` (2026-08-25) — signed off; Postgres dual-race NOT runtime-verified (FIN003-POSTGRES-DUAL-RACE) |
+<<<<<<< HEAD
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done on branch `codex/FIN-004-tralent-v1-reconcile` (2026-08-25) — awaiting financial sign-off/merge |
 >>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Not started |
+=======
+| FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done on branch `codex/FIN-004-tralent-v1-reconcile` (2026-08-25) — signed off; Power Law divergence-only |
+| FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done on branch `codex/FIN-005-financial-reconciliation-harness` (2026-08-25) — in-process harness; awaiting sign-off |
+>>>>>>> 294cd38 (FIN-005: Add in-process financial reconciliation harness)
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Not started |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Not started |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Not started |
@@ -276,12 +285,12 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### FIN-005 — End-to-end financial reconciliation test harness
 **Subtasks**
-- [ ] Build a repeatable harness that runs a full contest lifecycle — join, trade, leaderboard compute, finalize, settle — end to end, and asserts amounts reconcile at every stage.
-- [ ] Wire it into CI as a required check for any PR touching contest, payout, or settlement code.
-- [ ] Run it on a schedule against a staging-like environment as an ongoing regression guard, not a one-time check.
+- [x] In-process harness `TestFIN005FinancialReconciliationHarness` (join/split → trade note → preview=settle shares → prize conservation → synthetic ledger).
+- [x] Always-on CI job `fin-005-reconciliation-harness` (+ Power Law production ban). Required-check path filter deferred to CI-003 (`FIN005-BRANCH-PROTECTION`).
+- [ ] Staging schedule deferred — tracked as `FIN005-STAGING-SCHEDULE` (no staging env this session).
 
 **Verify**
-- [ ] Harness runs green in CI.
+- [x] Local `test:fin005` green; GitHub Actions pending push.
 
 **Done when:** it's enforced as a required check on the relevant code paths.
 
