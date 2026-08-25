@@ -203,19 +203,14 @@ func ComputeJoinCharge(entryFeeCents int64, platformFeeBps int, isLate bool) Joi
 	}
 }
 
-// AllocatePayouts distributes prizePoolNet to ranked winners using the shared
-// power-law distribution. Remainder cents go to rank 1 (see prizedistribution).
-// Returns nil when there is nothing to pay.
+// AllocatePayouts distributes prizePoolNet to ranked winners using tralent_v1
+// (FIN-004). Returns nil when there is nothing to pay.
 func AllocatePayouts(ranked []RankedUser, prizePoolNet int64) ([]Payout, error) {
 	if len(ranked) == 0 || prizePoolNet <= 0 {
 		return nil, nil
 	}
-	cfg := prizedistribution.ConfigFromEnv()
-	winnersCount := prizedistribution.GetWinnersCount(len(ranked), cfg.WinnerPercent)
-	if winnersCount <= 0 {
-		return nil, nil
-	}
-	shares := prizedistribution.CalculatePrizeDistribution(prizePoolNet, winnersCount, cfg.Alpha)
+	// FIN-004: tralent_v1 — ranked length is the participant count for preview/settlement.
+	shares := prizedistribution.CalculateForContest(prizePoolNet, len(ranked))
 	if len(shares) == 0 {
 		return nil, nil
 	}

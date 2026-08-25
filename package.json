@@ -13,7 +13,16 @@
     "test:payment4-retirement": "node --test scripts/payment4-retirement-check.test.mjs",
     "validate:sec007": "node scripts/sec-007-super-admin-mfa-check.mjs",
     "test:sec007": "node --test scripts/sec-007-super-admin-mfa-check.test.mjs",
+<<<<<<< HEAD
     "test:doc001": "node --test scripts/codex/doc-001-claude-status.test.mjs",
+=======
+    "test:sec008": "node --test scripts/sec-008-auth-regression-lock.test.mjs",
+    "test:sec009": "node --test scripts/sec-009-admin-reauth-mfa.test.mjs",
+    "test:fin001": "node --test scripts/sec-fin001-platform-fee-check.test.mjs",
+    "test:fin002": "node --test scripts/sec-fin002-prize-path-check.test.mjs",
+    "test:fin003": "node --test scripts/sec-fin003-finalization-owner.test.mjs",
+    "test:fin004": "node --test scripts/sec-fin004-tralent-v1-check.test.mjs",
+>>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

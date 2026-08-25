@@ -247,6 +247,41 @@ jobs:
       - name: FIN-002 regression suite
         run: node --test scripts/sec-fin002-prize-path-check.test.mjs
 
+<<<<<<< HEAD
+=======
+  fin-003-finalization-owner:
+    name: FIN-003 single finalization owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: FIN-003 regression suite
+        run: node --test scripts/sec-fin003-finalization-owner.test.mjs
+
+  fin-004-tralent-v1:
+    name: FIN-004 tralent_v1 prize distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: FIN-004 regression suite
+        run: node --test scripts/sec-fin004-tralent-v1-check.test.mjs
+
+>>>>>>> adc74ad (FIN-004: Switch production prize shares to policy tralent_v1)
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)

@@ -23,11 +23,9 @@ func scoresEqual(a, b float64) bool {
 	return math.Abs(a-b) <= ScoreEpsilon
 }
 
-// GetWinnersCount returns the number of winners for a given participant count.
-// Delegates to the shared prizedistribution package.
+// GetWinnersCount returns planned winners (tralent_v1 / FIN-004).
 func GetWinnersCount(participants int) int {
-	cfg := prizedistribution.ConfigFromEnv()
-	return prizedistribution.GetWinnersCount(participants, cfg.WinnerPercent)
+	return prizedistribution.GetWinnersCount(participants, 0)
 }
 
 // CalculatePrizePoolFromBps computes the net prize pool using FIN-001/FIN-002
@@ -57,31 +55,15 @@ func CalculatePrizePool(participants int, entryFeeCents int, commissionRate floa
 	return CalculatePrizePoolFromBps(participants, entryFeeCents, FractionToPlatformFeeBps(commissionRate)), nil
 }
 
-// CalculatePrizeDistribution computes the prize breakdown for each winner position
-// using the unified Power Law formula from the shared prizedistribution package.
-//
-//   - participants: total number of contest participants
-//   - prizePoolCents: total prize pool in cents to distribute
-//
-// Returns a slice of PrizeSlot ordered by rank (1 = first place).
-// The sum of all AmountCents equals exactly prizePoolCents (remainder goes to 1st place).
+// CalculatePrizeDistribution computes prize shares via tralent_v1 (FIN-004).
 func CalculatePrizeDistribution(participants int, prizePoolCents int64) []PrizeSlot {
 	if participants <= 0 || prizePoolCents <= 0 {
 		return nil
 	}
-
-	cfg := prizedistribution.ConfigFromEnv()
-	winners := prizedistribution.GetWinnersCount(participants, cfg.WinnerPercent)
-	if winners <= 0 {
-		return nil
-	}
-
-	shares := prizedistribution.CalculatePrizeDistribution(prizePoolCents, winners, cfg.Alpha)
+	shares := prizedistribution.CalculateForContest(prizePoolCents, participants)
 	if len(shares) == 0 {
 		return nil
 	}
-
-	// Convert []PrizeShare → []PrizeSlot
 	slots := make([]PrizeSlot, len(shares))
 	for i, s := range shares {
 		slots[i] = PrizeSlot{

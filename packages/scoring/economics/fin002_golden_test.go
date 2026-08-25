@@ -45,14 +45,12 @@ func TestFIN002PreviewLeaderboardSettlementAgreement(t *testing.T) {
 				t.Fatalf("conservation broken: fee+net=%d gross=%d", pool.FeeCents+pool.NetCents, pool.GrossCents)
 			}
 
-			// Distribution agreement: same shares for same net + winners.
-			cfg := prizedistribution.ConfigFromEnv()
-			winners := prizedistribution.GetWinnersCount(tc.participants, cfg.WinnerPercent)
-			if winners <= 0 || pool.NetCents <= 0 {
+			// Distribution agreement: same shares for same net + participants (tralent_v1).
+			if pool.NetCents <= 0 {
 				return
 			}
-			sharesA := prizedistribution.CalculatePrizeDistribution(pool.NetCents, winners, cfg.Alpha)
-			sharesB := prizedistribution.CalculatePrizeDistribution(lbNet, winners, cfg.Alpha)
+			sharesA := prizedistribution.CalculateForContest(pool.NetCents, tc.participants)
+			sharesB := prizedistribution.CalculateForContest(lbNet, tc.participants)
 			if len(sharesA) != len(sharesB) {
 				t.Fatalf("share count %d vs %d", len(sharesA), len(sharesB))
 			}

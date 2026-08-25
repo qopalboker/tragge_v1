@@ -26,12 +26,12 @@ func TestTralentReference(t *testing.T) {
 		t.Fatalf("Expected prize pool %d, got %d", expectedPool, pool)
 	}
 
-	winners := GetWinnersCount(participants, DefaultWinnerPercent)
+	winners := GetWinnersCountPowerLaw(participants, DefaultWinnerPercent)
 	if winners != 300 {
 		t.Fatalf("Expected 300 winners, got %d", winners)
 	}
 
-	shares := CalculatePrizeDistribution(pool, winners, DefaultAlpha)
+	shares := CalculatePrizeDistributionPowerLaw(pool, winners, DefaultAlpha)
 	if len(shares) != 300 {
 		t.Fatalf("Expected 300 shares, got %d", len(shares))
 	}
@@ -195,9 +195,9 @@ func TestGetWinnersCount(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := GetWinnersCount(tt.participants, tt.winnerPct)
+		got := GetWinnersCountPowerLaw(tt.participants, tt.winnerPct)
 		if got != tt.want {
-			t.Errorf("GetWinnersCount(%d, %.2f) = %d, want %d",
+			t.Errorf("GetWinnersCountPowerLaw(%d, %.2f) = %d, want %d",
 				tt.participants, tt.winnerPct, got, tt.want)
 		}
 	}
@@ -324,7 +324,7 @@ func TestConfigFromEnv(t *testing.T) {
 func TestVariousParticipantCounts(t *testing.T) {
 	for _, n := range []int{10, 50, 100, 500, 1000, 5000} {
 		t.Run("", func(t *testing.T) {
-			winners := GetWinnersCount(n, DefaultWinnerPercent)
+			winners := GetWinnersCountPowerLaw(n, DefaultWinnerPercent)
 			pool := int64(n) * 10000 // $100 entry each
 			netPool := (pool * int64(10000-1700)) / 10000
 

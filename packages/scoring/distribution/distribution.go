@@ -1,9 +1,8 @@
-// Package prizedistribution implements a unified Power Law prize distribution
-// formula for trading tournaments. All services (user-bff preview, leaderboard-worker
-// payout, settlement-service distribution, and the prize package) delegate to
-// this single implementation to guarantee consistent results.
+// Package prizedistribution is the sole prize-share implementation for Tragge.
 //
-// Formula: prize(rank) = PRIZE_POOL × (1/rank^α) / Σ(1/i^α)  where α = DefaultAlpha
+// FIN-004: production path is policy `tralent_v1` (see tralent_v1.go and
+// FIXED_PRODUCT_AND_TECHNICAL_POLICIES §11). Legacy Power Law helpers remain
+// for divergence tests only — do not use them for settlement or preview.
 package prizedistribution
 
 import (
@@ -71,9 +70,15 @@ func ConfigFromEnv() Config {
 	return cfg
 }
 
-// GetWinnersCount returns the number of winners for a given participant count.
-// Result is ceil(participants * winnerPercent), with a minimum of MinWinners.
+// GetWinnersCount returns planned winners for a contest.
+// FIN-004: uses tralent_v1 (winnerPercent is ignored; retained for call-site compatibility).
 func GetWinnersCount(participants int, winnerPercent float64) int {
+	_ = winnerPercent
+	return TralentV1PlannedWinners(participants)
+}
+
+// GetWinnersCountPowerLaw is the pre-FIN-004 ceil(participants×ratio) helper.
+func GetWinnersCountPowerLaw(participants int, winnerPercent float64) int {
 	if participants <= 0 {
 		return 0
 	}
@@ -93,18 +98,23 @@ func GetWinnersCount(participants int, winnerPercent float64) int {
 	return w
 }
 
-// CalculatePrizeDistribution computes the prize breakdown for each winner using
-// the Power Law formula:
+// CalculateForContest is the FIN-004 production API (tralent_v1).
+func CalculateForContest(prizePoolCents int64, participants int) []PrizeShare {
+	return TralentV1CalculatePrizeDistribution(prizePoolCents, participants, 0)
+}
+
+// CalculatePrizeDistribution delegates to tralent_v1 when numWinners matches
+// TralentV1PlannedWinners for some participant count is unknowable here, so this
+// legacy (pool, winners, alpha) entry point now routes through Power Law only
+// for backward-compatible unit tests. Production callers must use CalculateForContest.
 //
-//	weight(rank) = 1 / rank^alpha
-//	percentage(rank) = weight(rank) / sum(weights) * 100
-//
-// The distribution is cent-perfect: the sum of all AmountCents equals exactly
-// prizePoolCents. Remainder cents from floor rounding go to 1st place.
-// Every winner is guaranteed at least 1 cent.
-//
-// Returns nil if prizePoolCents <= 0 or numWinners <= 0.
+// Deprecated: use CalculateForContest(participants).
 func CalculatePrizeDistribution(prizePoolCents int64, numWinners int, alpha float64) []PrizeShare {
+	return CalculatePrizeDistributionPowerLaw(prizePoolCents, numWinners, alpha)
+}
+
+// CalculatePrizeDistributionPowerLaw is the legacy Power Law allocator (α≈1.095).
+func CalculatePrizeDistributionPowerLaw(prizePoolCents int64, numWinners int, alpha float64) []PrizeShare {
 	if prizePoolCents <= 0 || numWinners <= 0 {
 		return nil
 	}
