@@ -174,6 +174,23 @@ jobs:
             )
           done
 
+  # ---- SEC-008 auth regression lock (always on PRs/pushes to main) ----
+  sec-008-auth-regression:
+    name: SEC-008 auth regression lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: SEC-008 regression suite
+        run: node --test scripts/sec-008-auth-regression-lock.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)
