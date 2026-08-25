@@ -16,6 +16,7 @@ import (
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/validation"
+	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -1286,9 +1287,11 @@ func (a *App) handleGetDashboard(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		var depositsToday int64
 		err := a.circuits.ExecuteReplica(queryCtx, func(ctx context.Context) error {
+			// FIN-006: gateway/user deposit revenue only (excludes admin_funded_deposit).
 			return a.pool.Replica().QueryRowContext(ctx, `
 				SELECT COALESCE(SUM(amount_cents), 0) FROM wallet_ledger
-				WHERE type = 'deposit' AND created_at >= $1
+				WHERE (`+wallet.GatewayDepositRevenueSQLPredicate+`)
+				  AND created_at >= $1
 			`, startOfDay).Scan(&depositsToday)
 		})
 		if err != nil && !strings.Contains(err.Error(), "does not exist") {

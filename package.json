@@ -22,6 +22,7 @@
     "test:fin003": "node --test scripts/sec-fin003-finalization-owner.test.mjs",
     "test:fin004": "node --test scripts/sec-fin004-tralent-v1-check.test.mjs",
     "test:fin005": "node --test scripts/sec-fin005-reconciliation-harness.test.mjs",
+    "test:fin006": "node --test scripts/sec-fin006-admin-funded-deposit.test.mjs",
     "test:lifecycle001": "node --test scripts/sec-lifecycle001-late-entry.test.mjs",
     "test:lifecycle002": "node --test scripts/sec-lifecycle002-capacity.test.mjs",
     "test:lifecycle003": "node --test scripts/sec-lifecycle003-archival.test.mjs",

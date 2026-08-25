@@ -873,7 +873,7 @@ export default {
       activeContests: 'مسابقات فعال',
       scheduledContests: 'مسابقات زمان‌بندی شده',
       totalRevenue: 'درآمد کل',
-      depositsToday: 'واریزی‌های امروز',
+      depositsToday: 'واریزی‌های درگاه (کاربری) امروز',
       tradesToday: 'معاملات امروز',
       ordersToday: 'سفارش‌های امروز',
       pendingKYC: 'KYC در انتظار',

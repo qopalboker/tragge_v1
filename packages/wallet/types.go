@@ -38,6 +38,7 @@ type LedgerType string
 
 const (
 	LedgerTypeDeposit             LedgerType = "deposit"
+	LedgerTypeAdminFundedDeposit  LedgerType = "admin_funded_deposit" // FIN-006: Admin Panel top-ups (not gateway revenue)
 	LedgerTypeWithdrawal          LedgerType = "withdrawal"
 	LedgerTypeContestEntry        LedgerType = "contest_entry"
 	LedgerTypeContestRefund       LedgerType = "contest_refund"
@@ -48,6 +49,16 @@ const (
 	LedgerTypeWithdrawalRefund    LedgerType = "withdrawal_refund"
 	LedgerTypeWithdrawFeeRefund   LedgerType = "withdraw_fee_refund"
 )
+
+// GatewayDepositRevenueSQLPredicate is the SQL boolean predicate for user/gateway
+// deposit revenue metrics. It includes only ledger type `deposit` and excludes
+// residual misclassified admin top-ups (defense in depth after FIN-006 backfill).
+const GatewayDepositRevenueSQLPredicate = `
+type = 'deposit'
+AND NOT (
+  COALESCE(reason_code, '') = 'WALLET_TOPUP'
+  AND COALESCE(ref_type::text, '') = 'admin_action'
+)`
 
 // ReasonCode represents a machine-readable reason for a ledger entry.
 type ReasonCode string

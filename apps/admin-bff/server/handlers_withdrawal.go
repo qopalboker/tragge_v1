@@ -117,9 +117,10 @@ func (a *App) handleChargeUserWallet(w http.ResponseWriter, r *http.Request) {
 
 	var entry *wallet.LedgerEntry
 	if req.Amount > 0 {
+		// FIN-006: admin top-ups are admin_funded_deposit, never gateway `deposit` revenue.
 		entry, err = a.walletService.CreditIdempotentWithReason(
 			ctx, txWrapper, userID, req.Amount,
-			wallet.LedgerTypeDeposit, &refType, nil, &description, &reasonCode, idempotencyKey,
+			wallet.LedgerTypeAdminFundedDeposit, &refType, nil, &description, &reasonCode, idempotencyKey,
 		)
 		if err != nil {
 			// Check for duplicate (idempotency hit)
@@ -129,7 +130,7 @@ func (a *App) handleChargeUserWallet(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": adminMsg.DuplicateCharge})
 				return
 			}
-			// Check for wallet not found Ã¢â‚¬â€ create wallet first (within transaction)
+			// Check for wallet not found — create wallet first (within transaction)
 			if _, ok := err.(*wallet.WalletNotFoundError); ok {
 				_, createErr := a.walletService.CreateWalletTx(ctx, txWrapper, userID)
 				if createErr != nil {
@@ -140,7 +141,7 @@ func (a *App) handleChargeUserWallet(w http.ResponseWriter, r *http.Request) {
 				// Retry credit after wallet creation
 				entry, err = a.walletService.CreditIdempotentWithReason(
 					ctx, txWrapper, userID, req.Amount,
-					wallet.LedgerTypeDeposit, &refType, nil, &description, &reasonCode, idempotencyKey,
+					wallet.LedgerTypeAdminFundedDeposit, &refType, nil, &description, &reasonCode, idempotencyKey,
 				)
 				if err != nil {
 					if _, ok := err.(*wallet.DuplicateCreditError); ok {
@@ -180,12 +181,13 @@ func (a *App) handleChargeUserWallet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Write audit log
+	// Write audit log (ledger_type included for FIN-006 reconstruction)
 	auditPayload := map[string]interface{}{
 		"user_id":         userID,
 		"amount":          req.Amount,
 		"reason":          req.Reason,
 		"description":     description,
+		"ledger_type":     string(entry.Type),
 		"new_balance":     entry.BalanceAfterCents,
 		"ledger_entry_id": entry.ID,
 		"ip_address":      getAdminClientIP(r),
