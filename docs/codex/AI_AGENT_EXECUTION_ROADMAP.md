@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** CI-002 on main. **CI-003** on branch (required CI gate wiring). Next: **CI-004** then **DOC-002**.
+> **Status note (2026-08-25 continuity):** CI-003 on main (protection applied). **CI-004** on branch (gitleaks). Next: **DOC-002**.
 
 ### Task Tracker
 
@@ -135,8 +135,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | ENGINE-002 | `position_management.go`: float64 â†’ decimal | 4 | P1 | Not started |
 | ENGINE-003 | Regression-lock WAL fail-closed behavior | 4 | P1 | Not started |
 | CI-002 | Test coverage for the 7 untested critical Go services | 5 | P1 | Done on branch codex/CI-002-critical-go-coverage (2026-08-25) â€” floor >0%; depth gap CI002-DEPTH |
-| CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Done on branch `codex/CI-003-branch-protection-gate` (2026-08-25) — apply script + aggregate gates; review-count gap open |
-| CI-004 | Continuous secret-scanning in CI | 5 | Nice-to-have | Not started |
+| CI-003 | Enforce CI as a required branch-protection gate | 5 | P1 | Done (merged to main) — protection applied; CI003-REVIEW-ENFORCEMENT open |
+| CI-004 | Continuous secret-scanning in CI | 5 | Nice-to-have | Done on branch `codex/CI-004-secret-scanning` (2026-08-25) — gitleaks always-on |
 | DOC-002 | Ongoing documentation-sync process | 6 | â€” | Not started |
 
 *P0 = blocks paid-production launch. P1 = important, not launch-blocking. Quick win = high value, low effort.*
@@ -462,4 +462,5 @@ Believed already fixed by code reading (`config.go` fails closed if `WAL_PERSIST
 ## Starting a Session
 
 Point your coding agent at this file and say: *"Follow `docs/codex/AI_AGENT_EXECUTION_ROADMAP.md`. Run the Continuity Protocol in Â§2, then resume the current task."* Attach a fresh GitHub PAT (Â§5) if code needs to be pushed this session.
+
 

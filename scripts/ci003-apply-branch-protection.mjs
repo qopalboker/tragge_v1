@@ -18,6 +18,7 @@ const REQUIRED_CONTEXTS = [
   "Go CI complete",
   "Frontend CI complete",
   "CI-002 critical Go coverage floor",
+  "CI-004 secret scanning",
   "SEC-008 auth regression lock",
   "SEC-009 admin reauth + Super Admin MFA",
 ];
