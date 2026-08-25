@@ -116,7 +116,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | INFRA-001 | Contain K8s production overlay drift (stopgap) | 0 | P0 | Blocked — awaiting live cluster / kubeconfig (decision 2026-08-25) |
 | CI-001 | Turn on existing frontend test suites in CI | 0 | P1 | Done on branch `codex/CI-001-frontend-tests-ci` (2026-08-25) — Vitest in CI; Playwright quarantined |
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch (merged to main with stack land) |
-| SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Not started |
+| SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch (stack land) |
 | FIN-001 | Single source of truth for platform fee | 1 | P0 | Not started |
 | FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Not started |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
@@ -198,12 +198,12 @@ Covers: shared auth between User/Admin, JWT accepted via `?token=` URL param, mo
 These were reported fixed internally but never personally verified — treat as open until proven.
 
 **Subtasks**
-- [ ] Write an integration test that attempts a sensitive admin action without fresh reauthentication and asserts it's rejected.
-- [ ] Write an integration test that attempts a Super Admin action without MFA and asserts it's rejected.
-- [ ] Document exact repro steps and results, dated, in `docs/codex/reports/`, explicitly marked "independently verified."
+- [x] Write a regression test that attempts a sensitive admin action without fresh reauthentication and asserts it's rejected (`TestSEC009ReauthenticationMissingGrantRejected`).
+- [x] Write a regression test that Super Admin without MFA is rejected when policy ON (`TestSEC009SuperAdminActionWithoutMFARejectedWhenPolicyOn`); policy OFF allows password-only.
+- [x] Document exact repro steps and results in `docs/codex/reports/SEC-009-admin-reauth-mfa.md`, marked independently verified.
 
 **Verify**
-- [ ] Both negative tests exist, pass, and run in CI.
+- [x] Both negative tests exist, pass, and run in CI job `sec-009-admin-reauth-mfa`.
 
 **Done when:** both are permanent regression guards in CI.
 

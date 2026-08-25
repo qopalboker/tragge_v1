@@ -31,6 +31,10 @@ const (
 // Used as a DB-backed fallback for session invalidation when Redis is unavailable (P0-5).
 type PasswordChangedAtFunc func(ctx context.Context, userID string) (*time.Time, error)
 
+// SuperAdminMFAPolicyFunc reports whether the global Admin MFA policy is ON.
+// When the function is nil, middleware treats policy as OFF (MVP default).
+type SuperAdminMFAPolicyFunc func(ctx context.Context) (enabled bool, err error)
+
 // Middleware provides HTTP middleware for authentication and authorization.
 type Middleware struct {
 	tokenService        *TokenService
@@ -38,6 +42,7 @@ type Middleware struct {
 	tokenBlacklist      *TokenBlacklist
 	passwordChangedAtFn PasswordChangedAtFunc
 	logger              *log.Logger
+	superAdminMFAPolicy SuperAdminMFAPolicyFunc
 }
 
 // NewMiddleware creates a new authentication middleware.
@@ -71,6 +76,26 @@ func (m *Middleware) SetPasswordChangedAtFunc(fn PasswordChangedAtFunc) {
 // When set, errors from passwordChangedAtFn will be logged instead of silently ignored.
 func (m *Middleware) SetLogger(logger *log.Logger) {
 	m.logger = logger
+}
+
+// SetSuperAdminMFAPolicy wires the Admin MFA policy lookup used by
+// RequireSuperAdminMFA. Admin BFF should pass isAdminMFAEnabled.
+func (m *Middleware) SetSuperAdminMFAPolicy(fn SuperAdminMFAPolicyFunc) {
+	m.superAdminMFAPolicy = fn
+}
+
+// SuperAdminMFAAllowed reports whether a Super Admin session may proceed under
+// the given MFA policy. Unknown non-empty assurance values always fail closed.
+// When policy is ON, only MFAAssuranceSuperAdminTOTPV1 is accepted.
+// When policy is OFF, empty assurance (password-only) is allowed.
+func SuperAdminMFAAllowed(policyEnabled bool, assurance MFAAssurance) bool {
+	if assurance != "" && assurance != MFAAssuranceSuperAdminTOTPV1 {
+		return false
+	}
+	if policyEnabled {
+		return assurance == MFAAssuranceSuperAdminTOTPV1
+	}
+	return true
 }
 
 // RequireAuth returns a middleware that requires a valid access token.
@@ -162,14 +187,13 @@ func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// RequireSuperAdminMFA gates Super Admin sessions by MFA assurance.
+// RequireSuperAdminMFA gates Super Admin sessions by MFA assurance and the
+// optional global Admin MFA policy callback (see SetSuperAdminMFAPolicy).
 //
-// When global admin MFA policy is ON, Super Admin tokens are only issued after
-// successful MFA and carry MFAAssuranceSuperAdminTOTPV1.
-// When the MVP policy is OFF, Super Admin may hold a password-only session
-// (empty MFAAssurance). Support Admin is unaffected either way.
-//
-// Reject unknown non-empty assurance values so clients cannot invent levels.
+// When policy is ON, Super Admin must carry MFAAssuranceSuperAdminTOTPV1.
+// When policy is OFF (or unset), password-only Super Admin (empty assurance)
+// is allowed. Support Admin is unaffected either way. Unknown non-empty
+// assurance values always fail closed.
 func (m *Middleware) RequireSuperAdminMFA(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims := GetClaims(r.Context())
@@ -178,8 +202,16 @@ func (m *Middleware) RequireSuperAdminMFA(next http.Handler) http.Handler {
 			return
 		}
 		if claims.HasRole(RoleSuperAdmin) {
-			a := claims.MFAAssurance
-			if a != "" && a != MFAAssuranceSuperAdminTOTPV1 {
+			policyOn := false
+			if m.superAdminMFAPolicy != nil {
+				enabled, err := m.superAdminMFAPolicy(r.Context())
+				if err != nil {
+					writeUnauthorized(w, "additional authentication required")
+					return
+				}
+				policyOn = enabled
+			}
+			if !SuperAdminMFAAllowed(policyOn, claims.MFAAssurance) {
 				writeUnauthorized(w, "additional authentication required")
 				return
 			}
