@@ -114,3 +114,6 @@ var/
 infra/docker/.env.tunnel
 infra/docker/.env.tunnel.*
 
+
+# Go build cache (never commit)
+.go-cache/
