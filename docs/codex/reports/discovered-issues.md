@@ -188,3 +188,16 @@ LIFECYCLE-002 removed product capacity enforcement (constraint, ValidateRegistra
 | **Status** | Open — **not runtime-verified** |
 
 LIFECYCLE-003 soft-delete + archive copies are locked via static/unit tests. A full Postgres integration run (archive completed contest → absent from hot listings → present in `tournaments_archive` / audit query until `retain_until`) was **not** reproduced this session. Do **not** mark archival as runtime-verified until that E2E passes.
+
+---
+
+## ARCH001-DOCKER-IMAGE
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH001-DOCKER-IMAGE |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+ARCH-001 added `apps/platform/Dockerfile` (one image, three modes) and `infra/docker/docker-compose.platform.yml`. The Docker image build / multi-mode container smoke was **not** run this session. Local `go test ./apps/platform/...` and binary build passed. Do **not** claim the versioned image acceptance criterion as runtime-verified until `docker build` succeeds and each mode responds on `/healthz` + `/readyz` in a container.

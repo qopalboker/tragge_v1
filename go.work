@@ -9,6 +9,7 @@ use (
 	./apps/leaderboard-worker
 	./apps/market-ingestor
 	./apps/payment-service
+	./apps/platform
 	./apps/settlement-service
 	./apps/shard-router
 	./apps/trade-bff
