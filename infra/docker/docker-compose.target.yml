@@ -1,0 +1,129 @@
+# ARCH-007 target runtime topology (ADR-0001).
+# Preferred over merged wrappers. Does not delete legacy app/full profiles yet.
+#
+#   docker compose \
+#     -f infra/docker/docker-compose.yml \
+#     -f infra/docker/docker-compose.target.yml \
+#     --profile target up -d platform-api platform-realtime platform-worker trading-engine market-ingestor
+#
+# Legacy wrappers remain under profiles app/full/legacy-wrappers until cutover gaps close:
+#   ARCH007-WRAPPER-DELETE, ENG001-TRADING-CORE-CUTOVER, ARCH004-PAYMENT-HTTP-CUTOVER,
+#   ARCH005-SETTLEMENT-HTTP-CUTOVER, MD001-KAFKA-V2-CUTOVER
+
+services:
+  platform-api:
+    profiles: ["target"]
+    build:
+      context: ../..
+      dockerfile: apps/platform/Dockerfile
+    container_name: tragge_platform_api
+    restart: unless-stopped
+    environment:
+      PLATFORM_MODE: api
+      PLATFORM_ADDR: ":8080"
+      POSTGRES_USER: platform
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  platform-realtime:
+    profiles: ["target"]
+    build:
+      context: ../..
+      dockerfile: apps/platform/Dockerfile
+    container_name: tragge_platform_realtime
+    restart: unless-stopped
+    environment:
+      PLATFORM_MODE: realtime
+      PLATFORM_ADDR: ":8080"
+      POSTGRES_USER: platform
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  platform-worker:
+    profiles: ["target"]
+    build:
+      context: ../..
+      dockerfile: apps/platform/Dockerfile
+    container_name: tragge_platform_worker
+    restart: unless-stopped
+    environment:
+      PLATFORM_MODE: worker
+      PLATFORM_ADDR: ":8080"
+      POSTGRES_USER: platform
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  trading-engine:
+    profiles: ["target", "engine-standalone"]
+    build:
+      context: ../..
+      dockerfile: apps/trading-engine/Dockerfile
+    container_name: tragge_trading_engine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: engine
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      CONSUMER_GROUP: trading-engine
+      ORDERS_TOPIC: orders.v1
+      TICKS_TOPIC: ticks.v1
+      FILLS_TOPIC: fills.v1
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
+  market-ingestor:
+    profiles: ["target"]
+    build:
+      context: ../..
+      dockerfile: apps/market-ingestor/Dockerfile
+    container_name: tragge_market_ingestor
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: market_data
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started

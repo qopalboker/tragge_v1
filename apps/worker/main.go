@@ -26,7 +26,8 @@ import (
 
 func main() {
 	observability.InstallStandardLoggerRedaction()
-	log.Println("worker: starting merged workers (leaderboard :8086, settlement :8087, scheduler :8088, generator :8089)")
+	// ARCH-007: merged wrapper is transitional. Prefer platform --mode=worker.
+	log.Println("worker: DEPRECATED wrapper starting (leaderboard :8086, settlement :8087, scheduler :8088, generator :8089); prefer platform --mode=worker")
 
 	// Create shared database pool (1 pool instead of 4, saving ~20 connections)
 	dbMaxOpen := 10

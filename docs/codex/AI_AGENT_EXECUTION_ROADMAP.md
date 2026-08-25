@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** DATA-001 on main. MD-001 done on branch. Next: ARCH-007. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** MD-001 on main. ARCH-007 done on branch. Next: ARCH-008. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -125,7 +125,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001..006 Done (merged); ARCH-007 Not started |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001..007 Done - ARCH-007 on branch awaiting merge |
 | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
 | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
@@ -327,7 +327,7 @@ These were reported fixed internally but never personally verified — treat as 
 - [x] **ARCH-004** — Wallet/payment/KYC/withdrawal. See `docs/codex/reports/ARCH-004-financial-modules.md`. FIN-006 / MD-005A excluded.
 - [x] **ARCH-005** — Settlement sole finalization owner. See `docs/codex/reports/ARCH-005-settlement-owner.md`.
 - [x] **ARCH-006** — Schema ownership + transactional outbox/inbox. See `docs/codex/reports/ARCH-006-schema-outbox.md`.
-- [ ] ARCH-007 — not started; own branch/PR per source document.
+- [x] **ARCH-007** — Wrapper retirement boundary + target Compose profile. See `docs/codex/reports/ARCH-007-runtime-retirement.md`. Hard-delete deferred (`ARCH007-WRAPPER-DELETE`).
 - [ ] Treat each as its own branch/PR, following §5 and §6.
 
 **Verify:** per-task, as specified in the source document.
