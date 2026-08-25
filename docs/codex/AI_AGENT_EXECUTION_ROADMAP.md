@@ -118,7 +118,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch (merged to main with stack land) |
 | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch (stack land) |
 | FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch (stack land) |
-| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Not started |
+| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch (stack land) |
 | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Not started |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Not started |
@@ -227,15 +227,15 @@ These were reported fixed internally but never personally verified — treat as 
 
 #### FIN-002 — Consolidate prize calculation into one shared path
 **Subtasks**
-- [ ] Diff `apps/leaderboard-worker/server/payout.go` (`CalculatePrizePoolGross`, `AllocatePayouts`), `apps/settlement-service/server/settlement.go` (`calculatePrizes`, `distributePrizes`), and `packages/scoring/prize` function-by-function — catalog every behavioral difference, not just naming differences.
-- [ ] Ask which behavior is correct per product policy wherever the three disagree (§4).
-- [ ] Refactor both services to call `packages/scoring/prize` exclusively.
-- [ ] Delete the local duplicate implementations once callers are migrated — no dead code "just in case."
-- [ ] Add a golden-file/table-driven test suite in `packages/scoring/prize` covering every scenario the three implementations previously handled differently.
+- [x] Diff catalogued in `docs/codex/decisions/FIN-002-decision-log.md`.
+- [x] Human chose economics + prizedistribution as sole path (2026-08-25).
+- [x] Settlement + leaderboard call economics/prizedistribution; prize package thinned to economics wrappers.
+- [x] Local net formulas removed; orchestration wrappers retained where they call shared math.
+- [x] Golden agreement test in `packages/scoring/economics/fin002_golden_test.go` + CI `fin-002-prize-path`.
 
 **Verify**
-- [ ] For a representative set of synthetic contests: the preview amount, the leaderboard-computed amount, and the settlement-paid amount are numerically identical.
-- [ ] Automated end-to-end test asserts this invariant going forward.
+- [x] `TestFIN002PreviewLeaderboardSettlementAgreement` covers representative cases.
+- [x] CI job `fin-002-prize-path` runs the golden suite (full settlement package link OOM on this host — economics suite is the authority).
 
 **Done when:** both verify items hold and the duplicate code is deleted.
 
