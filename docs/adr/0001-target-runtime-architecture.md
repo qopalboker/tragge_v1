@@ -37,6 +37,11 @@ name to "Market Data"; this ADR uses the policy name "Market Data Service."
 
 ### Target topology
 
+> **ARCH-009:** Staged Compose mapping of this diagram is in
+> [`docs/architecture/staged-runtime-topology.md`](../architecture/staged-runtime-topology.md)
+> (`profile=target`). That mapping is for the local archive and is **not** a
+> live-production deployment claim. Wrapper cutovers remain open gaps.
+
 ```mermaid
 flowchart LR
     User["User, trade, and admin web applications"]

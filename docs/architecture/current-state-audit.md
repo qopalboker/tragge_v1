@@ -1,22 +1,31 @@
 # Tragge current-state production baseline
 
-**Task:** `FND-001`  
-**Snapshot date:** `2026-07-25`  
-**Policy version:** `2026-07-25.1`  
-**Roadmap version:** `2026-07-25.1`  
+**Original task:** `FND-001` (historical snapshot `2026-07-25`)  
+**Continuity refresh:** `ARCH-009` (`2026-08-25`)  
+**Policy version:** see `docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md`  
 **Paid-production decision:** **NO-GO**
 
-This is an evidence snapshot of the extracted local archive. It does not change
-product behavior and it is not evidence that any test suite, deployment, legal
-gate, provider-rights gate, or production-readiness gate passes. The approved
-target remains the three bounded systems in the
+This document describes a **local / no-user** repository archive. It is **not**
+evidence of live-production traffic, cluster health, or launch readiness.
+
+The approved target remains the three bounded systems in the
 [fixed product and technical policies](../product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md):
 Platform modular monolith, independent Trading Engine, and independent Market
 Data Service.
 
-The companion
-[production roadmap](../codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md) declares
-the current repository **NO-GO**. The findings below retain that decision.
+### ARCH-009 reader guide (use these first)
+
+| Doc | Purpose |
+|---|---|
+| [staged-runtime-topology.md](./staged-runtime-topology.md) | Target vs transitional Compose/K8s topology + diagrams |
+| [service-inventory.md](./service-inventory.md) | App/package/migration inventory after ARCH-001…008 |
+| [ARCH-008-standalone-fate.md](../codex/reports/ARCH-008-standalone-fate.md) | Per-service KEEP/REPLACE/DELETE_AFTER_CUTOVER |
+| [ARCH-007-runtime-retirement.md](../codex/reports/ARCH-007-runtime-retirement.md) | Wrapper retirement boundary |
+
+Sections below retain FND-001 historical counts where noted; **topology and
+implementation status are refreshed for ARCH-009**. The companion
+[production roadmap](../codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md) and
+[execution roadmap](../codex/AI_AGENT_EXECUTION_ROADMAP.md) still declare **NO-GO**.
 
 ## Reproducing the baseline
 
@@ -80,94 +89,82 @@ up migrations and 98 corresponding down migrations through
 [`0098_fix_migration_audit_issues.up.sql`](../../packages/db/migrations/0098_fix_migration_audit_issues.up.sql).
 Classification or reset of migrations belongs to `FND-004`, not this task.
 
-### Application inventory
+### Application inventory (ARCH-009)
 
-There are 17 immediate application directories: 14 Go modules, two Node
-frontends, and one Nginx gateway directory.
+There are **18** immediate application directories: Platform + prior Go
+services/frontends/gateway. Authoritative table:
+[service-inventory.md](./service-inventory.md).
 
-| Application | Current form | In `go.work` |
-|---|---|---:|
-| [`admin-bff`](../../apps/admin-bff) | Go module, standalone server package | Yes |
-| [`admin-frontend`](../../apps/admin-frontend) | Vue/Node package, Dockerfile | n/a |
-| [`api-server`](../../apps/api-server) | Go merged wrapper, `main.go`, Dockerfile | Yes |
-| [`contest-scheduler`](../../apps/contest-scheduler) | Go module, standalone server package | Yes |
-| [`free-contest-generator`](../../apps/free-contest-generator) | Go module, standalone server package | Yes |
-| [`gateway`](../../apps/gateway) | Nginx configuration, development and production Dockerfiles | n/a |
-| [`leaderboard-worker`](../../apps/leaderboard-worker) | Go module, standalone server package | Yes |
-| [`market-ingestor`](../../apps/market-ingestor) | Go module, standalone server package | Yes |
-| [`payment-service`](../../apps/payment-service) | Go module, standalone server package | Yes |
-| [`settlement-service`](../../apps/settlement-service) | Go module, standalone server package | Yes |
-| [`shard-router`](../../apps/shard-router) | Go module with `main.go`; added to the workspace by SEC-001 so its Admin validator is compiled with the shared auth package | Yes |
-| [`trade-bff`](../../apps/trade-bff) | Go module, standalone server package | Yes |
-| [`trading-core`](../../apps/trading-core) | Go merged wrapper, `main.go`, Dockerfile | Yes |
-| [`trading-engine`](../../apps/trading-engine) | Go module, standalone server package | Yes |
-| [`user-bff`](../../apps/user-bff) | Go module, standalone server package | Yes |
-| [`user-frontend`](../../apps/user-frontend) | Vue/Node package, Dockerfile | n/a |
-| [`worker`](../../apps/worker) | Go merged wrapper, `main.go`, Dockerfile | Yes |
-
-### Package inventory
-
-There are 20 immediate package directories. Nineteen contain Go modules:
-[`audit`](../../packages/audit), [`auth`](../../packages/auth),
-[`config`](../../packages/config), [`contracts`](../../packages/contracts),
-[`db`](../../packages/db), [`domain`](../../packages/domain),
-[`infra`](../../packages/infra), [`kyc`](../../packages/kyc),
-[`notification`](../../packages/notification),
-[`observability`](../../packages/observability), [`redis`](../../packages/redis),
-[`resilience`](../../packages/resilience), [`scoring`](../../packages/scoring),
-[`secrets`](../../packages/secrets), [`sms`](../../packages/sms),
-[`storage`](../../packages/storage), [`ticket`](../../packages/ticket),
-[`validation`](../../packages/validation), and [`wallet`](../../packages/wallet).
-The twentieth is the Node package
-[`frontend-shared`](../../packages/frontend-shared). The contracts directory
-also contains the nested Node package
-[`packages/contracts/ts`](../../packages/contracts/ts).
-
-[`go.work`](../../go.work) includes 33 modules: 14 under `apps` and 19 under
-`packages`. SEC-001 added [`apps/shard-router`](../../apps/shard-router) so
-its Admin-protected routes use and compile against the explicit Admin trust
-context. The Go module
-[`scripts/create-admin-users`](../../scripts/create-admin-users) remains outside
-the workspace. [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) includes four
-packages: both frontends, TypeScript contracts, and frontend-shared.
-
-## Current runtime and deployment topology
-
-The source contains both standalone services and three merged executable
-wrappers. With all profiles enabled,
-[`infra/docker/docker-compose.yml`](../../infra/docker/docker-compose.yml)
-selects PostgreSQL, Redis, Redpanda, both frontends, gateway, and the three
-merged wrappers:
-
-| Merged executable | Embedded runtimes | Shared process resources |
+| Application | Current form | Fate |
 |---|---|---|
-| [`api-server`](../../apps/api-server/main.go) | user-bff, admin-bff, payment-service | database pool, Redis client, separate User and Admin authentication contexts |
-| [`trading-core`](../../apps/trading-core/main.go) | Market Ingestor, Trading Engine, trade-bff | database pool and Redis client |
-| [`worker`](../../apps/worker/main.go) | leaderboard, settlement, scheduler, free contest generator | database pool and partially shared Redis client |
+| [`platform`](../../apps/platform) | Modular monolith (`--mode=api\|realtime\|worker`), Dockerfile | **KEEP** |
+| [`trading-engine`](../../apps/trading-engine) | Standalone image + still embedded in trading-core | **KEEP** |
+| [`market-ingestor`](../../apps/market-ingestor) | Standalone image + still embedded in trading-core | **KEEP** |
+| [`api-server`](../../apps/api-server) | DEPRECATED merged wrapper | DELETE_AFTER_CUTOVER |
+| [`trading-core`](../../apps/trading-core) | DEPRECATED merged wrapper | DELETE_AFTER_CUTOVER |
+| [`worker`](../../apps/worker) | DEPRECATED merged wrapper | DELETE_AFTER_CUTOVER |
+| [`user-bff`](../../apps/user-bff) / [`admin-bff`](../../apps/admin-bff) / [`payment-service`](../../apps/payment-service) | Packages started by api-server | REPLACE |
+| [`trade-bff`](../../apps/trade-bff) | Package started by trading-core | REPLACE |
+| [`leaderboard-worker`](../../apps/leaderboard-worker) / [`settlement-service`](../../apps/settlement-service) | Packages started by worker | REPLACE |
+| [`contest-scheduler`](../../apps/contest-scheduler) / [`free-contest-generator`](../../apps/free-contest-generator) | Packages started by worker | DELETE_AFTER_CUTOVER |
+| Frontends + [`gateway`](../../apps/gateway) | Vue + Nginx | KEEP (edge/FE) |
+| [`shard-router`](../../apps/shard-router) | Dockerfile; not in k8s base resources | KEEP until proven unused |
+
+**SAFE_TO_DELETE:** none (`ARCH008-NO-SAFE-DELETE`).
+
+### Package inventory (ARCH-009)
+
+Go packages include prior set **plus** [`money`](../../packages/money)
+(DATA-001). Contracts add `envelope/v1`, `engine/v1`, `marketdata/v2` while
+legacy `contracts/v1` float ticks remain for rollout. See
+[service-inventory.md](./service-inventory.md).
+
+## Current runtime and deployment topology (ARCH-009)
+
+**This is a local staged topology, not live production.**
+
+### Preferred target path
+
+Compose profile **`target`**
+([`docker-compose.target.yml`](../../infra/docker/docker-compose.target.yml)):
+
+| Process | Image / entry |
+|---|---|
+| Platform api / realtime / worker | `apps/platform` (same image, mode env) |
+| Trading Engine | `apps/trading-engine` |
+| Market Data | `apps/market-ingestor` |
+
+Diagrams: [staged-runtime-topology.md](./staged-runtime-topology.md).
+
+### Transitional legacy path (rollback)
+
+Profiles `app` / `full` / `legacy-wrappers` still run DEPRECATED wrappers:
+
+| Merged executable | Embedded runtimes |
+|---|---|
+| [`api-server`](../../apps/api-server/main.go) | user-bff, admin-bff, payment-service |
+| [`trading-core`](../../apps/trading-core/main.go) | market-ingestor, trading-engine, trade-bff |
+| [`worker`](../../apps/worker/main.go) | leaderboard, settlement, scheduler, free generator |
 
 [`infra/k8s/base/kustomization.yaml`](../../infra/k8s/base/kustomization.yaml)
-also selects those merged deployments. In contrast, the
+still selects those wrappers (correct for transitional deploys). The
 [`production overlay`](../../infra/k8s/overlays/production/kustomization.yaml)
-patches replicas and image names for standalone workloads that the base does
-not create. Therefore the Kubernetes production overlay is internally
-inconsistent and is not credible launch evidence.
+still patches obsolete standalone names → **INFRA-002** (next after ARCH-009).
 
-The approved target topology is not implemented: Platform is not yet the
-single modular-monolith codebase with `api`, `realtime`, and `worker` modes,
-and Trading Engine and Market Data do not yet have proven independent images,
-deployments, credentials, and failure domains.
+Independent Engine/Market Data **images exist**; full traffic cutover and
+Postgres grant E2E remain **open gaps** (not runtime-verified).
 
-## Database and migration baseline
+## Database and migration baseline (ARCH-009)
 
-- PostgreSQL 16, Redis 7, and Redpanda `v24.1.1` are declared by
+- PostgreSQL 16, Redis 7, and Redpanda are declared by
   [Compose](../../infra/docker/docker-compose.yml).
-- All 197 migration files are under
-  [`packages/db/migrations`](../../packages/db/migrations).
-- The archive has 98 up migrations and 99 down migrations.
-- No fresh-database migration or supported upgrade migration was executed:
-  the Docker daemon was unavailable and host `psql` was not installed.
-- Schema ownership is not yet separated into `platform`, `engine`, and
-  `market_data` roles; that is a later architecture/migration task.
+- **Legacy** chain: `packages/db/migrations` (111 ups after FIN/LIFECYCLE work;
+  FND-001 historical count was 98 — do not use the old number for current tree).
+- **Target** chain: `packages/db/migrations/target/` (`0001` schema ownership,
+  `0002`–`0004` outbox/inbox per owner, `0005` financial type policy comments).
+- Cluster roles: `packages/db/init/target/01-cluster-roles.sql`.
+- Live fresh-install / permission E2E against Postgres remains an open gap
+  (`ARCH006-POSTGRES-PERMISSIONS-E2E`); docs do not claim it passed.
 
 ## Test baseline and coverage gaps
 
@@ -215,6 +212,22 @@ build targets is explicitly unresolved production-engineering work.
 Every row contains at least one repository link validated by the FND-001
 verifier. Severity is launch severity, not implementation priority within this
 task.
+
+### Mitigation status after staged ARCH/FIN/LIFECYCLE stack (ARCH-009)
+
+Work landed on **stacked `codex/*` PRs**, not as a claim that `main` is
+production-ready. Gaps that remain **open / not runtime-verified** stay open
+(see `docs/codex/reports/discovered-issues.md`).
+
+| Finding cluster | Staged mitigation | Still open |
+|---|---|---|
+| P0-ARCH-01…05 wrappers | ARCH-001…008: Platform + standalone Engine/MD images + fate matrix; wrappers DEPRECATED | Wrapper traffic cutover, K8s overlay drift (INFRA-002), target Compose E2E |
+| P0-SEC-* | SEC-008/009 and earlier SEC tasks on stack | Runtime re-verify as required by those tasks |
+| P0-FIN-01…06 | FIN-001…005 on stack; settlement sole owner path | FIN003 Postgres dual-race, FIN005 compose gaps, P0-FIN-06 economics lock E2E as tracked |
+| P0-CON / LIFECYCLE | LIFECYCLE-001…003 on stack | Postgres E2E / load-test gaps as tracked |
+| Market-data float ticks | MD-001 v2 contract + types | `MD001-KAFKA-V2-CUTOVER`, `MD001-FRONTEND-CUTOVER` |
+
+**Do not treat this table as closure of any gap without the linked evidence.**
 
 | ID | Severity | Finding | Evidence |
 |---|---|---|---|
@@ -272,6 +285,8 @@ task.
 
 ## Baseline conclusion
 
-FND-001 establishes a reproducible inventory and evidence map. It does not
-remediate the findings. Tragge remains **NO-GO for paid production** until the
-roadmap tasks and launch gates are completed with executable evidence.
+FND-001 established the original inventory. **ARCH-009** refreshes topology and
+service inventory to match the staged architecture through ARCH-008. Tragge
+remains **NO-GO for paid production**. This archive is a **local / no-user**
+environment: documentation of Compose `profile=target` is not live-production
+topology and does not close runtime verification gaps.

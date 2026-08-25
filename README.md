@@ -4,11 +4,17 @@ Trading Tournament Platform - A monorepo for trading competition services.
 
 ## Production readiness
 
-**Current paid-production status: NO-GO.** The reproducible repository
-inventory, current runtime topology, test gaps, toolchain baseline, and every
-known P0/P1 finding are recorded in the
-[current-state production audit](docs/architecture/current-state-audit.md).
-This status must not be interpreted as a test-suite or deployment pass.
+**Current paid-production status: NO-GO.** This is a **local / no-user**
+archive, not a live-production topology claim.
+
+Start with:
+
+- [Staged runtime topology (ARCH-009)](docs/architecture/staged-runtime-topology.md)
+- [Service inventory (ARCH-009)](docs/architecture/service-inventory.md)
+- [Current-state audit](docs/architecture/current-state-audit.md)
+
+Known P0/P1 findings and open verification gaps remain tracked; do not treat
+docs refresh as launch evidence.
 
 ## Repository Structure
 
