@@ -357,3 +357,29 @@ Tick contract v2 and Engine admission helpers exist. Production Kafka still defa
 | **Status** | Open — **not runtime-verified** |
 
 TypeScript v2 types are exported for frontends. Chart/trading websocket handlers still consume legacy float tick payloads.
+
+---
+
+## ARCH007-WRAPPER-DELETE
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH007-WRAPPER-DELETE |
+| **Severity** | P1 (verification gap) |
+| **Found during** | ARCH-007 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Wrappers are deprecated and inventoried as `DELETE_AFTER_CUTOVER`, but source/images for `api-server`, `trading-core`, and `worker` remain for rollback. Physical deletion waits on payment/settlement/trading-core/Kafka cutover evidence.
+
+---
+
+## ARCH007-TARGET-COMPOSE-E2E
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH007-TARGET-COMPOSE-E2E |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ARCH-007 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Compose profile `target` defines Platform + Engine + Market Data. Live up/smoke against public routes was not reproduced this session.

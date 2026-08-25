@@ -242,9 +242,12 @@ services:
 
   # =============================================================================
   # API SERVER (merged: user-bff + admin-bff + payment-service)
+  # ARCH-007: transitional legacy wrapper. Prefer compose profile `target`
+  # (docker-compose.target.yml). Deletion blocked on ARCH007-WRAPPER-DELETE /
+  # ARCH004-PAYMENT-HTTP-CUTOVER.
   # =============================================================================
   api-server:
-    profiles: ["app", "full"]
+    profiles: ["app", "full", "legacy-wrappers"]
     build:
       context: ../..
       dockerfile: apps/api-server/Dockerfile
@@ -421,9 +424,12 @@ services:
 
   # =============================================================================
   # TRADING-CORE (merged: trading-engine + market-ingestor + trade-bff)
+  # ARCH-007: transitional legacy wrapper. Prefer profile `target` standalone
+  # Engine + Market Data images. Deletion blocked on ARCH007-WRAPPER-DELETE /
+  # ENG001-TRADING-CORE-CUTOVER / MD001-KAFKA-V2-CUTOVER.
   # =============================================================================
   trading-core:
-    profiles: ["app", "full"]
+    profiles: ["app", "full", "legacy-wrappers"]
     build:
       context: ../..
       dockerfile: apps/trading-core/Dockerfile
@@ -558,9 +564,12 @@ services:
 
   # =============================================================================
   # WORKER (merged: leaderboard-worker + settlement-service + contest-scheduler + free-contest-generator)
+  # ARCH-007: transitional legacy wrapper. Prefer platform --mode=worker under
+  # profile `target`. Deletion blocked on ARCH007-WRAPPER-DELETE /
+  # ARCH005-SETTLEMENT-HTTP-CUTOVER.
   # =============================================================================
   worker:
-    profiles: ["app", "full"]
+    profiles: ["app", "full", "legacy-wrappers"]
     build:
       context: ../..
       dockerfile: apps/worker/Dockerfile

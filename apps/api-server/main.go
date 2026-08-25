@@ -26,7 +26,9 @@ import (
 
 func main() {
 	observability.InstallStandardLoggerRedaction()
-	log.Println("api-server: starting merged services (user-bff :8081, admin-bff :8083, payment-service :8091)")
+	// ARCH-007: merged wrapper is transitional. Target deploy is Platform
+	// --mode=api (+ payment cutover). See docs/codex/reports/ARCH-007-runtime-retirement.md.
+	log.Println("api-server: DEPRECATED wrapper starting (user-bff :8081, admin-bff :8083, payment-service :8091); prefer platform --mode=api")
 
 	// Validate both cryptographic trust domains before opening shared runtime
 	// resources. Errors identify fields only and never include secret values.

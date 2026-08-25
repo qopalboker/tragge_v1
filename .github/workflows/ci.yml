@@ -496,6 +496,17 @@ jobs:
       - name: MD-001 tick v2 suite
         run: node --test scripts/sec-md001-tick-v2.test.mjs
 
+  arch-007-runtime-retirement:
+    name: ARCH-007 runtime retirement boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: ARCH-007 retirement suite
+        run: node --test scripts/sec-arch007-runtime-retirement.test.mjs
+
   # ---- Frontend jobs (skipped if no frontend changes) ----
   lint-and-test-frontend:
     name: Frontend (lint, test, build)

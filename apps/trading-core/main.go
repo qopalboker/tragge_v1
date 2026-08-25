@@ -25,7 +25,9 @@ import (
 
 func main() {
 	observability.InstallStandardLoggerRedaction()
-	log.Println("trading-core: starting merged services (engine :8085, ingestor :8084, trade-bff :8082)")
+	// ARCH-007: merged wrapper violates Engine/Market Data failure separation.
+	// Prefer standalone trading-engine + market-ingestor images (compose profile target).
+	log.Println("trading-core: DEPRECATED wrapper starting (engine :8085, ingestor :8084, trade-bff :8082); prefer profile=target")
 
 	// Create shared database pool (1 pool instead of 3, saving ~20 connections)
 	dbMaxOpen := 20

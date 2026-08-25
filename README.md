@@ -15,16 +15,18 @@ This status must not be interpreted as a test-suite or deployment pass.
 ```
 tragge/
 ├── apps/                        # Applications
+│   ├── platform/               # Target modular monolith (api|realtime|worker)
 │   ├── user-frontend/          # User panel SPA (Vue 3 + Vite, port 5173)
 │   ├── admin-frontend/         # Admin panel SPA (Vue 3 + Vite, port 5174)
-│   ├── user-bff/               # User Backend-for-Frontend (Go)
-│   ├── trade-bff/              # Trade Backend-for-Frontend (Go)
-│   ├── admin-bff/              # Admin Backend-for-Frontend (Go)
-│   ├── api-server/             # Merged user-bff + admin-bff + payment-service
-│   ├── market-ingestor/        # Market data ingestion service (Go)
-│   ├── trading-engine/         # Core trading engine (Go)
-│   ├── trading-core/           # Merged trading-engine + market-ingestor + trade-bff
-│   ├── leaderboard-worker/     # Leaderboard computation worker (Go)
+│   ├── market-ingestor/        # Market Data Service (standalone image; ARCH-007)
+│   ├── trading-engine/         # Trading Engine (standalone image; ENG-001)
+│   ├── user-bff/               # Legacy BFF (REPLACE via Platform)
+│   ├── trade-bff/              # Legacy trade BFF (REPLACE via Platform)
+│   ├── admin-bff/              # Legacy admin BFF (REPLACE via Platform)
+│   ├── api-server/             # DEPRECATED merged wrapper (ARCH-007 DELETE_AFTER_CUTOVER)
+│   ├── trading-core/           # DEPRECATED merged wrapper (ARCH-007 DELETE_AFTER_CUTOVER)
+│   ├── worker/                 # DEPRECATED merged wrapper (ARCH-007 DELETE_AFTER_CUTOVER)
+│   ├── leaderboard-worker/     # Legacy worker (Platform worker cutover)
 │   └── gateway/                # Nginx gateway — :8080 user panel, :8081 admin
 ├── packages/                    # Shared packages
 │   ├── contracts/              # Shared event contracts (Go + TS)
@@ -32,13 +34,22 @@ tragge/
 │   ├── frontend-shared/        # Shared Vue primitives (auth bootstrap, API client, i18n)
 │   ├── observability/          # Logging, metrics, tracing (Go)
 │   ├── db/                     # Database utilities (Go)
+│   ├── money/                  # Fixed-point financial primitives (DATA-001)
 │   └── ...                     # See packages/ directory for full list
 ├── infra/                       # Infrastructure
-│   └── docker/                 # Docker configurations
+│   └── docker/                 # Docker configurations (see docker-compose.target.yml)
 ├── go.work                      # Go workspace configuration
 ├── pnpm-workspace.yaml          # pnpm workspace configuration
 └── package.json                 # Root package.json
 ```
+
+### Target vs legacy Compose profiles (ARCH-007)
+
+- **Preferred:** `docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.target.yml --profile target up`
+  runs Platform (api/realtime/worker), Trading Engine, and Market Data only.
+- **Legacy wrappers:** profiles `app` / `full` / `legacy-wrappers` still build
+  `api-server`, `trading-core`, and `worker` for rollback until cutover gaps close.
+  See `docs/codex/reports/ARCH-007-runtime-retirement.md`.
 
 ## Panel split
 

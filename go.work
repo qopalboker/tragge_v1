@@ -3,6 +3,9 @@ go 1.24.7
 use (
 	./apps/admin-bff
 	// Apps - Go services
+	// ARCH-007: api-server, trading-core, and worker remain in the workspace for
+	// rollback until ARCH007-WRAPPER-DELETE; prefer apps/platform + standalone
+	// trading-engine + market-ingestor for new deploys (compose profile target).
 	./apps/api-server
 	./apps/contest-scheduler
 	./apps/free-contest-generator
