@@ -1919,10 +1919,14 @@ type JoinContestResponse struct {
 	QtyAvailable  int64     `json:"qty_available"`
 	AlreadyJoined bool      `json:"already_joined"`
 
-	// P2-P3-2: Fee transparency fields
-	EntryFeeCents  int   `json:"entry_fee_cents,omitempty"`
-	PlatformFeeBps int   `json:"platform_fee_bps,omitempty"`
-	NetPrizeCents  int64 `json:"net_prize_pool_estimate_cents,omitempty"` // Estimated net prize pool at join time
+	// Fee transparency (policy §4.2–4.3): base, late surcharge, and totals.
+	EntryFeeCents          int   `json:"entry_fee_cents,omitempty"`
+	PlatformFeeBps         int   `json:"platform_fee_bps,omitempty"`
+	IsLateJoin             bool  `json:"is_late_join,omitempty"`
+	LateSurchargeCents     int64 `json:"late_surcharge_cents,omitempty"`
+	TotalChargedCents      int64 `json:"total_charged_cents,omitempty"`
+	PrizeContributionCents int64 `json:"prize_contribution_cents,omitempty"`
+	NetPrizeCents          int64 `json:"net_prize_pool_estimate_cents,omitempty"`
 }
 
 // ParticipantEntry represents a single participant in a contest.

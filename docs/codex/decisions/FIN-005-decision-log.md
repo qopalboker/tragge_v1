@@ -9,3 +9,7 @@
 ## Production Power Law ban (from FIN-004 sign-off)
 
 Power Law must remain only for divergence/regression comparison. FIN-005 CI statically fails if `apps/**` non-test Go calls `CalculatePrizeDistributionPowerLaw` / `GetWinnersCountPowerLaw`.
+
+## 2026-08-25 — Human financial sign-off
+
+**Decision:** FIN-005 **approved**. Phase 1 financial work approved. Verification gaps (`FIN003-POSTGRES-DUAL-RACE`, `FIN005-COMPOSE-LIFECYCLE`, `FIN005-STAGING-SCHEDULE`, `FIN005-BRANCH-PROTECTION`) remain **explicitly not runtime-verified** until reproduced.
