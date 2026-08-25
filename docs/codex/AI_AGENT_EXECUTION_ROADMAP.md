@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 
 ## 8. The Roadmap
 
-> **Status note (2026-08-25 continuity):** ARCH-001..005 on main. ARCH-006 done on branch. Next: ENG-001. Keep FIN-006/MD-005A separate.
+> **Status note (2026-08-25 continuity):** ARCH-001..006 on main. ENG-001 done on branch. Next: DATA-001. Keep FIN-006/MD-005A separate.
 
 ### Task Tracker
 
@@ -125,7 +125,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done (merged to main) |
-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001..005 Done (merged); ARCH-006 Done on branch - awaiting merge; ARCH-007 Not started |
+| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001..006 Done (merged); ARCH-007 Not started |
 | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
 | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Done (merged to main) — desired-state gate; live-cluster/HA follow-ups open |
 | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |

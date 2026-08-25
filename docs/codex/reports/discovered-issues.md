@@ -292,3 +292,29 @@ Target SQL defines per-owner outbox/inbox and schema grants. Live PostgreSQL tes
 | **Status** | Open — **not runtime-verified** |
 
 Outbox relay jobs exist as Platform worker ports. Publishing committed outbox rows to the broker with retry/dead-letter evidence was not runtime-verified.
+
+---
+
+## ENG001-TRADING-CORE-CUTOVER
+
+| Field | Value |
+|---|---|
+| **ID** | ENG001-TRADING-CORE-CUTOVER |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ENG-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+Standalone Engine image/entrypoint exists. Default Compose still serves Engine via `trading-core` merged wrapper. Do not claim production traffic runs exclusively on the standalone Engine image until cutover is verified.
+
+---
+
+## ENG001-COMPOSE-RESTART-E2E
+
+| Field | Value |
+|---|---|
+| **ID** | ENG001-COMPOSE-RESTART-E2E |
+| **Severity** | P2 (verification gap) |
+| **Found during** | ENG-001 (2026-08-25) |
+| **Status** | Open — **not runtime-verified** |
+
+`docker-compose.engine-standalone.yml` documents independent restart. Live Compose build/up/restart of `trading-engine` without Market Data provider credentials was not reproduced this session.

@@ -94,6 +94,14 @@ func Run() {
 // instead of registering its own signal handler. When sharedPool is non-nil, the service
 // uses pool.Primary() for its *sql.DB instead of creating its own connection.
 func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRedis *pkgredis.Client) {
+	// ENG-001: refuse Market Data provider credentials and Platform JWT/session secrets.
+	if err := ValidateIndependentRuntime(); err != nil {
+		panic(err.Error())
+	}
+	if UsesPlatformDBGrants() {
+		panic("eng-001: Engine must not use Platform DB grants; use engine schema role")
+	}
+
 	// Validate critical environment variables in production/staging
 	if sharedPool == nil {
 		config.MustBeSetAny("database connection", "POSTGRES_DSN", "POSTGRES_HOST")

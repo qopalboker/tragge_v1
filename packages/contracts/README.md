@@ -11,6 +11,7 @@ Versioned contracts for the tragge event-driven trading platform.
 > `DATA-001`, `MD-001`, and `ENG-001` own the target fixed-point replacements.
 > ARCH-006 introduced `envelope.v1` (`packages/contracts/envelope/v1` and
 > `schemas/envelope.v1.json`) for cross-system command/event metadata.
+> ENG-001 adds Platform↔Engine target contracts under `packages/contracts/engine/v1`.
 
 ## Structure
 

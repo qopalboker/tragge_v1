@@ -1,0 +1,31 @@
+# ENG-001: optional standalone Trading Engine profile.
+# Restart independently of trading-core / market-ingestor:
+#   docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.engine-standalone.yml --profile engine-standalone up -d trading-engine
+services:
+  trading-engine:
+    profiles: ["engine-standalone"]
+    build:
+      context: ../..
+      dockerfile: apps/trading-engine/Dockerfile
+    container_name: tragge_trading_engine
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      POSTGRES_USER: engine
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: app
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      CONSUMER_GROUP: trading-engine
+      ORDERS_TOPIC: orders.v1
+      TICKS_TOPIC: ticks.v1
+      FILLS_TOPIC: fills.v1
+    # Intentionally omit FINNHUB_*/NOBITEX_*/DERIV_*/BINANCE_* and JWT_* secrets.
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
