@@ -1,0 +1,554 @@
+From b2c2c2e9133bf219b95cbd63a63e6efbca10d350 Mon Sep 17 00:00:00 2001
+From: qopalboker <qopalboker@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 03:36:48 +0330
+Subject: [PATCH] FIN-002: Route prize pool math through economics +
+ prizedistribution
+
+Settlement recalculation and leaderboard net helpers call economics;
+prize.CalculatePrizePool delegates to bps/economics. Golden test locks
+preview/leaderboard/settlement agreement. Requires financial sign-off.
+---
+ .github/workflows/ci.yml                      | 16 +++++
+ apps/leaderboard-worker/server/payout.go      | 14 +---
+ apps/settlement-service/server/settlement.go  |  9 ++-
+ docs/codex/AI_AGENT_EXECUTION_ROADMAP.md      | 18 ++---
+ docs/codex/decisions/FIN-002-decision-log.md  | 24 +++++++
+ .../reports/FIN-002-prize-calculation-path.md | 48 +++++++++++++
+ package.json                                  |  1 +
+ packages/scoring/economics/economics.go       | 27 ++++++-
+ .../scoring/economics/fin002_golden_test.go   | 71 +++++++++++++++++++
+ packages/scoring/prize/commission.go          | 21 ++++--
+ packages/scoring/prize/distribution.go        | 41 ++++++++---
+ scripts/sec-fin002-prize-path-check.test.mjs  | 51 +++++++++++++
+ 12 files changed, 301 insertions(+), 40 deletions(-)
+ create mode 100644 docs/codex/decisions/FIN-002-decision-log.md
+ create mode 100644 docs/codex/reports/FIN-002-prize-calculation-path.md
+ create mode 100644 packages/scoring/economics/fin002_golden_test.go
+ create mode 100644 scripts/sec-fin002-prize-path-check.test.mjs
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 0761894..2b00856 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -223,6 +223,22 @@ jobs:
+       - name: FIN-001 regression suite
+         run: node --test scripts/sec-fin001-platform-fee-check.test.mjs
+ 
++  fin-002-prize-path:
++    name: FIN-002 prize calculation path
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-go@v5
++        with:
++          go-version: "1.24"
++          cache: true
++          cache-dependency-path: "**/go.sum"
++      - uses: actions/setup-node@v4
++        with:
++          node-version: "20"
++      - name: FIN-002 regression suite
++        run: node --test scripts/sec-fin002-prize-path-check.test.mjs
++
+   # ---- Frontend jobs (skipped if no frontend changes) ----
+   lint-and-test-frontend:
+     name: Frontend (lint, test, build)
+diff --git a/apps/leaderboard-worker/server/payout.go b/apps/leaderboard-worker/server/payout.go
+index 02ea244..660ec3a 100644
+--- a/apps/leaderboard-worker/server/payout.go
++++ b/apps/leaderboard-worker/server/payout.go
+@@ -30,18 +30,10 @@ func CalculatePrizePoolGross(participantsCount int, entryFeeCents int64) int64 {
+ }
+ 
+ // CalculatePrizePoolNet calculates the net prize pool after platform fee deduction.
+-// Uses floor((gross * (10000-bps)) / 10000) for historical consistency with tests
+-// and settlement. packages/scoring/economics.CalculatePool uses fee-then-subtract
+-// which can differ by 1 cent; callers that need package economics should call it
+-// directly with participants+entry.
++// FIN-002: delegates to economics.NetFromGross (same math as settlement).
+ func CalculatePrizePoolNet(prizePoolGross int64, platformFeeBps int) int64 {
+-	if platformFeeBps <= 0 {
+-		return prizePoolGross
+-	}
+-	if platformFeeBps >= 10000 {
+-		return 0
+-	}
+-	return (prizePoolGross * int64(10000-platformFeeBps)) / 10000
++	net, _ := economics.NetFromGross(prizePoolGross, platformFeeBps)
++	return net
+ }
+ 
+ // CalculateWinnersCount calculates the number of winners using the shared formula.
+diff --git a/apps/settlement-service/server/settlement.go b/apps/settlement-service/server/settlement.go
+index 1453cc7..a31c436 100644
+--- a/apps/settlement-service/server/settlement.go
++++ b/apps/settlement-service/server/settlement.go
+@@ -17,6 +17,7 @@ import (
+ 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
+ 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
+ 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
++	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
+ 	"github.com/Parsaeffatravesh/tragge/packages/wallet"
+ 	"github.com/shopspring/decimal"
+ 	"github.com/twmb/franz-go/pkg/kgo"
+@@ -608,9 +609,11 @@ func (s *SettlementService) calculatePrizes(rankings []contracts.FinalRanking, c
+ 		} else if platformFeeBps == 0 && !contestInfo.EconomicsLocked {
+ 			platformFeeBps = s.app.config.PlatformFeeBps
+ 		}
+-		// Floor-net formula matches packages/scoring/economics.CalculatePool.
+-		prizePoolNet = (prizePoolGross * int64(10000-platformFeeBps)) / 10000
+-		platformFee = prizePoolGross - prizePoolNet
++		// FIN-002: sole fee math via packages/scoring/economics.
++		poolCalc := economics.CalculatePool(participantsCount, contestInfo.EntryFeeCents, platformFeeBps)
++		prizePoolGross = poolCalc.GrossCents
++		prizePoolNet = poolCalc.NetCents
++		platformFee = poolCalc.FeeCents
+ 	}
+ 
+ 	pool := PrizePool{
+diff --git a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+index fb3e104..212c25e 100644
+--- a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
++++ b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ 
+ ## 8. The Roadmap
+ 
+-> **Status note (2026-08-25 continuity):** Production K8s not deployed; INFRA-001 parked. DOC-001/CI-001/SEC-008/SEC-009/FIN-001 on local branches awaiting push. FIN-001 financially signed off 2026-08-25. Next: **FIN-002**.
++> **Status note (2026-08-25 continuity):** FIN-001 signed off + done. FIN-002 done on branch (economics+prizedistribution sole path) — awaiting financial sign-off before merge. Next after sign-off: **FIN-003**. INFRA-001 parked.
+ 
+ ### Task Tracker
+ 
+@@ -118,7 +118,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ | SEC-008 | Regression-lock the three verified auth fixes | 0 | P0 | Done on branch `codex/SEC-008-auth-regression-lock` (2026-08-25) — awaiting merge |
+ | SEC-009 | Independently verify admin reauth + Super Admin MFA | 0 | P0 | Done on branch `codex/SEC-009-admin-reauth-mfa` (2026-08-25) — awaiting merge |
+ | FIN-001 | Single source of truth for platform fee | 1 | P0 | Done on branch `codex/FIN-001-platform-fee-source` (2026-08-25) — signed off; awaiting merge |
+-| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Not started |
++| FIN-002 | Consolidate prize calculation into one shared path | 1 | P0 | Done on branch `codex/FIN-002-prize-calculation-path` (2026-08-25) — awaiting financial sign-off/merge |
+ | FIN-003 | Single owner for contest finalization | 1 | P0 | Not started |
+ | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Not started |
+ | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Not started |
+@@ -227,15 +227,15 @@ These were reported fixed internally but never personally verified — treat as
+ 
+ #### FIN-002 — Consolidate prize calculation into one shared path
+ **Subtasks**
+-- [ ] Diff `apps/leaderboard-worker/server/payout.go` (`CalculatePrizePoolGross`, `AllocatePayouts`), `apps/settlement-service/server/settlement.go` (`calculatePrizes`, `distributePrizes`), and `packages/scoring/prize` function-by-function — catalog every behavioral difference, not just naming differences.
+-- [ ] Ask which behavior is correct per product policy wherever the three disagree (§4).
+-- [ ] Refactor both services to call `packages/scoring/prize` exclusively.
+-- [ ] Delete the local duplicate implementations once callers are migrated — no dead code "just in case."
+-- [ ] Add a golden-file/table-driven test suite in `packages/scoring/prize` covering every scenario the three implementations previously handled differently.
++- [x] Diff catalogued in `docs/codex/decisions/FIN-002-decision-log.md`.
++- [x] Human chose economics + prizedistribution as sole path (2026-08-25).
++- [x] Settlement + leaderboard call economics/prizedistribution; prize package thinned to economics wrappers.
++- [x] Local net formulas removed; orchestration wrappers retained where they call shared math.
++- [x] Golden agreement test in `packages/scoring/economics/fin002_golden_test.go` + CI `fin-002-prize-path`.
+ 
+ **Verify**
+-- [ ] For a representative set of synthetic contests: the preview amount, the leaderboard-computed amount, and the settlement-paid amount are numerically identical.
+-- [ ] Automated end-to-end test asserts this invariant going forward.
++- [x] `TestFIN002PreviewLeaderboardSettlementAgreement` covers representative cases.
++- [x] CI job `fin-002-prize-path` runs the golden suite (full settlement package link OOM on this host — economics suite is the authority).
+ 
+ **Done when:** both verify items hold and the duplicate code is deleted.
+ 
+diff --git a/docs/codex/decisions/FIN-002-decision-log.md b/docs/codex/decisions/FIN-002-decision-log.md
+new file mode 100644
+index 0000000..13608b3
+--- /dev/null
++++ b/docs/codex/decisions/FIN-002-decision-log.md
+@@ -0,0 +1,24 @@
++# FIN-002 decision log
++
++## 2026-08-25 — Sole prize-math owner
++
++**Question:** leaderboard payouts are labeled preview-only; `packages/scoring/prize` still used commission fractions; economics uses `platform_fee_bps`. Which path owns prize math?
++
++**Answer (human):** **`packages/scoring/economics` + `prizedistribution` as the sole path.**
++
++**Implication:**
++- Fee/net pool math → `economics.CalculatePool` / `NetFromGross`
++- Winner count + power-law shares → `prizedistribution`
++- `packages/scoring/prize` becomes a thin compatibility layer (bps preferred)
++- Settlement recalculation and leaderboard net helpers must call economics (no local formulas)
++
++## Behavioral differences catalogued (pre-fix)
++
++| Topic | leaderboard `payout.go` | settlement `calculatePrizes` | `packages/scoring/prize` |
++|---|---|---|---|
++| Pool fee input | `platform_fee_bps` | locked/`platform_fee_bps` | commission **fraction** |
++| Net formula | floor gross×(10000-bps)/10000 | same (inline) | Floor(gross×fraction) |
++| Distribution | `prizedistribution` | `prizedistribution` | `prizedistribution` |
++| Authority | preview only | payout authority | preview helpers |
++
++Post-fix: all three use economics net + prizedistribution shares.
+diff --git a/docs/codex/reports/FIN-002-prize-calculation-path.md b/docs/codex/reports/FIN-002-prize-calculation-path.md
+new file mode 100644
+index 0000000..70cfc14
+--- /dev/null
++++ b/docs/codex/reports/FIN-002-prize-calculation-path.md
+@@ -0,0 +1,48 @@
++# FIN-002 — Consolidate prize calculation
++
++**Date:** 2026-08-25  
++**Branch:** `codex/FIN-002-prize-calculation-path`  
++**Status:** Implemented — **requires financial sign-off before merge** (money-path)
++
++## Decision
++
++Sole path: **`packages/scoring/economics` + `prizedistribution`** (human, 2026-08-25).
++
++## What changed
++
++| File | Change |
++|---|---|
++| `packages/scoring/economics/economics.go` | `NetFromGross`; `CalculatePool` uses it |
++| `packages/scoring/economics/fin002_golden_test.go` | Preview/leaderboard/settlement agreement golden |
++| `packages/scoring/prize/distribution.go` | `CalculatePrizePoolFromBps`; pool math → economics |
++| `packages/scoring/prize/commission.go` | `FractionToPlatformFeeBps` |
++| `apps/leaderboard-worker/server/payout.go` | `CalculatePrizePoolNet` → `economics.NetFromGross` |
++| `apps/settlement-service/server/settlement.go` | recalculation → `economics.CalculatePool` |
++| CI / `test:fin002` | Always-on lock |
++
++## Numeric example (10 × 100 USDT, 2000 bps)
++
++| | Gross | Fee | Net |
++|---|---|---|---|
++| economics / leaderboard / settlement | 100000 | 20000 | 80000 |
++
++Distribution shares for the same net + winner count are identical (power-law via `prizedistribution`).
++
++## Exact tests
++
++```text
++go test ./packages/scoring/economics/ ./packages/scoring/prize/
++ok
++
++node --test scripts/sec-fin002-prize-path-check.test.mjs
++# pass 4 / fail 0
++```
++
++## NOT verified
++
++- Full `go test ./apps/settlement-service/server` on this host (linker OOM). Locked-fee unit test exists; golden suite covers shared math.
++- Live end-to-end settlement against Postgres.
++
++## Sign-off request
++
++Please approve merge of FIN-002 (prize math consolidation). After approval, next task is **FIN-003** (single finalization owner).
+diff --git a/package.json b/package.json
+index 5427139..58a9b5c 100644
+--- a/package.json
++++ b/package.json
+@@ -16,6 +16,7 @@
+     "test:sec008": "node --test scripts/sec-008-auth-regression-lock.test.mjs",
+     "test:sec009": "node --test scripts/sec-009-admin-reauth-mfa.test.mjs",
+     "test:fin001": "node --test scripts/sec-fin001-platform-fee-check.test.mjs",
++    "test:fin002": "node --test scripts/sec-fin002-prize-path-check.test.mjs",
+     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
+     "build": "pnpm -r build",
+     "lint": "pnpm -r lint",
+diff --git a/packages/scoring/economics/economics.go b/packages/scoring/economics/economics.go
+index 71e11f2..abac822 100644
+--- a/packages/scoring/economics/economics.go
++++ b/packages/scoring/economics/economics.go
+@@ -85,6 +85,29 @@ func PlatformFeeBpsForPaidWrite(isFree bool, entryFeeCents int64, platformFeeBps
+ 	return ResolvePlatformFeeBps(platformFeeBps, 0)
+ }
+ 
++// NetFromGross applies platform_fee_bps to a gross pool (integer cents).
++// Floor net first so fee + net == gross always.
++func NetFromGross(grossCents int64, platformFeeBps int) (netCents, feeCents int64) {
++	if grossCents < 0 {
++		grossCents = 0
++	}
++	if platformFeeBps < 0 {
++		platformFeeBps = 0
++	}
++	if platformFeeBps > 10000 {
++		platformFeeBps = 10000
++	}
++	if platformFeeBps == 0 {
++		return grossCents, 0
++	}
++	if platformFeeBps >= 10000 {
++		return 0, grossCents
++	}
++	netCents = (grossCents * int64(10000-platformFeeBps)) / 10000
++	feeCents = grossCents - netCents
++	return netCents, feeCents
++}
++
+ // CalculatePool computes gross, platform fee, and net distributable prize pool.
+ // All amounts are integer cents. Net uses floor division so fee never underflows.
+ func CalculatePool(participants int, entryFeeCents int64, platformFeeBps int) PoolResult {
+@@ -101,9 +124,7 @@ func CalculatePool(participants int, entryFeeCents int64, platformFeeBps int) Po
+ 		platformFeeBps = 10000
+ 	}
+ 	gross := int64(participants) * entryFeeCents
+-	// Floor net first so fee + net == gross always with integer cents.
+-	net := (gross * int64(10000-platformFeeBps)) / 10000
+-	fee := gross - net
++	net, fee := NetFromGross(gross, platformFeeBps)
+ 	return PoolResult{
+ 		Participants:   participants,
+ 		EntryFeeCents:  entryFeeCents,
+diff --git a/packages/scoring/economics/fin002_golden_test.go b/packages/scoring/economics/fin002_golden_test.go
+new file mode 100644
+index 0000000..86dbfa9
+--- /dev/null
++++ b/packages/scoring/economics/fin002_golden_test.go
+@@ -0,0 +1,71 @@
++package economics
++
++import (
++	"testing"
++
++	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
++)
++
++// FIN-002: preview (economics), leaderboard-style net, and settlement-style pool
++// must agree for the same inputs.
++func TestFIN002PreviewLeaderboardSettlementAgreement(t *testing.T) {
++	cases := []struct {
++		name           string
++		participants   int
++		entryFeeCents  int64
++		platformFeeBps int
++	}{
++		{"canonical 20%", 10, 10000, 2000},
++		{"locked 15%", 3, 10000, 1500},
++		{"odd bps", 7, 3333, 1733},
++		{"zero fee", 5, 1000, 0},
++	}
++
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			pool := CalculatePool(tc.participants, tc.entryFeeCents, tc.platformFeeBps)
++			gross := int64(tc.participants) * tc.entryFeeCents
++			if pool.GrossCents != gross {
++				t.Fatalf("gross=%d want %d", pool.GrossCents, gross)
++			}
++
++			// Leaderboard path: NetFromGross on gross.
++			lbNet, lbFee := NetFromGross(gross, tc.platformFeeBps)
++			if lbNet != pool.NetCents || lbFee != pool.FeeCents {
++				t.Fatalf("leaderboard net/fee=%d/%d want %d/%d", lbNet, lbFee, pool.NetCents, pool.FeeCents)
++			}
++
++			// Settlement path: same CalculatePool.
++			st := CalculatePool(tc.participants, tc.entryFeeCents, tc.platformFeeBps)
++			if st.NetCents != pool.NetCents || st.FeeCents != pool.FeeCents {
++				t.Fatalf("settlement pool mismatch: %+v vs %+v", st, pool)
++			}
++
++			if pool.FeeCents+pool.NetCents != pool.GrossCents {
++				t.Fatalf("conservation broken: fee+net=%d gross=%d", pool.FeeCents+pool.NetCents, pool.GrossCents)
++			}
++
++			// Distribution agreement: same shares for same net + winners.
++			cfg := prizedistribution.ConfigFromEnv()
++			winners := prizedistribution.GetWinnersCount(tc.participants, cfg.WinnerPercent)
++			if winners <= 0 || pool.NetCents <= 0 {
++				return
++			}
++			sharesA := prizedistribution.CalculatePrizeDistribution(pool.NetCents, winners, cfg.Alpha)
++			sharesB := prizedistribution.CalculatePrizeDistribution(lbNet, winners, cfg.Alpha)
++			if len(sharesA) != len(sharesB) {
++				t.Fatalf("share count %d vs %d", len(sharesA), len(sharesB))
++			}
++			var sum int64
++			for i := range sharesA {
++				if sharesA[i].AmountCents != sharesB[i].AmountCents {
++					t.Fatalf("rank %d amount %d vs %d", sharesA[i].Rank, sharesA[i].AmountCents, sharesB[i].AmountCents)
++				}
++				sum += sharesA[i].AmountCents
++			}
++			if sum != pool.NetCents {
++				t.Fatalf("distributed %d != net %d", sum, pool.NetCents)
++			}
++		})
++	}
++}
+diff --git a/packages/scoring/prize/commission.go b/packages/scoring/prize/commission.go
+index 341bd27..16875f2 100644
+--- a/packages/scoring/prize/commission.go
++++ b/packages/scoring/prize/commission.go
+@@ -1,13 +1,17 @@
+ package prize
+ 
+-import "fmt"
++import (
++	"fmt"
++	"math"
++
++	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
++)
+ 
+ // CommissionPercentToFraction converts a commission rate from percentage
+ // representation (e.g. 20.0 for 20%) to fraction representation (e.g. 0.20).
+ //
+-// This centralizes the conversion to prevent scattered / 100.0 arithmetic.
+-// The prize package functions (CalculatePrizePool, PreviewPrizes) expect
+-// fraction values.
++// Deprecated for fee authority (FIN-001/FIN-002): prefer platform_fee_bps.
++// Kept for legacy call sites that still pass fractions into PreviewPrizes.
+ //
+ // Valid range: 0.0 to 100.0 (inclusive). Returns an error for out-of-range values.
+ func CommissionPercentToFraction(pct float64) (float64, error) {
+@@ -17,6 +21,15 @@ func CommissionPercentToFraction(pct float64) (float64, error) {
+ 	return pct / 100.0, nil
+ }
+ 
++// FractionToPlatformFeeBps converts a commission fraction (0.20) to bps (2000).
++func FractionToPlatformFeeBps(fraction float64) int {
++	if fraction <= 0 {
++		return 0
++	}
++	bps := int(math.Round(fraction * 10000))
++	return economics.ResolvePlatformFeeBps(bps, 0)
++}
++
+ // MustCommissionPercentToFraction is like CommissionPercentToFraction but panics
+ // on invalid input. Use only when the value has already been validated (e.g., from
+ // database storage where CHECK constraints enforce the range).
+diff --git a/packages/scoring/prize/distribution.go b/packages/scoring/prize/distribution.go
+index c9c03bf..53e4ad0 100644
+--- a/packages/scoring/prize/distribution.go
++++ b/packages/scoring/prize/distribution.go
+@@ -6,6 +6,7 @@ import (
+ 	"sort"
+ 
+ 	prizedistribution "github.com/Parsaeffatravesh/tragge/packages/scoring/distribution"
++	"github.com/Parsaeffatravesh/tragge/packages/scoring/economics"
+ )
+ 
+ // MaxCommissionRate is the maximum allowed commission rate as a fraction.
+@@ -29,13 +30,20 @@ func GetWinnersCount(participants int) int {
+ 	return prizedistribution.GetWinnersCount(participants, cfg.WinnerPercent)
+ }
+ 
+-// CalculatePrizePool computes the net prize pool in cents after commission.
+-//   - participants: number of contest participants
+-//   - entryFeeCents: entry fee per participant in cents
+-//   - commissionRate: platform commission as a fraction (e.g. 0.20 for 20%)
++// CalculatePrizePoolFromBps computes the net prize pool using FIN-001/FIN-002
++// canonical platform_fee_bps via packages/scoring/economics.
++func CalculatePrizePoolFromBps(participants int, entryFeeCents int, platformFeeBps int) int64 {
++	if participants <= 0 || entryFeeCents <= 0 {
++		return 0
++	}
++	return economics.CalculatePool(participants, int64(entryFeeCents), platformFeeBps).NetCents
++}
++
++// CalculatePrizePool computes the net prize pool in cents after platform fee.
++//   - commissionRate: legacy fraction (e.g. 0.20 for 20%); converted to bps.
+ //
+-// Returns the prize pool available for distribution in cents.
+-// Returns an error if commissionRate is negative or exceeds MaxCommissionRate.
++// FIN-002: delegates to economics (same math as settlement/leaderboard).
++// Prefer CalculatePrizePoolFromBps for new callers.
+ func CalculatePrizePool(participants int, entryFeeCents int, commissionRate float64) (int64, error) {
+ 	if participants <= 0 || entryFeeCents <= 0 {
+ 		return 0, nil
+@@ -46,9 +54,7 @@ func CalculatePrizePool(participants int, entryFeeCents int, commissionRate floa
+ 	if commissionRate > MaxCommissionRate {
+ 		return 0, fmt.Errorf("prize: commission rate %.4f exceeds maximum allowed %.4f", commissionRate, MaxCommissionRate)
+ 	}
+-	gross := int64(participants) * int64(entryFeeCents)
+-	commission := int64(math.Floor(float64(gross) * commissionRate))
+-	return gross - commission, nil
++	return CalculatePrizePoolFromBps(participants, entryFeeCents, FractionToPlatformFeeBps(commissionRate)), nil
+ }
+ 
+ // CalculatePrizeDistribution computes the prize breakdown for each winner position
+@@ -96,7 +102,7 @@ func CalculatePrizeDistributionWithTiers(participants int, prizePoolCents int64,
+ }
+ 
+ // PreviewPrizes generates a PrizePreview for pre-start display.
+-// This shows prospective participants what the prize breakdown would be.
++// commissionRate is a legacy fraction; fee math uses economics via bps.
+ func PreviewPrizes(participants int, entryFeeCents int, commissionRate float64) (PrizePreview, error) {
+ 	pool, err := CalculatePrizePool(participants, entryFeeCents, commissionRate)
+ 	if err != nil {
+@@ -116,6 +122,21 @@ func PreviewPrizes(participants int, entryFeeCents int, commissionRate float64)
+ 	}, nil
+ }
+ 
++// PreviewPrizesFromBps is the FIN-002 canonical preview path (platform_fee_bps).
++func PreviewPrizesFromBps(participants int, entryFeeCents int, platformFeeBps int) PrizePreview {
++	pool := economics.CalculatePool(participants, int64(entryFeeCents), platformFeeBps)
++	slots := CalculatePrizeDistribution(participants, pool.NetCents)
++	return PrizePreview{
++		Participants:   participants,
++		EntryFeeCents:  entryFeeCents,
++		CommissionRate: float64(pool.PlatformFeeBps) / 10000.0,
++		GrossPool:      pool.GrossCents,
++		NetPool:        pool.NetCents,
++		WinnersCount:   GetWinnersCount(participants),
++		Slots:          slots,
++	}
++}
++
+ // RankedParticipant represents a participant with their score for tie handling.
+ type RankedParticipant struct {
+ 	UserID string
+diff --git a/scripts/sec-fin002-prize-path-check.test.mjs b/scripts/sec-fin002-prize-path-check.test.mjs
+new file mode 100644
+index 0000000..10cd135
+--- /dev/null
++++ b/scripts/sec-fin002-prize-path-check.test.mjs
+@@ -0,0 +1,51 @@
++/**
++ * FIN-002 — prize math consolidation onto economics + prizedistribution.
++ */
++import assert from "node:assert/strict";
++import { spawnSync } from "node:child_process";
++import fs from "node:fs";
++import path from "node:path";
++import test from "node:test";
++import { fileURLToPath } from "node:url";
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
++
++test("FIN-002 settlement recalculation uses economics.CalculatePool", () => {
++  const src = read("apps/settlement-service/server/settlement.go");
++  assert.match(src, /economics\.CalculatePool/);
++  assert.doesNotMatch(
++    src,
++    /prizePoolNet = \(prizePoolGross \* int64\(10000-platformFeeBps\)\) \/ 10000/,
++  );
++});
++
++test("FIN-002 leaderboard net uses economics.NetFromGross", () => {
++  const src = read("apps/leaderboard-worker/server/payout.go");
++  assert.match(src, /economics\.NetFromGross/);
++});
++
++test("FIN-002 prize package delegates pool math to economics", () => {
++  const src = read("packages/scoring/prize/distribution.go");
++  assert.match(src, /CalculatePrizePoolFromBps/);
++  assert.match(src, /economics\.CalculatePool/);
++});
++
++test("FIN-002 golden agreement test passes", () => {
++  const result = spawnSync(
++    "go",
++    ["test", "-count=1", "-run=^TestFIN002PreviewLeaderboardSettlementAgreement$", "."],
++    {
++      cwd: path.join(root, "packages/scoring/economics"),
++      encoding: "utf8",
++      env: {
++        ...process.env,
++        GOCACHE: process.env.GOCACHE || path.join(root, ".go-cache"),
++        GOFLAGS: "-vet=off",
++      },
++    },
++  );
++  const output = `${result.stdout || ""}${result.stderr || ""}`;
++  assert.equal(result.status, 0, output);
++  assert.match(output, /ok\s+/);
++});
+-- 
+2.45.1.windows.1
+

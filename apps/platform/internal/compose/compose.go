@@ -36,9 +36,9 @@ type Platform struct {
 	Scheduler    scheduler.Service
 }
 
-// New builds the Platform with memory stubs for non-migrated modules and
-// memory identity/admin services (no JWT secrets required for Ready/smoke).
+// New builds the Platform with ARCH-003 contest-support modules wired.
 func New() *Platform {
+	notif := notification.New()
 	return &Platform{
 		Identity:     identity.New(),
 		Contest:      contest.New(),
@@ -47,11 +47,20 @@ func New() *Platform {
 		KYC:          kyc.New(),
 		Settlement:   settlement.New(),
 		Leaderboard:  leaderboard.New(),
-		Notification: notification.New(),
-		Ticket:       ticket.New(),
+		Notification: notif,
+		Ticket:       ticket.New(notif),
 		Admin:        admin.New(),
 		Scheduler:    scheduler.New(),
 	}
+}
+
+// WorkerJobs returns background jobs for platform --mode=worker (ARCH-003).
+func (p *Platform) WorkerJobs() []modules.Job {
+	var jobs []modules.Job
+	jobs = append(jobs, p.Scheduler.Jobs()...)
+	jobs = append(jobs, p.Leaderboard.Jobs()...)
+	jobs = append(jobs, p.Notification.Jobs()...)
+	return jobs
 }
 
 // NewWithIsolatedAuth wires identity/admin to separate User/Admin Auth contexts (SEC-001/ARCH-002).

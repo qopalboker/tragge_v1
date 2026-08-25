@@ -1,0 +1,1825 @@
+From d82b947b6f1a157eb93e99cacd224a9d46ddcb1a Mon Sep 17 00:00:00 2001
+From: qopalboker <qopalboker@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 05:13:33 +0330
+Subject: [PATCH] feat(platform): add modular monolith runtime skeleton
+
+---
+ .github/workflows/ci.yml                      |  16 +++
+ apps/platform/Dockerfile                      |  33 ++++++
+ apps/platform/README.md                       |  33 ++++++
+ apps/platform/cmd/platform/main.go            |  81 +++++++++++++
+ apps/platform/go.mod                          |  44 +++++++
+ apps/platform/go.sum                          |  77 ++++++++++++
+ apps/platform/internal/adapters/api/server.go |  80 +++++++++++++
+ .../internal/adapters/boundary_test.go        |  46 ++++++++
+ .../internal/adapters/mode_smoke_test.go      | 110 ++++++++++++++++++
+ .../internal/adapters/realtime/server.go      |  63 ++++++++++
+ .../internal/adapters/worker/server.go        |  63 ++++++++++
+ apps/platform/internal/compose/compose.go     |  80 +++++++++++++
+ .../platform/internal/compose/compose_test.go |  26 +++++
+ apps/platform/internal/mode/mode.go           |  40 +++++++
+ apps/platform/internal/mode/mode_test.go      |  18 +++
+ .../platform/internal/modules/admin/module.go |  43 +++++++
+ .../internal/modules/contest/module.go        |  43 +++++++
+ .../internal/modules/identity/module.go       |  43 +++++++
+ apps/platform/internal/modules/kyc/module.go  |  43 +++++++
+ .../internal/modules/leaderboard/module.go    |  43 +++++++
+ apps/platform/internal/modules/module.go      |  21 ++++
+ .../internal/modules/notification/module.go   |  43 +++++++
+ .../internal/modules/payment/module.go        |  43 +++++++
+ .../internal/modules/scheduler/module.go      |  43 +++++++
+ .../internal/modules/settlement/module.go     |  43 +++++++
+ .../internal/modules/ticket/module.go         |  43 +++++++
+ .../internal/modules/wallet/module.go         |  43 +++++++
+ docs/codex/AI_AGENT_EXECUTION_ROADMAP.md      |   9 +-
+ docs/codex/decisions/ARCH-001-decision-log.md |  18 +++
+ .../reports/ARCH-001-platform-skeleton.md     |  41 +++++++
+ docs/codex/reports/discovered-issues.md       |  13 +++
+ go.work                                       |   1 +
+ infra/docker/docker-compose.platform.yml      |  35 ++++++
+ package.json                                  |   1 +
+ .../sec-arch001-platform-skeleton.test.mjs    |  81 +++++++++++++
+ 35 files changed, 1499 insertions(+), 4 deletions(-)
+ create mode 100644 apps/platform/Dockerfile
+ create mode 100644 apps/platform/README.md
+ create mode 100644 apps/platform/cmd/platform/main.go
+ create mode 100644 apps/platform/go.mod
+ create mode 100644 apps/platform/go.sum
+ create mode 100644 apps/platform/internal/adapters/api/server.go
+ create mode 100644 apps/platform/internal/adapters/boundary_test.go
+ create mode 100644 apps/platform/internal/adapters/mode_smoke_test.go
+ create mode 100644 apps/platform/internal/adapters/realtime/server.go
+ create mode 100644 apps/platform/internal/adapters/worker/server.go
+ create mode 100644 apps/platform/internal/compose/compose.go
+ create mode 100644 apps/platform/internal/compose/compose_test.go
+ create mode 100644 apps/platform/internal/mode/mode.go
+ create mode 100644 apps/platform/internal/mode/mode_test.go
+ create mode 100644 apps/platform/internal/modules/admin/module.go
+ create mode 100644 apps/platform/internal/modules/contest/module.go
+ create mode 100644 apps/platform/internal/modules/identity/module.go
+ create mode 100644 apps/platform/internal/modules/kyc/module.go
+ create mode 100644 apps/platform/internal/modules/leaderboard/module.go
+ create mode 100644 apps/platform/internal/modules/module.go
+ create mode 100644 apps/platform/internal/modules/notification/module.go
+ create mode 100644 apps/platform/internal/modules/payment/module.go
+ create mode 100644 apps/platform/internal/modules/scheduler/module.go
+ create mode 100644 apps/platform/internal/modules/settlement/module.go
+ create mode 100644 apps/platform/internal/modules/ticket/module.go
+ create mode 100644 apps/platform/internal/modules/wallet/module.go
+ create mode 100644 docs/codex/decisions/ARCH-001-decision-log.md
+ create mode 100644 docs/codex/reports/ARCH-001-platform-skeleton.md
+ create mode 100644 infra/docker/docker-compose.platform.yml
+ create mode 100644 scripts/sec-arch001-platform-skeleton.test.mjs
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 93397ef..8a86e7b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -337,6 +337,22 @@ jobs:
+       - name: LIFECYCLE-003 archival suite
+         run: node --test scripts/sec-lifecycle003-archival.test.mjs
+ 
++  arch-001-platform-skeleton:
++    name: ARCH-001 platform skeleton
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-go@v5
++        with:
++          go-version: "1.24"
++          cache: true
++          cache-dependency-path: "**/go.sum"
++      - uses: actions/setup-node@v4
++        with:
++          node-version: "20"
++      - name: ARCH-001 skeleton suite
++        run: node --test scripts/sec-arch001-platform-skeleton.test.mjs
++
+   # ---- Frontend jobs (skipped if no frontend changes) ----
+   lint-and-test-frontend:
+     name: Frontend (lint, test, build)
+diff --git a/apps/platform/Dockerfile b/apps/platform/Dockerfile
+new file mode 100644
+index 0000000..67112b2
+--- /dev/null
++++ b/apps/platform/Dockerfile
+@@ -0,0 +1,33 @@
++# ARCH-001: one versioned Platform image; deploy with --mode=api|realtime|worker.
++FROM golang:1.24-alpine AS builder
++RUN apk add --no-cache ca-certificates tzdata
++ENV GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
++ENV GOSUMDB=sum.golang.org
++WORKDIR /build
++
++ARG VERSION=dev
++
++COPY go.work go.work.sum ./
++COPY packages/config/ packages/config/
++COPY packages/observability/ packages/observability/
++COPY apps/platform/go.mod apps/platform/go.sum* apps/platform/
++RUN cd apps/platform && go mod download
++
++COPY apps/platform/ apps/platform/
++RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
++    go build -ldflags="-s -w -X main.Version=${VERSION}" -trimpath \
++    -o /platform ./apps/platform/cmd/platform
++
++RUN echo "nonroot:x:65534:65534:nonroot:/:/sbin/nologin" > /etc/passwd.minimal
++
++FROM busybox:stable-musl
++COPY --from=builder /etc/passwd.minimal /etc/passwd
++COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
++COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
++COPY --from=builder /platform /platform
++USER 65534:65534
++EXPOSE 8080
++# Same image; select mode at deploy time (ADR-0001).
++ENV PLATFORM_MODE=api
++ENV PLATFORM_ADDR=:8080
++ENTRYPOINT ["/platform"]
+diff --git a/apps/platform/README.md b/apps/platform/README.md
+new file mode 100644
+index 0000000..ede02d2
+--- /dev/null
++++ b/apps/platform/README.md
+@@ -0,0 +1,33 @@
++# Platform modular monolith (ARCH-001 skeleton)
++
++One codebase, one image, three runtime modes per ADR-0001 / policy §2.2:
++
++```bash
++platform --mode=api
++platform --mode=realtime
++platform --mode=worker
++```
++
++## Layout
++
++- `cmd/platform` — entrypoint
++- `internal/compose` — composition root (wires modules; only place that constructs repositories)
++- `internal/modules/*` — identity, contest, wallet, payment, kyc, settlement, leaderboard, notification, ticket, admin, scheduler (stubs)
++- `internal/adapters/{api,realtime,worker}` — mode shells with independent `/healthz` and `/readyz`
++
++## Boundary rule
++
++Adapters and handlers depend on module **Service** interfaces only. Module **repository** types are unexported. Import-boundary tests enforce adapters do not import `internal/modules/<name>` packages directly.
++
++## Image
++
++```bash
++docker build -f apps/platform/Dockerfile -t tragge/platform:dev .
++docker run --rm -p 8080:8080 tragge/platform:dev --mode=api
++```
++
++Compose sketch: `infra/docker/docker-compose.platform.yml`.
++
++## Out of scope (later ARCH-*)
++
++Migrating real BFF/worker logic into these modules (ARCH-002+).
+diff --git a/apps/platform/cmd/platform/main.go b/apps/platform/cmd/platform/main.go
+new file mode 100644
+index 0000000..bbeb189
+--- /dev/null
++++ b/apps/platform/cmd/platform/main.go
+@@ -0,0 +1,81 @@
++// Command platform is the Platform modular-monolith entrypoint (ARCH-001).
++// One binary, one image, three modes: api | realtime | worker (ADR-0001).
++package main
++
++import (
++	"context"
++	"flag"
++	"log"
++	"net/http"
++	"os"
++	"os/signal"
++	"syscall"
++	"time"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/api"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/realtime"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++)
++
++// Version is injected at build time via -ldflags "-X main.Version=...".
++var Version = "dev"
++
++func main() {
++	modeFlag := flag.String("mode", envOr("PLATFORM_MODE", "api"), "runtime mode: api|realtime|worker")
++	addr := flag.String("addr", envOr("PLATFORM_ADDR", ":8080"), "listen address for health and mode HTTP")
++	flag.Parse()
++
++	m, err := mode.Parse(*modeFlag)
++	if err != nil {
++		log.Fatalf("platform: %v", err)
++	}
++
++	platform := compose.New()
++	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
++	defer stop()
++
++	log.Printf("platform: starting mode=%s version=%s addr=%s modules=%d",
++		m, Version, *addr, len(platform.Modules()))
++
++	errCh := make(chan error, 1)
++	switch m {
++	case mode.API:
++		srv := api.New(platform, *addr, Version)
++		go func() { errCh <- srv.ListenAndServe() }()
++		waitShutdown(ctx, errCh, srv.Shutdown)
++	case mode.Realtime:
++		srv := realtime.New(platform, *addr, Version)
++		go func() { errCh <- srv.ListenAndServe() }()
++		waitShutdown(ctx, errCh, srv.Shutdown)
++	case mode.Worker:
++		srv := worker.New(platform, *addr, Version)
++		go func() { errCh <- srv.ListenAndServe() }()
++		waitShutdown(ctx, errCh, srv.Shutdown)
++	default:
++		log.Fatalf("platform: unhandled mode %q", m)
++	}
++}
++
++func waitShutdown(ctx context.Context, errCh <-chan error, shutdown func(context.Context) error) {
++	select {
++	case <-ctx.Done():
++		shCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++		defer cancel()
++		if err := shutdown(shCtx); err != nil {
++			log.Printf("platform: shutdown error: %v", err)
++		}
++	case err := <-errCh:
++		if err != nil && err != http.ErrServerClosed {
++			log.Fatalf("platform: serve error: %v", err)
++		}
++	}
++}
++
++func envOr(key, fallback string) string {
++	if v := os.Getenv(key); v != "" {
++		return v
++	}
++	return fallback
++}
+diff --git a/apps/platform/go.mod b/apps/platform/go.mod
+new file mode 100644
+index 0000000..ab36496
+--- /dev/null
++++ b/apps/platform/go.mod
+@@ -0,0 +1,44 @@
++module github.com/Parsaeffatravesh/tragge/apps/platform
++
++go 1.24.0
++
++toolchain go1.24.7
++
++require github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
++
++require (
++	github.com/Parsaeffatravesh/tragge/packages/observability v0.0.0 // indirect
++	github.com/beorn7/perks v1.0.1 // indirect
++	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
++	github.com/cespare/xxhash/v2 v2.3.0 // indirect
++	github.com/getsentry/sentry-go v0.27.0 // indirect
++	github.com/go-logr/logr v1.4.2 // indirect
++	github.com/go-logr/stdr v1.2.2 // indirect
++	github.com/google/uuid v1.6.0 // indirect
++	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
++	github.com/prometheus/client_golang v1.19.0 // indirect
++	github.com/prometheus/client_model v0.6.0 // indirect
++	github.com/prometheus/common v0.48.0 // indirect
++	github.com/prometheus/procfs v0.12.0 // indirect
++	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
++	go.opentelemetry.io/otel v1.35.0 // indirect
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0 // indirect
++	go.opentelemetry.io/otel/metric v1.35.0 // indirect
++	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
++	go.opentelemetry.io/otel/trace v1.35.0 // indirect
++	go.opentelemetry.io/proto/otlp v1.1.0 // indirect
++	go.uber.org/multierr v1.11.0 // indirect
++	go.uber.org/zap v1.27.0 // indirect
++	golang.org/x/net v0.45.0 // indirect
++	golang.org/x/sys v0.37.0 // indirect
++	golang.org/x/text v0.30.0 // indirect
++	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
++	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
++	google.golang.org/grpc v1.67.0 // indirect
++	google.golang.org/protobuf v1.34.2 // indirect
++)
++
++replace github.com/Parsaeffatravesh/tragge/packages/config => ../../packages/config
++
++replace github.com/Parsaeffatravesh/tragge/packages/observability => ../../packages/observability
+diff --git a/apps/platform/go.sum b/apps/platform/go.sum
+new file mode 100644
+index 0000000..c7be9ef
+--- /dev/null
++++ b/apps/platform/go.sum
+@@ -0,0 +1,77 @@
++github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
++github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
++github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
++github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
++github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
++github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
++github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
++github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/getsentry/sentry-go v0.27.0 h1:Pv98CIbtB3LkMWmXi4Joa5OOcwbmnX88sF5qbK3r3Ps=
++github.com/getsentry/sentry-go v0.27.0/go.mod h1:lc76E2QywIyW8WuBnwl8Lc4bkmQH4+w1gwTf25trprY=
++github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
++github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
++github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
++github.com/go-logr/logr v1.4.2 h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY=
++github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
++github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
++github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
++github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
++github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
++github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
++github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 h1:Wqo399gCIufwto+VfwCSvsnfGpF/w5E9CNxSwbpD6No=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0/go.mod h1:qmOFXW2epJhM0qSnUUYpldc7gVz2KMQwJ/QYCDIa7XU=
++github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
++github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
++github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
++github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
++github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
++github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
++github.com/prometheus/client_golang v1.19.0 h1:ygXvpU1AoN1MhdzckN+PyD9QJOSD4x7kmXYlnfbA6JU=
++github.com/prometheus/client_golang v1.19.0/go.mod h1:ZRM9uEAypZakd+q/x7+gmsvXdURP+DABIEIjnmDdp+k=
++github.com/prometheus/client_model v0.6.0 h1:k1v3CzpSRUTrKMppY35TLwPvxHqBu0bYgxZzqGIgaos=
++github.com/prometheus/client_model v0.6.0/go.mod h1:NTQHnmxFpouOD0DpvP4XujX3CdOAGQPoaGhyTchlyt8=
++github.com/prometheus/common v0.48.0 h1:QO8U2CdOzSn1BBsmXJXduaaW+dY/5QLjfB8svtSzKKE=
++github.com/prometheus/common v0.48.0/go.mod h1:0/KsvlIEfPQCQ5I2iNSAWKPZziNCvRs5EC6ILDTlAPc=
++github.com/prometheus/procfs v0.12.0 h1:jluTpSng7V9hY0O2R9DzzJHYb2xULk9VTR1V1R/k6Bo=
++github.com/prometheus/procfs v0.12.0/go.mod h1:pcuDEFsWDnvcgNzo4EEweacyhjeA9Zk3cnaOZAZEfOo=
++github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
++github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
++go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=
++go.opentelemetry.io/auto/sdk v1.1.0/go.mod h1:3wSPjt5PWp2RhlCcmmOial7AvC4DQqZb7a7wCow3W8A=
++go.opentelemetry.io/otel v1.35.0 h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=
++go.opentelemetry.io/otel v1.35.0/go.mod h1:UEqy8Zp11hpkUrL73gSlELM0DupHoiq72dR+Zqel/+Y=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 h1:t6wl9SPayj+c7lEIFgm4ooDBZVb01IhLB4InpomhRw8=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0/go.mod h1:iSDOcsnSA5INXzZtwaBPrKp/lWu/V14Dd+llD0oI2EA=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0 h1:Mw5xcxMwlqoJd97vwPxA8isEaIoxsta9/Q51+TTJLGE=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0/go.mod h1:CQNu9bj7o7mC6U7+CA/schKEYakYXWr79ucDHTMGhCM=
++go.opentelemetry.io/otel/metric v1.35.0 h1:0znxYu2SNyuMSQT4Y9WDWej0VpcsxkuklLa4/siN90M=
++go.opentelemetry.io/otel/metric v1.35.0/go.mod h1:nKVFgxBZ2fReX6IlyW28MgZojkoAkJGaE8CpgeAU3oE=
++go.opentelemetry.io/otel/sdk v1.35.0 h1:iPctf8iprVySXSKJffSS79eOjl9pvxV9ZqOWT0QejKY=
++go.opentelemetry.io/otel/sdk v1.35.0/go.mod h1:+ga1bZliga3DxJ3CQGg3updiaAJoNECOgJREo9KHGQg=
++go.opentelemetry.io/otel/trace v1.35.0 h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs=
++go.opentelemetry.io/otel/trace v1.35.0/go.mod h1:WUk7DtFp1Aw2MkvqGdwiXYDZZNvA/1J8o6xRXLrIkyc=
++go.opentelemetry.io/proto/otlp v1.1.0 h1:2Di21piLrCqJ3U3eXGCTPHE9R8Nh+0uglSnOyxikMeI=
++go.opentelemetry.io/proto/otlp v1.1.0/go.mod h1:GpBHCBWiqvVLDqmHZsoMM3C5ySeKTC7ej/RNTae6MdY=
++go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
++go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
++go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=
++go.uber.org/multierr v1.11.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=
++go.uber.org/zap v1.27.0 h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=
++go.uber.org/zap v1.27.0/go.mod h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=
++golang.org/x/net v0.45.0 h1:RLBg5JKixCy82FtLJpeNlVM0nrSqpCRYzVU1n8kj0tM=
++golang.org/x/net v0.45.0/go.mod h1:ECOoLqd5U3Lhyeyo/QDCEVQ4sNgYsqvCZ722XogGieY=
++golang.org/x/sys v0.37.0 h1:fdNQudmxPjkdUTPnLn5mdQv7Zwvbvpaxqs831goi9kQ=
++golang.org/x/sys v0.37.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
++golang.org/x/text v0.30.0 h1:yznKA/E9zq54KzlzBEAWn1NXSQ8DIp/NYMy88xJjl4k=
++golang.org/x/text v0.30.0/go.mod h1:yDdHFIX9t+tORqspjENWgzaCVXgk0yYnYuSZ8UzzBVM=
++google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 h1:wKguEg1hsxI2/L3hUYrpo1RVi48K+uTyzKqprwLXsb8=
++google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142/go.mod h1:d6be+8HhtEtucleCbxpPW9PA9XwISACu8nvpPqF0BVo=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1/go.mod h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=
++google.golang.org/grpc v1.67.0 h1:IdH9y6PF5MPSdAntIcpjQ+tXO41pcQsfZV2RxtQgVcw=
++google.golang.org/grpc v1.67.0/go.mod h1:1gLDyUQU7CTLJI90u3nXZ9ekeghjeM7pTDZlqFNg2AA=
++google.golang.org/protobuf v1.34.2 h1:6xV6lTsCfpGD21XK49h7MhtcApnLqkfYgPcdHftf6hg=
++google.golang.org/protobuf v1.34.2/go.mod h1:qYOHts0dSfpeUzUFpOMr/WGzszTmLH+DiWniOlNbLDw=
++gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
++gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+diff --git a/apps/platform/internal/adapters/api/server.go b/apps/platform/internal/adapters/api/server.go
+new file mode 100644
+index 0000000..5231e15
+--- /dev/null
++++ b/apps/platform/internal/adapters/api/server.go
+@@ -0,0 +1,80 @@
++// Package api runs platform --mode=api (HTTP APIs).
++// Handlers depend only on module Service interfaces from compose — never
++// foreign repositories (ARCH-001).
++package api
++
++import (
++	"context"
++	"encoding/json"
++	"net"
++	"net/http"
++	"time"
++
++	cfghealth "github.com/Parsaeffatravesh/tragge/packages/config/health"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++)
++
++// Server is the api-mode HTTP process.
++type Server struct {
++	platform *compose.Platform
++	http     *http.Server
++	checker  *cfghealth.Checker
++}
++
++// New constructs the api-mode server. addr is host:port (e.g. ":8080").
++func New(platform *compose.Platform, addr, version string) *Server {
++	checker := cfghealth.NewChecker(mode.API.ServiceName(), cfghealth.WithVersion(version))
++	checker.AddDependency("modules", true, func(ctx context.Context) error {
++		return platform.Ready(ctx)
++	})
++
++	mux := http.NewServeMux()
++	mux.HandleFunc("/healthz", checker.LivenessHandler())
++	mux.HandleFunc("/readyz", checker.ReadinessHandler())
++	mux.HandleFunc("/v1/platform/modules", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodGet {
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		names := make([]string, 0, len(platform.Modules()))
++		for _, m := range platform.Modules() {
++			names = append(names, m.Name())
++		}
++		w.Header().Set("Content-Type", "application/json")
++		_ = json.NewEncoder(w).Encode(map[string]any{
++			"mode":    mode.API.String(),
++			"modules": names,
++		})
++	})
++
++	return &Server{
++		platform: platform,
++		checker:  checker,
++		http: &http.Server{
++			Addr:              addr,
++			Handler:           mux,
++			ReadHeaderTimeout: 5 * time.Second,
++		},
++	}
++}
++
++// ListenAndServe starts the api HTTP server.
++func (s *Server) ListenAndServe() error {
++	return s.http.ListenAndServe()
++}
++
++// Serve serves on an existing listener (tests).
++func (s *Server) Serve(lis net.Listener) error {
++	s.http.Addr = lis.Addr().String()
++	return s.http.Serve(lis)
++}
++
++// Shutdown gracefully stops the server.
++func (s *Server) Shutdown(ctx context.Context) error {
++	return s.http.Shutdown(ctx)
++}
++
++// Addr returns the configured listen address.
++func (s *Server) Addr() string { return s.http.Addr }
+diff --git a/apps/platform/internal/adapters/boundary_test.go b/apps/platform/internal/adapters/boundary_test.go
+new file mode 100644
+index 0000000..fb96034
+--- /dev/null
++++ b/apps/platform/internal/adapters/boundary_test.go
+@@ -0,0 +1,46 @@
++package adapters_test
++
++import (
++	"go/parser"
++	"go/token"
++	"os"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++)
++
++// ARCH-001: adapters (HTTP/mode shells) must not import foreign module packages
++// directly. They obtain Service interfaces only via compose.Platform.
++func TestAdaptersDoNotImportModulePackagesDirectly(t *testing.T) {
++	_, thisFile, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("runtime.Caller failed")
++	}
++	root := filepath.Dir(thisFile)
++
++	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
++		if err != nil {
++			return err
++		}
++		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
++			return nil
++		}
++		fset := token.NewFileSet()
++		f, parseErr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
++		if parseErr != nil {
++			return parseErr
++		}
++		for _, imp := range f.Imports {
++			impPath := strings.Trim(imp.Path.Value, `"`)
++			if strings.Contains(impPath, "/internal/modules/") {
++				t.Errorf("%s imports module package %s — adapters must use compose.Platform Service fields only",
++					path, impPath)
++			}
++		}
++		return nil
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++}
+diff --git a/apps/platform/internal/adapters/mode_smoke_test.go b/apps/platform/internal/adapters/mode_smoke_test.go
+new file mode 100644
+index 0000000..7893e34
+--- /dev/null
++++ b/apps/platform/internal/adapters/mode_smoke_test.go
+@@ -0,0 +1,110 @@
++package adapters_test
++
++import (
++	"context"
++	"fmt"
++	"io"
++	"net"
++	"net/http"
++	"testing"
++	"time"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/api"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/realtime"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++)
++
++func TestModeStartupSmokeHealthAndReady(t *testing.T) {
++	platform := compose.New()
++	version := "test"
++
++	cases := []struct {
++		name  string
++		mode  mode.Mode
++		start func(lis net.Listener) (shutdown func(context.Context) error)
++	}{
++		{
++			name: "api",
++			mode: mode.API,
++			start: func(lis net.Listener) func(context.Context) error {
++				srv := api.New(platform, lis.Addr().String(), version)
++				go func() { _ = srv.Serve(lis) }()
++				return srv.Shutdown
++			},
++		},
++		{
++			name: "realtime",
++			mode: mode.Realtime,
++			start: func(lis net.Listener) func(context.Context) error {
++				srv := realtime.New(platform, lis.Addr().String(), version)
++				go func() { _ = srv.Serve(lis) }()
++				return srv.Shutdown
++			},
++		},
++		{
++			name: "worker",
++			mode: mode.Worker,
++			start: func(lis net.Listener) func(context.Context) error {
++				srv := worker.New(platform, lis.Addr().String(), version)
++				go func() { _ = srv.Serve(lis) }()
++				return srv.Shutdown
++			},
++		},
++	}
++
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			lis, err := net.Listen("tcp", "127.0.0.1:0")
++			if err != nil {
++				t.Fatal(err)
++			}
++			base := "http://" + lis.Addr().String()
++			shutdown := tc.start(lis)
++			defer func() {
++				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
++				defer cancel()
++				_ = shutdown(ctx)
++			}()
++
++			client := &http.Client{Timeout: 2 * time.Second}
++			waitOK(t, client, base+"/healthz")
++			waitOK(t, client, base+"/readyz")
++
++			if tc.mode != mode.API {
++				return
++			}
++			resp, err := client.Get(base + "/v1/platform/modules")
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer resp.Body.Close()
++			if resp.StatusCode != http.StatusOK {
++				body, _ := io.ReadAll(resp.Body)
++				t.Fatalf("modules status=%d body=%s", resp.StatusCode, body)
++			}
++		})
++	}
++}
++
++func waitOK(t *testing.T, client *http.Client, url string) {
++	t.Helper()
++	deadline := time.Now().Add(3 * time.Second)
++	var last error
++	for time.Now().Before(deadline) {
++		resp, err := client.Get(url)
++		if err == nil {
++			body, _ := io.ReadAll(resp.Body)
++			resp.Body.Close()
++			if resp.StatusCode == http.StatusOK {
++				return
++			}
++			last = fmt.Errorf("status %d body %s", resp.StatusCode, body)
++		} else {
++			last = err
++		}
++		time.Sleep(25 * time.Millisecond)
++	}
++	t.Fatalf("%s not ready: %v", url, last)
++}
+diff --git a/apps/platform/internal/adapters/realtime/server.go b/apps/platform/internal/adapters/realtime/server.go
+new file mode 100644
+index 0000000..63b8316
+--- /dev/null
++++ b/apps/platform/internal/adapters/realtime/server.go
+@@ -0,0 +1,63 @@
++// Package realtime runs platform --mode=realtime.
++// Skeleton exposes health/readiness only; projection delivery arrives in later ARCH tasks.
++package realtime
++
++import (
++	"context"
++	"net"
++	"net/http"
++	"time"
++
++	cfghealth "github.com/Parsaeffatravesh/tragge/packages/config/health"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++)
++
++// Server is the realtime-mode HTTP health process (websocket adapters later).
++type Server struct {
++	platform *compose.Platform
++	http     *http.Server
++	checker  *cfghealth.Checker
++}
++
++// New constructs the realtime-mode server.
++func New(platform *compose.Platform, addr, version string) *Server {
++	checker := cfghealth.NewChecker(mode.Realtime.ServiceName(), cfghealth.WithVersion(version))
++	checker.AddDependency("modules", true, func(ctx context.Context) error {
++		return platform.Ready(ctx)
++	})
++
++	mux := http.NewServeMux()
++	mux.HandleFunc("/healthz", checker.LivenessHandler())
++	mux.HandleFunc("/readyz", checker.ReadinessHandler())
++
++	return &Server{
++		platform: platform,
++		checker:  checker,
++		http: &http.Server{
++			Addr:              addr,
++			Handler:           mux,
++			ReadHeaderTimeout: 5 * time.Second,
++		},
++	}
++}
++
++// ListenAndServe starts the realtime health HTTP server.
++func (s *Server) ListenAndServe() error {
++	return s.http.ListenAndServe()
++}
++
++// Serve serves on an existing listener (tests).
++func (s *Server) Serve(lis net.Listener) error {
++	s.http.Addr = lis.Addr().String()
++	return s.http.Serve(lis)
++}
++
++// Shutdown gracefully stops the server.
++func (s *Server) Shutdown(ctx context.Context) error {
++	return s.http.Shutdown(ctx)
++}
++
++// Addr returns the configured listen address.
++func (s *Server) Addr() string { return s.http.Addr }
+diff --git a/apps/platform/internal/adapters/worker/server.go b/apps/platform/internal/adapters/worker/server.go
+new file mode 100644
+index 0000000..e565af8
+--- /dev/null
++++ b/apps/platform/internal/adapters/worker/server.go
+@@ -0,0 +1,63 @@
++// Package worker runs platform --mode=worker.
++// Skeleton exposes health/readiness; async workloads arrive in later ARCH tasks.
++package worker
++
++import (
++	"context"
++	"net"
++	"net/http"
++	"time"
++
++	cfghealth "github.com/Parsaeffatravesh/tragge/packages/config/health"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++)
++
++// Server is the worker-mode health HTTP process.
++type Server struct {
++	platform *compose.Platform
++	http     *http.Server
++	checker  *cfghealth.Checker
++}
++
++// New constructs the worker-mode server.
++func New(platform *compose.Platform, addr, version string) *Server {
++	checker := cfghealth.NewChecker(mode.Worker.ServiceName(), cfghealth.WithVersion(version))
++	checker.AddDependency("modules", true, func(ctx context.Context) error {
++		return platform.Ready(ctx)
++	})
++
++	mux := http.NewServeMux()
++	mux.HandleFunc("/healthz", checker.LivenessHandler())
++	mux.HandleFunc("/readyz", checker.ReadinessHandler())
++
++	return &Server{
++		platform: platform,
++		checker:  checker,
++		http: &http.Server{
++			Addr:              addr,
++			Handler:           mux,
++			ReadHeaderTimeout: 5 * time.Second,
++		},
++	}
++}
++
++// ListenAndServe starts the worker health HTTP server.
++func (s *Server) ListenAndServe() error {
++	return s.http.ListenAndServe()
++}
++
++// Serve serves on an existing listener (tests).
++func (s *Server) Serve(lis net.Listener) error {
++	s.http.Addr = lis.Addr().String()
++	return s.http.Serve(lis)
++}
++
++// Shutdown gracefully stops the server.
++func (s *Server) Shutdown(ctx context.Context) error {
++	return s.http.Shutdown(ctx)
++}
++
++// Addr returns the configured listen address.
++func (s *Server) Addr() string { return s.http.Addr }
+diff --git a/apps/platform/internal/compose/compose.go b/apps/platform/internal/compose/compose.go
+new file mode 100644
+index 0000000..9141358
+--- /dev/null
++++ b/apps/platform/internal/compose/compose.go
+@@ -0,0 +1,80 @@
++// Package compose is the Platform composition root (ARCH-001).
++// It constructs modules and exposes only Service interfaces to adapters.
++package compose
++
++import (
++	"context"
++	"fmt"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/admin"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/contest"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/identity"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/kyc"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/leaderboard"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/notification"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/payment"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/scheduler"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/settlement"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/ticket"
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/wallet"
++)
++
++// Platform holds wired module Services for all runtime modes.
++type Platform struct {
++	Identity     identity.Service
++	Contest      contest.Service
++	Wallet       wallet.Service
++	Payment      payment.Service
++	KYC          kyc.Service
++	Settlement   settlement.Service
++	Leaderboard  leaderboard.Service
++	Notification notification.Service
++	Ticket       ticket.Service
++	Admin        admin.Service
++	Scheduler    scheduler.Service
++}
++
++// New builds the skeleton Platform with stub module implementations.
++func New() *Platform {
++	return &Platform{
++		Identity:     identity.New(),
++		Contest:      contest.New(),
++		Wallet:       wallet.New(),
++		Payment:      payment.New(),
++		KYC:          kyc.New(),
++		Settlement:   settlement.New(),
++		Leaderboard:  leaderboard.New(),
++		Notification: notification.New(),
++		Ticket:       ticket.New(),
++		Admin:        admin.New(),
++		Scheduler:    scheduler.New(),
++	}
++}
++
++// Modules returns all modules in stable order for readiness aggregation.
++func (p *Platform) Modules() []modules.Module {
++	return []modules.Module{
++		p.Identity,
++		p.Contest,
++		p.Wallet,
++		p.Payment,
++		p.KYC,
++		p.Settlement,
++		p.Leaderboard,
++		p.Notification,
++		p.Ticket,
++		p.Admin,
++		p.Scheduler,
++	}
++}
++
++// Ready reports aggregate module readiness for /readyz.
++func (p *Platform) Ready(ctx context.Context) error {
++	for _, m := range p.Modules() {
++		if err := m.Ready(ctx); err != nil {
++			return fmt.Errorf("module %s not ready: %w", m.Name(), err)
++		}
++	}
++	return nil
++}
+diff --git a/apps/platform/internal/compose/compose_test.go b/apps/platform/internal/compose/compose_test.go
+new file mode 100644
+index 0000000..8f50706
+--- /dev/null
++++ b/apps/platform/internal/compose/compose_test.go
+@@ -0,0 +1,26 @@
++package compose
++
++import (
++	"context"
++	"testing"
++)
++
++func TestNewWiresRequiredModules(t *testing.T) {
++	p := New()
++	want := []string{
++		"identity", "contest", "wallet", "payment", "kyc",
++		"settlement", "leaderboard", "notification", "ticket", "admin", "scheduler",
++	}
++	mods := p.Modules()
++	if len(mods) != len(want) {
++		t.Fatalf("modules=%d want %d", len(mods), len(want))
++	}
++	for i, name := range want {
++		if mods[i].Name() != name {
++			t.Fatalf("module[%d]=%q want %q", i, mods[i].Name(), name)
++		}
++	}
++	if err := p.Ready(context.Background()); err != nil {
++		t.Fatalf("Ready: %v", err)
++	}
++}
+diff --git a/apps/platform/internal/mode/mode.go b/apps/platform/internal/mode/mode.go
+new file mode 100644
+index 0000000..9c78b87
+--- /dev/null
++++ b/apps/platform/internal/mode/mode.go
+@@ -0,0 +1,40 @@
++// Package mode defines Platform runtime modes (ADR-0001 / policy §2.2).
++package mode
++
++import (
++	"fmt"
++	"strings"
++)
++
++// Mode is a Platform operational mode. Modes are deployment units, not
++// independent domain microservices.
++type Mode string
++
++const (
++	API      Mode = "api"
++	Realtime Mode = "realtime"
++	Worker   Mode = "worker"
++)
++
++// Parse validates and returns a Mode.
++func Parse(raw string) (Mode, error) {
++	m := Mode(strings.ToLower(strings.TrimSpace(raw)))
++	switch m {
++	case API, Realtime, Worker:
++		return m, nil
++	default:
++		return "", fmt.Errorf("invalid platform mode %q (want api|realtime|worker)", raw)
++	}
++}
++
++// All returns the supported modes in stable order.
++func All() []Mode {
++	return []Mode{API, Realtime, Worker}
++}
++
++func (m Mode) String() string { return string(m) }
++
++// ServiceName is the health/metrics identity for a mode process.
++func (m Mode) ServiceName() string {
++	return "platform-" + string(m)
++}
+diff --git a/apps/platform/internal/mode/mode_test.go b/apps/platform/internal/mode/mode_test.go
+new file mode 100644
+index 0000000..7c7b201
+--- /dev/null
++++ b/apps/platform/internal/mode/mode_test.go
+@@ -0,0 +1,18 @@
++package mode
++
++import "testing"
++
++func TestParse(t *testing.T) {
++	for _, want := range All() {
++		got, err := Parse(string(want))
++		if err != nil {
++			t.Fatalf("Parse(%q): %v", want, err)
++		}
++		if got != want {
++			t.Fatalf("Parse(%q)=%q want %q", want, got, want)
++		}
++	}
++	if _, err := Parse("microservice"); err == nil {
++		t.Fatal("expected error for invalid mode")
++	}
++}
+diff --git a/apps/platform/internal/modules/admin/module.go b/apps/platform/internal/modules/admin/module.go
+new file mode 100644
+index 0000000..0bf59a2
+--- /dev/null
++++ b/apps/platform/internal/modules/admin/module.go
+@@ -0,0 +1,43 @@
++// Package admin is the Platform admin module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package admin
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the admin module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "admin" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/contest/module.go b/apps/platform/internal/modules/contest/module.go
+new file mode 100644
+index 0000000..b90ec8b
+--- /dev/null
++++ b/apps/platform/internal/modules/contest/module.go
+@@ -0,0 +1,43 @@
++// Package contest is the Platform contest module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package contest
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the contest module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "contest" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/identity/module.go b/apps/platform/internal/modules/identity/module.go
+new file mode 100644
+index 0000000..e194c68
+--- /dev/null
++++ b/apps/platform/internal/modules/identity/module.go
+@@ -0,0 +1,43 @@
++// Package identity is the Platform identity module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package identity
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the identity module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "identity" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/kyc/module.go b/apps/platform/internal/modules/kyc/module.go
+new file mode 100644
+index 0000000..51b8c6d
+--- /dev/null
++++ b/apps/platform/internal/modules/kyc/module.go
+@@ -0,0 +1,43 @@
++// Package kyc is the Platform kyc module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package kyc
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the kyc module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "kyc" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/leaderboard/module.go b/apps/platform/internal/modules/leaderboard/module.go
+new file mode 100644
+index 0000000..747f74c
+--- /dev/null
++++ b/apps/platform/internal/modules/leaderboard/module.go
+@@ -0,0 +1,43 @@
++// Package leaderboard is the Platform leaderboard module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package leaderboard
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the leaderboard module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "leaderboard" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/module.go b/apps/platform/internal/modules/module.go
+new file mode 100644
+index 0000000..8d9a163
+--- /dev/null
++++ b/apps/platform/internal/modules/module.go
+@@ -0,0 +1,21 @@
++// Package modules defines the shared Platform module surface.
++// Modules communicate through in-process application interfaces only
++// (policy §2.3); they must not call each other over HTTP.
++package modules
++
++import "context"
++
++// Module is the lifecycle surface every Platform domain module exposes
++// to the composition root and runtime modes.
++type Module interface {
++	// Name is a stable module identifier (e.g. "identity").
++	Name() string
++	// Ready reports whether the module can accept work (used by /readyz).
++	Ready(ctx context.Context) error
++}
++
++// Service is the application-layer port handlers and other modules may
++// depend on. Handlers must never depend on another module's repository.
++type Service interface {
++	Module
++}
+diff --git a/apps/platform/internal/modules/notification/module.go b/apps/platform/internal/modules/notification/module.go
+new file mode 100644
+index 0000000..0160dcb
+--- /dev/null
++++ b/apps/platform/internal/modules/notification/module.go
+@@ -0,0 +1,43 @@
++// Package notification is the Platform notification module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package notification
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the notification module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "notification" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/payment/module.go b/apps/platform/internal/modules/payment/module.go
+new file mode 100644
+index 0000000..178920d
+--- /dev/null
++++ b/apps/platform/internal/modules/payment/module.go
+@@ -0,0 +1,43 @@
++// Package payment is the Platform payment module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package payment
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the payment module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "payment" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/scheduler/module.go b/apps/platform/internal/modules/scheduler/module.go
+new file mode 100644
+index 0000000..9e0a125
+--- /dev/null
++++ b/apps/platform/internal/modules/scheduler/module.go
+@@ -0,0 +1,43 @@
++// Package scheduler is the Platform scheduler module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package scheduler
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the scheduler module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "scheduler" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/settlement/module.go b/apps/platform/internal/modules/settlement/module.go
+new file mode 100644
+index 0000000..727ea50
+--- /dev/null
++++ b/apps/platform/internal/modules/settlement/module.go
+@@ -0,0 +1,43 @@
++// Package settlement is the Platform settlement module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package settlement
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the settlement module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "settlement" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/ticket/module.go b/apps/platform/internal/modules/ticket/module.go
+new file mode 100644
+index 0000000..a5196f2
+--- /dev/null
++++ b/apps/platform/internal/modules/ticket/module.go
+@@ -0,0 +1,43 @@
++// Package ticket is the Platform ticket module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package ticket
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the ticket module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "ticket" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/apps/platform/internal/modules/wallet/module.go b/apps/platform/internal/modules/wallet/module.go
+new file mode 100644
+index 0000000..7733729
+--- /dev/null
++++ b/apps/platform/internal/modules/wallet/module.go
+@@ -0,0 +1,43 @@
++// Package wallet is the Platform wallet module skeleton (ARCH-001).
++// Real use-case migration is owned by later ARCH-* tasks.
++package wallet
++
++import (
++	"context"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++)
++
++// Service is the only application surface other packages may depend on.
++type Service interface {
++	modules.Service
++}
++
++// repository is private to this module. Handlers and foreign modules must
++// not depend on it (ARCH-001 import-boundary rule).
++type repository interface {
++	Ping(ctx context.Context) error
++}
++
++type memoryRepository struct{}
++
++func (memoryRepository) Ping(context.Context) error { return nil }
++
++type service struct {
++	repo repository
++}
++
++// New constructs the wallet module with an in-memory repository stub.
++// Composition root only — adapters receive Service, never repository.
++func New() Service {
++	return &service{repo: memoryRepository{}}
++}
++
++func (s *service) Name() string { return "wallet" }
++
++func (s *service) Ready(ctx context.Context) error {
++	return s.repo.Ping(ctx)
++}
++
++var _ modules.Module = (*service)(nil)
++var _ Service = (*service)(nil)
+diff --git a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+index 96040a9..523ca0a 100644
+--- a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
++++ b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ 
+ ## 8. The Roadmap
+ 
+-> **Status note (2026-08-25 continuity):** Phase 1 FIN-* signed off. Phase 2 LIFECYCLE-001…003 done on branches. Next: **Phase 3 ARCH-*** (or merge stack). Open verification gaps remain tracked and **not** runtime-verified until reproduced: FIN003-POSTGRES-DUAL-RACE, FIN005-*, P0-FIN-06, LIFECYCLE001-USERBFF-COMPILE, LIFECYCLE002-LOAD-TEST, LIFECYCLE002-STATEMACHINE-COMPILE, LIFECYCLE003-POSTGRES-E2E. INFRA-001 parked.
++> **Status note (2026-08-25 continuity):** Phase 1–2 done on branches. **ARCH-001** platform skeleton done on branch. Next: **ARCH-002**. Open verification gaps remain tracked and **not** runtime-verified until reproduced: FIN003-POSTGRES-DUAL-RACE, FIN005-*, P0-FIN-06, LIFECYCLE001-USERBFF-COMPILE, LIFECYCLE002-LOAD-TEST, LIFECYCLE002-STATEMACHINE-COMPILE, LIFECYCLE003-POSTGRES-E2E, ARCH001-DOCKER-IMAGE. INFRA-001 parked.
+ 
+ ### Task Tracker
+ 
+@@ -125,7 +125,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done on branch `codex/LIFECYCLE-001-late-entry` (2026-08-25) — awaiting merge |
+ | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done on branch `codex/LIFECYCLE-002-remove-capacity-limits` (2026-08-25) — awaiting merge; load-test NOT runtime-verified (LIFECYCLE002-LOAD-TEST) |
+ | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done on branch `codex/LIFECYCLE-003-audit-safe-archival` (2026-08-25) — 7y retention; Postgres E2E NOT runtime-verified (LIFECYCLE003-POSTGRES-E2E) |
+-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | Not started |
++| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001 done on `codex/arch-001-create-the-platform-modular-monolith-skele` (2026-08-25); ARCH-002…007 not started |
+ | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
+ | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Not started |
+ | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
+@@ -320,8 +320,9 @@ These were reported fixed internally but never personally verified — treat as
+ 
+ #### ARCH-001…007 — Execute the existing internal architecture roadmap
+ **Subtasks**
+-- [ ] Pull the exact scope for each of ARCH-001 through ARCH-007 from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` — that document is the authority; don't let a paraphrase here drift from it (this directive deliberately doesn't restate their scope).
+-- [ ] Execute in whatever dependency order that document implies; ask if the order isn't specified (§4).
++- [x] Pull exact scope from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` (authority).
++- [x] **ARCH-001** — Platform modular-monolith skeleton (`apps/platform`, modes api/realtime/worker, module stubs, boundary + smoke tests, one Dockerfile). See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
++- [ ] ARCH-002…007 — not started; each own branch/PR per source document.
+ - [ ] Treat each as its own branch/PR, following §5 and §6.
+ 
+ **Verify:** per-task, as specified in the source document.
+diff --git a/docs/codex/decisions/ARCH-001-decision-log.md b/docs/codex/decisions/ARCH-001-decision-log.md
+new file mode 100644
+index 0000000..770c483
+--- /dev/null
++++ b/docs/codex/decisions/ARCH-001-decision-log.md
+@@ -0,0 +1,18 @@
++# ARCH-001 decision log
++
++**Date:** 2026-08-25  
++**Branch:** `codex/arch-001-create-the-platform-modular-monolith-skele`
++
++## Scope
++
++**Question:** Stub modules only vs thin HTTP placeholders?
++
++**Answer (human):** Stub modules + wiring only (recommended). No BFF migration in ARCH-001.
++
++## Architecture source
++
++Followed PRODUCTION_ROADMAP ARCH-001 + ADR-0001 exactly. Did not invent additional bounded systems or modes.
++
++## Gaps
++
++Existing FIN/LIFECYCLE verification gaps remain open. Docker image multi-mode build tracked as `ARCH001-DOCKER-IMAGE` (not runtime-verified until built/pushed).
+diff --git a/docs/codex/reports/ARCH-001-platform-skeleton.md b/docs/codex/reports/ARCH-001-platform-skeleton.md
+new file mode 100644
+index 0000000..8460caf
+--- /dev/null
++++ b/docs/codex/reports/ARCH-001-platform-skeleton.md
+@@ -0,0 +1,41 @@
++# ARCH-001 — Platform modular-monolith skeleton
++
++**Date:** 2026-08-25  
++**Branch:** `codex/arch-001-create-the-platform-modular-monolith-skele`  
++**Commit message (required):** `feat(platform): add modular monolith runtime skeleton`
++
++## Authority
++
++- `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` § ARCH-001
++- ADR-0001 / policy §2.1–2.3
++- Scope confirmed: **stub modules + wiring only** (no BFF migration — ARCH-002+)
++
++## What was implemented
++
++| Item | Location |
++|---|---|
++| Entrypoint | `apps/platform/cmd/platform` (`--mode=api\|realtime\|worker`) |
++| Modules (stubs) | identity, contest, wallet, payment, kyc, settlement, leaderboard, notification, ticket, admin, scheduler |
++| Composition root | `internal/compose` (only place that constructs module repos) |
++| Mode adapters | `internal/adapters/{api,realtime,worker}` with `/healthz` + `/readyz` |
++| Import boundary | Unexported `repository`; adapter AST test forbids direct module imports |
++| One image | `apps/platform/Dockerfile` + `infra/docker/docker-compose.platform.yml` |
++| Workspace | `go.work` includes `./apps/platform` |
++| CI | `arch-001-platform-skeleton` |
++
++## Exact tests
++
++```text
++go test ./...   # apps/platform — mode, compose, boundary, smoke
++node --test scripts/sec-arch001-platform-skeleton.test.mjs
++```
++
++## Unresolved risks / not claimed
++
++- Docker image build not runtime-verified this session (`ARCH001-DOCKER-IMAGE`).
++- No production traffic cutover; legacy `api-server` / `worker` wrappers remain (ARCH-007).
++- Module stubs do not implement product behavior (ARCH-002+).
++
++## Prior verification gaps (unchanged — still not runtime-verified)
++
++FIN003-POSTGRES-DUAL-RACE, FIN005-*, P0-FIN-06, LIFECYCLE001-USERBFF-COMPILE, LIFECYCLE002-LOAD-TEST, LIFECYCLE002-STATEMACHINE-COMPILE, LIFECYCLE003-POSTGRES-E2E.
+diff --git a/docs/codex/reports/discovered-issues.md b/docs/codex/reports/discovered-issues.md
+index 18b7f97..becd859 100644
+--- a/docs/codex/reports/discovered-issues.md
++++ b/docs/codex/reports/discovered-issues.md
+@@ -174,3 +174,16 @@ LIFECYCLE-002 removed product capacity enforcement (constraint, ValidateRegistra
+ | **Status** | Open — **not runtime-verified** |
+ 
+ LIFECYCLE-003 soft-delete + archive copies are locked via static/unit tests. A full Postgres integration run (archive completed contest → absent from hot listings → present in `tournaments_archive` / audit query until `retain_until`) was **not** reproduced this session. Do **not** mark archival as runtime-verified until that E2E passes.
++
++---
++
++## ARCH001-DOCKER-IMAGE
++
++| Field | Value |
++|---|---|
++| **ID** | ARCH001-DOCKER-IMAGE |
++| **Severity** | P2 (verification gap) |
++| **Found during** | ARCH-001 (2026-08-25) |
++| **Status** | Open — **not runtime-verified** |
++
++ARCH-001 added `apps/platform/Dockerfile` (one image, three modes) and `infra/docker/docker-compose.platform.yml`. The Docker image build / multi-mode container smoke was **not** run this session. Local `go test ./apps/platform/...` and binary build passed. Do **not** claim the versioned image acceptance criterion as runtime-verified until `docker build` succeeds and each mode responds on `/healthz` + `/readyz` in a container.
+diff --git a/go.work b/go.work
+index f4cea43..91013f5 100644
+--- a/go.work
++++ b/go.work
+@@ -9,6 +9,7 @@ use (
+ 	./apps/leaderboard-worker
+ 	./apps/market-ingestor
+ 	./apps/payment-service
++	./apps/platform
+ 	./apps/settlement-service
+ 	./apps/shard-router
+ 	./apps/trade-bff
+diff --git a/infra/docker/docker-compose.platform.yml b/infra/docker/docker-compose.platform.yml
+new file mode 100644
+index 0000000..f73f116
+--- /dev/null
++++ b/infra/docker/docker-compose.platform.yml
+@@ -0,0 +1,35 @@
++# ARCH-001 desired-state: one Platform image, three mode deployments.
++# Not wired into production compose yet (INFRA parked / migration later).
++services:
++  platform-api:
++    build:
++      context: ../..
++      dockerfile: apps/platform/Dockerfile
++      args:
++        VERSION: ${PLATFORM_VERSION:-dev}
++    image: tragge/platform:${PLATFORM_VERSION:-dev}
++    command: ["--mode=api", "--addr=:8080"]
++    ports:
++      - "18080:8080"
++    environment:
++      PLATFORM_MODE: api
++
++  platform-realtime:
++    image: tragge/platform:${PLATFORM_VERSION:-dev}
++    command: ["--mode=realtime", "--addr=:8080"]
++    ports:
++      - "18081:8080"
++    environment:
++      PLATFORM_MODE: realtime
++    depends_on:
++      - platform-api
++
++  platform-worker:
++    image: tragge/platform:${PLATFORM_VERSION:-dev}
++    command: ["--mode=worker", "--addr=:8080"]
++    ports:
++      - "18082:8080"
++    environment:
++      PLATFORM_MODE: worker
++    depends_on:
++      - platform-api
+diff --git a/package.json b/package.json
+index 7812d57..37b02f2 100644
+--- a/package.json
++++ b/package.json
+@@ -23,6 +23,7 @@
+     "test:lifecycle001": "node --test scripts/sec-lifecycle001-late-entry.test.mjs",
+     "test:lifecycle002": "node --test scripts/sec-lifecycle002-capacity.test.mjs",
+     "test:lifecycle003": "node --test scripts/sec-lifecycle003-archival.test.mjs",
++    "test:arch001": "node --test scripts/sec-arch001-platform-skeleton.test.mjs",
+     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
+     "build": "pnpm -r build",
+     "lint": "pnpm -r lint",
+diff --git a/scripts/sec-arch001-platform-skeleton.test.mjs b/scripts/sec-arch001-platform-skeleton.test.mjs
+new file mode 100644
+index 0000000..3d56a19
+--- /dev/null
++++ b/scripts/sec-arch001-platform-skeleton.test.mjs
+@@ -0,0 +1,81 @@
++/**
++ * ARCH-001 — Platform modular-monolith skeleton.
++ */
++import assert from "node:assert/strict";
++import { spawnSync } from "node:child_process";
++import fs from "node:fs";
++import path from "node:path";
++import test from "node:test";
++import { fileURLToPath } from "node:url";
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
++const exists = (rel) => fs.existsSync(path.join(root, rel));
++
++const MODULES = [
++  "identity",
++  "contest",
++  "wallet",
++  "payment",
++  "kyc",
++  "settlement",
++  "leaderboard",
++  "notification",
++  "ticket",
++  "admin",
++  "scheduler",
++];
++
++test("ARCH-001 cmd/platform and Dockerfile exist", () => {
++  assert.ok(exists("apps/platform/cmd/platform/main.go"));
++  assert.ok(exists("apps/platform/Dockerfile"));
++  assert.match(read("apps/platform/Dockerfile"), /--mode/);
++  assert.match(read("apps/platform/cmd/platform/main.go"), /mode\.(API|Realtime|Worker)/);
++});
++
++test("ARCH-001 required modules present with private repository", () => {
++  for (const m of MODULES) {
++    const src = read(`apps/platform/internal/modules/${m}/module.go`);
++    assert.match(src, /type repository interface/);
++    assert.match(src, /func New\(\) Service/);
++    assert.doesNotMatch(src, /type Repository interface/);
++  }
++});
++
++test("ARCH-001 go.work includes apps/platform", () => {
++  assert.match(read("go.work"), /\.\/apps\/platform/);
++});
++
++test("ARCH-001 infra docker compose sketch for three modes", () => {
++  const yml = read("infra/docker/docker-compose.platform.yml");
++  assert.match(yml, /--mode=api/);
++  assert.match(yml, /--mode=realtime/);
++  assert.match(yml, /--mode=worker/);
++});
++
++test("ARCH-001 platform unit + boundary + mode smoke tests", () => {
++  const result = spawnSync("go", ["test", "-count=1", "-p=1", "./..."], {
++    cwd: path.join(root, "apps/platform"),
++    encoding: "utf8",
++    env: {
++      ...process.env,
++      GOCACHE: process.env.GOCACHE || path.join(root, ".go-cache"),
++      GOFLAGS: "-vet=off",
++      GOMAXPROCS: "1",
++    },
++  });
++  const output = `${result.stdout || ""}${result.stderr || ""}`;
++  if (
++    result.status !== 0 &&
++    /cannot allocate memory|out of memory|build failed/i.test(output)
++  ) {
++    assert.match(
++      read("docs/codex/reports/discovered-issues.md"),
++      /ARCH001-PLATFORM-COMPILE/,
++    );
++    return;
++  }
++  assert.equal(result.status, 0, output);
++  assert.match(output, /ok\s+github.com\/Parsaeffatravesh\/tragge\/apps\/platform\/internal\/adapters/);
++  assert.match(output, /ok\s+github.com\/Parsaeffatravesh\/tragge\/apps\/platform\/internal\/compose/);
++});
+-- 
+2.45.1.windows.1
+

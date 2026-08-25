@@ -1,0 +1,1293 @@
+From 70b568c93917f1bb5fbb87bcc7a07890dd3131a5 Mon Sep 17 00:00:00 2001
+From: qopalboker <qopalboker@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 05:25:20 +0330
+Subject: [PATCH] refactor(platform): migrate identity and admin modules
+
+---
+ .github/workflows/ci.yml                      |  16 ++
+ apps/admin-bff/go.mod                         |   3 +
+ apps/admin-bff/server/app.go                  |   8 +
+ apps/platform/go.mod                          |  11 +-
+ apps/platform/go.sum                          |  16 ++
+ apps/platform/internal/adapters/api/server.go |   6 +
+ .../internal/adapters/mode_smoke_test.go      |  20 +-
+ apps/platform/internal/compose/compose.go     |  31 ++-
+ .../internal/modules/admin/authz_test.go      |  48 +++++
+ .../modules/admin/contract_authz_test.go      |  32 ++++
+ .../platform/internal/modules/admin/module.go | 178 ++++++++++++++++--
+ .../internal/modules/arch002_boundary_test.go |  53 ++++++
+ .../modules/identity/identity_test.go         |  21 +++
+ .../internal/modules/identity/module.go       | 134 +++++++++++--
+ apps/platform/pkg/admin/admin.go              |  26 +++
+ apps/platform/pkg/identity/identity.go        |  26 +++
+ apps/user-bff/go.mod                          |   3 +
+ apps/user-bff/server/app.go                   |   6 +
+ docs/codex/AI_AGENT_EXECUTION_ROADMAP.md      |   9 +-
+ docs/codex/decisions/ARCH-002-decision-log.md |  16 ++
+ .../ARCH-002-identity-admin-migration.md      |  44 +++++
+ package.json                                  |   1 +
+ packages/auth/middleware.go                   |  37 +++-
+ scripts/sec-arch002-identity-admin.test.mjs   |  82 ++++++++
+ 24 files changed, 789 insertions(+), 38 deletions(-)
+ create mode 100644 apps/platform/internal/modules/admin/authz_test.go
+ create mode 100644 apps/platform/internal/modules/admin/contract_authz_test.go
+ create mode 100644 apps/platform/internal/modules/arch002_boundary_test.go
+ create mode 100644 apps/platform/internal/modules/identity/identity_test.go
+ create mode 100644 apps/platform/pkg/admin/admin.go
+ create mode 100644 apps/platform/pkg/identity/identity.go
+ create mode 100644 docs/codex/decisions/ARCH-002-decision-log.md
+ create mode 100644 docs/codex/reports/ARCH-002-identity-admin-migration.md
+ create mode 100644 scripts/sec-arch002-identity-admin.test.mjs
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 8a86e7b..48b22b9 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -353,6 +353,22 @@ jobs:
+       - name: ARCH-001 skeleton suite
+         run: node --test scripts/sec-arch001-platform-skeleton.test.mjs
+ 
++  arch-002-identity-admin:
++    name: ARCH-002 identity admin migration
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-go@v5
++        with:
++          go-version: "1.24"
++          cache: true
++          cache-dependency-path: "**/go.sum"
++      - uses: actions/setup-node@v4
++        with:
++          node-version: "20"
++      - name: ARCH-002 identity/admin suite
++        run: node --test scripts/sec-arch002-identity-admin.test.mjs
++
+   # ---- Frontend jobs (skipped if no frontend changes) ----
+   lint-and-test-frontend:
+     name: Frontend (lint, test, build)
+diff --git a/apps/admin-bff/go.mod b/apps/admin-bff/go.mod
+index 66d6d03..f0925df 100644
+--- a/apps/admin-bff/go.mod
++++ b/apps/admin-bff/go.mod
+@@ -6,6 +6,7 @@ toolchain go1.24.7
+ 
+ require (
+ 	github.com/IBM/sarama v1.43.1
++	github.com/Parsaeffatravesh/tragge/apps/platform v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/contracts v0.0.0
+@@ -98,6 +99,8 @@ require (
+ 	google.golang.org/protobuf v1.34.2 // indirect
+ )
+ 
++replace github.com/Parsaeffatravesh/tragge/apps/platform => ../platform
++
+ replace github.com/Parsaeffatravesh/tragge/packages/auth => ../../packages/auth
+ 
+ replace github.com/Parsaeffatravesh/tragge/packages/contracts => ../../packages/contracts
+diff --git a/apps/admin-bff/server/app.go b/apps/admin-bff/server/app.go
+index 692dbd5..4956ebf 100644
+--- a/apps/admin-bff/server/app.go
++++ b/apps/admin-bff/server/app.go
+@@ -17,6 +17,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/IBM/sarama"
++	platformadmin "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin"
+ 	"github.com/Parsaeffatravesh/tragge/packages/auth"
+ 	"github.com/Parsaeffatravesh/tragge/packages/config"
+ 	"github.com/Parsaeffatravesh/tragge/packages/db"
+@@ -465,6 +466,13 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
+ 		app.auth.Middleware.SetSuperAdminMFAPolicy(func(ctx context.Context) (bool, error) {
+ 			return app.isAdminMFAEnabled(ctx)
+ 		})
++		// ARCH-002: role/permission enforcement via Platform admin application service.
++		adminSvc, adminErr := platformadmin.NewWithAuth(app.auth)
++		if adminErr != nil {
++			log.Fatal("Failed to construct Platform admin authorization service", zap.Error(adminErr))
++		}
++		app.auth.Middleware.SetPermissionAuthorizer(adminSvc)
++		app.auth.Middleware.SetRoleAuthorizer(adminSvc)
+ 	}
+ 
+ 	// Initialize ban expiry sweeper to auto-unban expired temporary bans
+diff --git a/apps/platform/go.mod b/apps/platform/go.mod
+index ab36496..a83f685 100644
+--- a/apps/platform/go.mod
++++ b/apps/platform/go.mod
+@@ -4,22 +4,28 @@ go 1.24.0
+ 
+ toolchain go1.24.7
+ 
+-require github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
++require (
++	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
++	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
++)
+ 
+ require (
+ 	github.com/Parsaeffatravesh/tragge/packages/observability v0.0.0 // indirect
+ 	github.com/beorn7/perks v1.0.1 // indirect
+ 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
++	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+ 	github.com/getsentry/sentry-go v0.27.0 // indirect
+ 	github.com/go-logr/logr v1.4.2 // indirect
+ 	github.com/go-logr/stdr v1.2.2 // indirect
++	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+ 	github.com/google/uuid v1.6.0 // indirect
+ 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
+ 	github.com/prometheus/client_golang v1.19.0 // indirect
+ 	github.com/prometheus/client_model v0.6.0 // indirect
+ 	github.com/prometheus/common v0.48.0 // indirect
+ 	github.com/prometheus/procfs v0.12.0 // indirect
++	github.com/redis/go-redis/v9 v9.7.3 // indirect
+ 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+ 	go.opentelemetry.io/otel v1.35.0 // indirect
+ 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect
+@@ -30,6 +36,7 @@ require (
+ 	go.opentelemetry.io/proto/otlp v1.1.0 // indirect
+ 	go.uber.org/multierr v1.11.0 // indirect
+ 	go.uber.org/zap v1.27.0 // indirect
++	golang.org/x/crypto v0.43.0 // indirect
+ 	golang.org/x/net v0.45.0 // indirect
+ 	golang.org/x/sys v0.37.0 // indirect
+ 	golang.org/x/text v0.30.0 // indirect
+@@ -39,6 +46,8 @@ require (
+ 	google.golang.org/protobuf v1.34.2 // indirect
+ )
+ 
++replace github.com/Parsaeffatravesh/tragge/packages/auth => ../../packages/auth
++
+ replace github.com/Parsaeffatravesh/tragge/packages/config => ../../packages/config
+ 
+ replace github.com/Parsaeffatravesh/tragge/packages/observability => ../../packages/observability
+diff --git a/apps/platform/go.sum b/apps/platform/go.sum
+index c7be9ef..b8fdb3e 100644
+--- a/apps/platform/go.sum
++++ b/apps/platform/go.sum
+@@ -1,11 +1,19 @@
++github.com/alicebob/miniredis/v2 v2.37.0 h1:RheObYW32G1aiJIj81XVt78ZHJpHonHLHW7OLIshq68=
++github.com/alicebob/miniredis/v2 v2.37.0/go.mod h1:TcL7YfarKPGDAthEtl5NBeHZfeUQj6OXMm/+iu5cLMM=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
++github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
++github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
++github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=
++github.com/bsm/gomega v1.27.10/go.mod h1:JyEr/xRbxbtgWNi8tIEVPUYZ5Dzef52k01W3YH0H+O0=
+ github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
+ github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
+ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
+ github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
++github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
+ github.com/getsentry/sentry-go v0.27.0 h1:Pv98CIbtB3LkMWmXi4Joa5OOcwbmnX88sF5qbK3r3Ps=
+ github.com/getsentry/sentry-go v0.27.0/go.mod h1:lc76E2QywIyW8WuBnwl8Lc4bkmQH4+w1gwTf25trprY=
+ github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
+@@ -15,6 +23,8 @@ github.com/go-logr/logr v1.4.2 h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY=
+ github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
+ github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
+ github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
++github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=
++github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+ github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+@@ -35,8 +45,12 @@ github.com/prometheus/common v0.48.0 h1:QO8U2CdOzSn1BBsmXJXduaaW+dY/5QLjfB8svtSz
+ github.com/prometheus/common v0.48.0/go.mod h1:0/KsvlIEfPQCQ5I2iNSAWKPZziNCvRs5EC6ILDTlAPc=
+ github.com/prometheus/procfs v0.12.0 h1:jluTpSng7V9hY0O2R9DzzJHYb2xULk9VTR1V1R/k6Bo=
+ github.com/prometheus/procfs v0.12.0/go.mod h1:pcuDEFsWDnvcgNzo4EEweacyhjeA9Zk3cnaOZAZEfOo=
++github.com/redis/go-redis/v9 v9.7.3 h1:YpPyAayJV+XErNsatSElgRZZVCwXX9QzkKYNvO7x0wM=
++github.com/redis/go-redis/v9 v9.7.3/go.mod h1:bGUrSggJ9X9GUmZpZNEOQKaANxSGgOEBRltRTZHSvrA=
+ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
++github.com/yuin/gopher-lua v1.1.1 h1:kYKnWBjvbNP4XLT3+bPEwAXJx262OhaHDWDVOPjL46M=
++github.com/yuin/gopher-lua v1.1.1/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
+ go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=
+ go.opentelemetry.io/auto/sdk v1.1.0/go.mod h1:3wSPjt5PWp2RhlCcmmOial7AvC4DQqZb7a7wCow3W8A=
+ go.opentelemetry.io/otel v1.35.0 h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=
+@@ -59,6 +73,8 @@ go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=
+ go.uber.org/multierr v1.11.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=
+ go.uber.org/zap v1.27.0 h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=
+ go.uber.org/zap v1.27.0/go.mod h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=
++golang.org/x/crypto v0.43.0 h1:dduJYIi3A3KOfdGOHX8AVZ/jGiyPa3IbBozJ5kNuE04=
++golang.org/x/crypto v0.43.0/go.mod h1:BFbav4mRNlXJL4wNeejLpWxB7wMbc79PdRGhWKncxR0=
+ golang.org/x/net v0.45.0 h1:RLBg5JKixCy82FtLJpeNlVM0nrSqpCRYzVU1n8kj0tM=
+ golang.org/x/net v0.45.0/go.mod h1:ECOoLqd5U3Lhyeyo/QDCEVQ4sNgYsqvCZ722XogGieY=
+ golang.org/x/sys v0.37.0 h1:fdNQudmxPjkdUTPnLn5mdQv7Zwvbvpaxqs831goi9kQ=
+diff --git a/apps/platform/internal/adapters/api/server.go b/apps/platform/internal/adapters/api/server.go
+index 5231e15..940e82b 100644
+--- a/apps/platform/internal/adapters/api/server.go
++++ b/apps/platform/internal/adapters/api/server.go
+@@ -14,6 +14,8 @@ import (
+ 
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose"
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode"
++	platformadmin "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin"
++	platformidentity "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity"
+ )
+ 
+ // Server is the api-mode HTTP process.
+@@ -49,6 +51,10 @@ func New(platform *compose.Platform, addr, version string) *Server {
+ 		})
+ 	})
+ 
++	// ARCH-002: identity + admin endpoints run from Platform API mode.
++	platformidentity.RegisterRoutes(mux, platform.Identity)
++	platformadmin.RegisterRoutes(mux, platform.Admin)
++
+ 	return &Server{
+ 		platform: platform,
+ 		checker:  checker,
+diff --git a/apps/platform/internal/adapters/mode_smoke_test.go b/apps/platform/internal/adapters/mode_smoke_test.go
+index 7893e34..6276805 100644
+--- a/apps/platform/internal/adapters/mode_smoke_test.go
++++ b/apps/platform/internal/adapters/mode_smoke_test.go
+@@ -75,14 +75,20 @@ func TestModeStartupSmokeHealthAndReady(t *testing.T) {
+ 			if tc.mode != mode.API {
+ 				return
+ 			}
+-			resp, err := client.Get(base + "/v1/platform/modules")
+-			if err != nil {
+-				t.Fatal(err)
+-			}
+-			defer resp.Body.Close()
+-			if resp.StatusCode != http.StatusOK {
++			for _, path := range []string{
++				"/v1/platform/modules",
++				"/api/user/auth/v1/boundary",
++				"/api/admin/auth/v1/boundary",
++			} {
++				resp, err := client.Get(base + path)
++				if err != nil {
++					t.Fatal(err)
++				}
+ 				body, _ := io.ReadAll(resp.Body)
+-				t.Fatalf("modules status=%d body=%s", resp.StatusCode, body)
++				resp.Body.Close()
++				if resp.StatusCode != http.StatusOK {
++					t.Fatalf("%s status=%d body=%s", path, resp.StatusCode, body)
++				}
+ 			}
+ 		})
+ 	}
+diff --git a/apps/platform/internal/compose/compose.go b/apps/platform/internal/compose/compose.go
+index 9141358..b3df5db 100644
+--- a/apps/platform/internal/compose/compose.go
++++ b/apps/platform/internal/compose/compose.go
+@@ -1,4 +1,4 @@
+-// Package compose is the Platform composition root (ARCH-001).
++// Package compose is the Platform composition root.
+ // It constructs modules and exposes only Service interfaces to adapters.
+ package compose
+ 
+@@ -18,6 +18,7 @@ import (
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/settlement"
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/ticket"
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/wallet"
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
+ )
+ 
+ // Platform holds wired module Services for all runtime modes.
+@@ -35,7 +36,8 @@ type Platform struct {
+ 	Scheduler    scheduler.Service
+ }
+ 
+-// New builds the skeleton Platform with stub module implementations.
++// New builds the Platform with memory stubs for non-migrated modules and
++// memory identity/admin services (no JWT secrets required for Ready/smoke).
+ func New() *Platform {
+ 	return &Platform{
+ 		Identity:     identity.New(),
+@@ -52,6 +54,31 @@ func New() *Platform {
+ 	}
+ }
+ 
++// NewWithIsolatedAuth wires identity/admin to separate User/Admin Auth contexts (SEC-001/ARCH-002).
++func NewWithIsolatedAuth(userAuth, adminAuth *auth.Auth) (*Platform, error) {
++	if userAuth == nil || adminAuth == nil {
++		return nil, fmt.Errorf("compose: user and admin auth are required")
++	}
++	if userAuth.Context() != auth.ContextUser || adminAuth.Context() != auth.ContextAdmin {
++		return nil, fmt.Errorf("compose: auth contexts are not isolated")
++	}
++	if userAuth == adminAuth {
++		return nil, fmt.Errorf("compose: user and admin auth must be distinct instances")
++	}
++	idSvc, err := identity.NewWithAuth(userAuth, nil)
++	if err != nil {
++		return nil, err
++	}
++	admSvc, err := admin.NewWithAuth(adminAuth, nil)
++	if err != nil {
++		return nil, err
++	}
++	p := New()
++	p.Identity = idSvc
++	p.Admin = admSvc
++	return p, nil
++}
++
+ // Modules returns all modules in stable order for readiness aggregation.
+ func (p *Platform) Modules() []modules.Module {
+ 	return []modules.Module{
+diff --git a/apps/platform/internal/modules/admin/authz_test.go b/apps/platform/internal/modules/admin/authz_test.go
+new file mode 100644
+index 0000000..d2f3ed6
+--- /dev/null
++++ b/apps/platform/internal/modules/admin/authz_test.go
+@@ -0,0 +1,48 @@
++package admin
++
++import (
++	"sync"
++	"testing"
++
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++func TestAuthorizePermissionApplicationLayer(t *testing.T) {
++	svc := New()
++	if err := svc.AuthorizePermission(nil, "contests.view"); err == nil {
++		t.Fatal("expected unauthorized for nil claims")
++	}
++	denied := &auth.Claims{Roles: []string{auth.RoleSupportAdmin}, Permissions: []string{"stats.view"}}
++	if err := svc.AuthorizePermission(denied, "contests.manage"); err == nil {
++		t.Fatal("expected forbidden")
++	}
++	allowed := &auth.Claims{Roles: []string{auth.RoleSupportAdmin}, Permissions: []string{"contests.view"}}
++	if err := svc.AuthorizePermission(allowed, "contests.view"); err != nil {
++		t.Fatalf("expected allow: %v", err)
++	}
++	super := &auth.Claims{Roles: []string{auth.RoleSuperAdmin}}
++	if err := svc.AuthorizePermission(super, "anything"); err != nil {
++		t.Fatalf("super admin: %v", err)
++	}
++}
++
++func TestAuthorizePermissionRace(t *testing.T) {
++	svc := New()
++	claims := &auth.Claims{Roles: []string{auth.RoleSupportAdmin}, Permissions: []string{"a", "b"}}
++	var wg sync.WaitGroup
++	for i := 0; i < 32; i++ {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			_ = svc.AuthorizePermission(claims, "a")
++			_ = svc.AuthorizeRole(claims, auth.RoleSupportAdmin)
++		}()
++	}
++	wg.Wait()
++}
++
++func TestAuthContextIsAdmin(t *testing.T) {
++	if New().AuthContext() != auth.ContextAdmin {
++		t.Fatal("admin module must own admin auth context")
++	}
++}
+diff --git a/apps/platform/internal/modules/admin/contract_authz_test.go b/apps/platform/internal/modules/admin/contract_authz_test.go
+new file mode 100644
+index 0000000..5944898
+--- /dev/null
++++ b/apps/platform/internal/modules/admin/contract_authz_test.go
+@@ -0,0 +1,32 @@
++package admin
++
++import (
++	"bytes"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++// Contract: Platform admin authorize endpoint mirrors application-service decisions.
++func TestAuthorizeHTTPContract(t *testing.T) {
++	mux := http.NewServeMux()
++	RegisterRoutes(mux, New())
++
++	body, _ := json.Marshal(map[string]any{
++		"permission": "contests.view",
++		"claims": map[string]any{
++			"user_id":     "u1",
++			"roles":       []string{auth.RoleSupportAdmin},
++			"permissions": []string{"contests.view"},
++		},
++	})
++	req := httptest.NewRequest(http.MethodPost, "/api/admin/auth/v1/authorize", bytes.NewReader(body))
++	rec := httptest.NewRecorder()
++	mux.ServeHTTP(rec, req)
++	if rec.Code != http.StatusOK {
++		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
++	}
++}
+diff --git a/apps/platform/internal/modules/admin/module.go b/apps/platform/internal/modules/admin/module.go
+index 0bf59a2..c779e7a 100644
+--- a/apps/platform/internal/modules/admin/module.go
++++ b/apps/platform/internal/modules/admin/module.go
+@@ -1,36 +1,84 @@
+-// Package admin is the Platform admin module skeleton (ARCH-001).
+-// Real use-case migration is owned by later ARCH-* tasks.
++// Package admin owns the Platform admin identity + authorization boundary (ARCH-002).
++// Role/permission enforcement lives in the application service, not only HTTP handlers.
+ package admin
+ 
+ import (
+ 	"context"
++	"encoding/json"
++	"errors"
++	"net/http"
+ 
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++var (
++	ErrNotAdminContext = errors.New("admin: auth context is not admin")
++	ErrForbidden       = errors.New("admin: forbidden")
++	ErrUnauthorized    = errors.New("admin: unauthorized")
+ )
+ 
+ // Service is the only application surface other packages may depend on.
++// Admin repository types are intentionally unexported.
+ type Service interface {
+ 	modules.Service
++	auth.PermissionAuthorizer
++	AuthContext() auth.AuthContext
++	Auth() *auth.Auth
++	AuthorizeRole(claims *auth.Claims, roles ...string) error
++	AuthorizePermission(claims *auth.Claims, permissions ...string) error
+ }
+ 
+-// repository is private to this module. Handlers and foreign modules must
+-// not depend on it (ARCH-001 import-boundary rule).
+-type repository interface {
++// adminRepository is private — must never be imported by user/identity handlers (ARCH-002).
++type adminRepository interface {
+ 	Ping(ctx context.Context) error
++	// PermissionsForRole returns granted permissions for a role name (read model).
++	PermissionsForRole(ctx context.Context, role string) ([]string, error)
++}
++
++type memoryAdminRepository struct {
++	rolePerms map[string][]string
++}
++
++func newMemoryAdminRepository() *memoryAdminRepository {
++	return &memoryAdminRepository{
++		rolePerms: map[string][]string{
++			auth.RoleSuperAdmin: {"*"},
++		},
++	}
+ }
+ 
+-type memoryRepository struct{}
++func (r *memoryAdminRepository) Ping(context.Context) error { return nil }
+ 
+-func (memoryRepository) Ping(context.Context) error { return nil }
++func (r *memoryAdminRepository) PermissionsForRole(_ context.Context, role string) ([]string, error) {
++	if perms, ok := r.rolePerms[role]; ok {
++		return append([]string(nil), perms...), nil
++	}
++	return nil, nil
++}
+ 
+ type service struct {
+-	repo repository
++	repo adminRepository
++	auth *auth.Auth
+ }
+ 
+-// New constructs the admin module with an in-memory repository stub.
+-// Composition root only — adapters receive Service, never repository.
++// New constructs a memory-backed admin module.
+ func New() Service {
+-	return &service{repo: memoryRepository{}}
++	return &service{repo: newMemoryAdminRepository()}
++}
++
++// NewWithAuth constructs admin with the Admin authentication trust domain.
++func NewWithAuth(adminAuth *auth.Auth, repo adminRepository) (Service, error) {
++	if adminAuth == nil {
++		return nil, errors.New("admin: admin auth is required")
++	}
++	if adminAuth.Context() != auth.ContextAdmin {
++		return nil, ErrNotAdminContext
++	}
++	if repo == nil {
++		repo = newMemoryAdminRepository()
++	}
++	return &service{repo: repo, auth: adminAuth}, nil
+ }
+ 
+ func (s *service) Name() string { return "admin" }
+@@ -39,5 +87,113 @@ func (s *service) Ready(ctx context.Context) error {
+ 	return s.repo.Ping(ctx)
+ }
+ 
++func (s *service) AuthContext() auth.AuthContext { return auth.ContextAdmin }
++
++func (s *service) Auth() *auth.Auth { return s.auth }
++
++// AuthorizePermission enforces RBAC in the application layer (ARCH-002).
++func (s *service) AuthorizePermission(claims *auth.Claims, permissions ...string) error {
++	if claims == nil {
++		return ErrUnauthorized
++	}
++	if claims.IsSuperAdmin() {
++		return nil
++	}
++	if claims.HasAnyPermission(permissions...) {
++		return nil
++	}
++	// Optional enrichment from admin repository (role → permissions read model).
++	for _, role := range claims.Roles {
++		perms, err := s.repo.PermissionsForRole(context.Background(), role)
++		if err != nil {
++			return ErrForbidden
++		}
++		for _, need := range permissions {
++			for _, have := range perms {
++				if have == "*" || have == need {
++					return nil
++				}
++			}
++		}
++	}
++	return ErrForbidden
++}
++
++// AuthorizeRole enforces role checks in the application layer.
++func (s *service) AuthorizeRole(claims *auth.Claims, roles ...string) error {
++	if claims == nil {
++		return ErrUnauthorized
++	}
++	if claims.HasAnyRole(roles...) {
++		return nil
++	}
++	return ErrForbidden
++}
++
++// RegisterRoutes mounts admin boundary + authorize endpoints on Platform API mode.
++func RegisterRoutes(mux *http.ServeMux, svc Service) {
++	mux.HandleFunc("/api/admin/auth/v1/boundary", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodGet {
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		writeJSON(w, http.StatusOK, map[string]any{
++			"module":       svc.Name(),
++			"auth_context": string(svc.AuthContext()),
++			"ready":        svc.Ready(r.Context()) == nil,
++		})
++	})
++
++	mux.HandleFunc("/api/admin/auth/v1/authorize", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodPost {
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		var body struct {
++			Permission string   `json:"permission"`
++			Roles      []string `json:"roles"`
++			Claims     struct {
++				UserID      string   `json:"user_id"`
++				Roles       []string `json:"roles"`
++				Permissions []string `json:"permissions"`
++			} `json:"claims"`
++		}
++		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
++			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_body"})
++			return
++		}
++		claims := &auth.Claims{
++			UserID:      body.Claims.UserID,
++			Roles:       body.Claims.Roles,
++			Permissions: body.Claims.Permissions,
++		}
++		var err error
++		if body.Permission != "" {
++			err = svc.AuthorizePermission(claims, body.Permission)
++		} else if len(body.Roles) > 0 {
++			err = svc.AuthorizeRole(claims, body.Roles...)
++		} else {
++			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "permission_or_roles_required"})
++			return
++		}
++		if errors.Is(err, ErrUnauthorized) {
++			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
++			return
++		}
++		if err != nil {
++			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
++			return
++		}
++		writeJSON(w, http.StatusOK, map[string]any{"allowed": true, "auth_context": string(svc.AuthContext())})
++	})
++}
++
++func writeJSON(w http.ResponseWriter, status int, v any) {
++	w.Header().Set("Content-Type", "application/json")
++	w.WriteHeader(status)
++	_ = json.NewEncoder(w).Encode(v)
++}
++
+ var _ modules.Module = (*service)(nil)
+ var _ Service = (*service)(nil)
++var _ auth.PermissionAuthorizer = (*service)(nil)
+diff --git a/apps/platform/internal/modules/arch002_boundary_test.go b/apps/platform/internal/modules/arch002_boundary_test.go
+new file mode 100644
+index 0000000..fdeb14d
+--- /dev/null
++++ b/apps/platform/internal/modules/arch002_boundary_test.go
+@@ -0,0 +1,53 @@
++package modules_test
++
++import (
++	"os"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++)
++
++// ARCH-002: identity module must not import admin module internals.
++func TestIdentityDoesNotImportAdminModule(t *testing.T) {
++	_, thisFile, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("caller")
++	}
++	root := filepath.Join(filepath.Dir(thisFile), "identity")
++	entries, err := os.ReadDir(root)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, e := range entries {
++		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
++			continue
++		}
++		b, err := os.ReadFile(filepath.Join(root, e.Name()))
++		if err != nil {
++			t.Fatal(err)
++		}
++		if strings.Contains(string(b), "internal/modules/admin") {
++			t.Fatalf("%s imports admin module — admin repository must stay unreachable from identity", e.Name())
++		}
++	}
++}
++
++// ARCH-002: admin repository type stays unexported.
++func TestAdminRepositoryUnexported(t *testing.T) {
++	_, thisFile, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("caller")
++	}
++	src, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "admin", "module.go"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	s := string(src)
++	if !strings.Contains(s, "type adminRepository interface") {
++		t.Fatal("expected unexported adminRepository")
++	}
++	if strings.Contains(s, "type AdminRepository interface") {
++		t.Fatal("AdminRepository must not be exported")
++	}
++}
+diff --git a/apps/platform/internal/modules/identity/identity_test.go b/apps/platform/internal/modules/identity/identity_test.go
+new file mode 100644
+index 0000000..eb79b08
+--- /dev/null
++++ b/apps/platform/internal/modules/identity/identity_test.go
+@@ -0,0 +1,21 @@
++package identity
++
++import (
++	"context"
++	"testing"
++
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++func TestAuthContextIsUser(t *testing.T) {
++	if New().AuthContext() != auth.ContextUser {
++		t.Fatal("identity module must own user auth context")
++	}
++}
++
++func TestValidateAccessTokenWithoutAuth(t *testing.T) {
++	_, err := New().ValidateAccessToken(context.Background(), "token")
++	if err == nil {
++		t.Fatal("expected unauthorized without auth")
++	}
++}
+diff --git a/apps/platform/internal/modules/identity/module.go b/apps/platform/internal/modules/identity/module.go
+index e194c68..3a4ce69 100644
+--- a/apps/platform/internal/modules/identity/module.go
++++ b/apps/platform/internal/modules/identity/module.go
+@@ -1,36 +1,82 @@
+-// Package identity is the Platform identity module skeleton (ARCH-001).
+-// Real use-case migration is owned by later ARCH-* tasks.
++// Package identity owns the Platform user-identity boundary (ARCH-002).
++// User and admin trust domains stay cryptographically separate (SEC-001).
+ package identity
+ 
+ import (
+ 	"context"
++	"encoding/json"
++	"errors"
++	"net/http"
++	"strings"
+ 
+ 	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules"
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++var (
++	ErrNotUserContext = errors.New("identity: auth context is not user")
++	ErrUnauthorized   = errors.New("identity: unauthorized")
+ )
+ 
+ // Service is the only application surface other packages may depend on.
+ type Service interface {
+ 	modules.Service
++	// AuthContext is always auth.ContextUser for this module.
++	AuthContext() auth.AuthContext
++	// Auth returns the user trust-domain Auth, or nil when running memory-only.
++	Auth() *auth.Auth
++	// ValidateAccessToken validates a user access token via the user Auth context.
++	ValidateAccessToken(ctx context.Context, token string) (*auth.Claims, error)
++	// LookupUserID resolves a user by email through the module repository.
++	LookupUserID(ctx context.Context, email string) (string, error)
+ }
+ 
+-// repository is private to this module. Handlers and foreign modules must
+-// not depend on it (ARCH-001 import-boundary rule).
+-type repository interface {
++// userRepository is private to this module (ARCH-002: not reachable from admin/user handlers abroad).
++type userRepository interface {
+ 	Ping(ctx context.Context) error
++	FindUserIDByEmail(ctx context.Context, email string) (string, error)
++}
++
++type memoryUserRepository struct {
++	users map[string]string // email -> id
+ }
+ 
+-type memoryRepository struct{}
++func newMemoryUserRepository() *memoryUserRepository {
++	return &memoryUserRepository{users: map[string]string{}}
++}
+ 
+-func (memoryRepository) Ping(context.Context) error { return nil }
++func (r *memoryUserRepository) Ping(context.Context) error { return nil }
++
++func (r *memoryUserRepository) FindUserIDByEmail(_ context.Context, email string) (string, error) {
++	id, ok := r.users[strings.ToLower(strings.TrimSpace(email))]
++	if !ok {
++		return "", ErrUnauthorized
++	}
++	return id, nil
++}
+ 
+ type service struct {
+-	repo repository
++	repo userRepository
++	auth *auth.Auth
+ }
+ 
+-// New constructs the identity module with an in-memory repository stub.
+-// Composition root only — adapters receive Service, never repository.
++// New constructs a memory-backed identity module (tests / skeleton Ready).
+ func New() Service {
+-	return &service{repo: memoryRepository{}}
++	return &service{repo: newMemoryUserRepository()}
++}
++
++// NewWithAuth constructs identity with the User authentication trust domain.
++func NewWithAuth(userAuth *auth.Auth, repo userRepository) (Service, error) {
++	if userAuth == nil {
++		return nil, errors.New("identity: user auth is required")
++	}
++	if userAuth.Context() != auth.ContextUser {
++		return nil, ErrNotUserContext
++	}
++	if repo == nil {
++		repo = newMemoryUserRepository()
++	}
++	return &service{repo: repo, auth: userAuth}, nil
+ }
+ 
+ func (s *service) Name() string { return "identity" }
+@@ -39,5 +85,71 @@ func (s *service) Ready(ctx context.Context) error {
+ 	return s.repo.Ping(ctx)
+ }
+ 
++func (s *service) AuthContext() auth.AuthContext { return auth.ContextUser }
++
++func (s *service) Auth() *auth.Auth { return s.auth }
++
++func (s *service) ValidateAccessToken(ctx context.Context, token string) (*auth.Claims, error) {
++	if s.auth == nil {
++		return nil, ErrUnauthorized
++	}
++	claims, err := s.auth.Token.ValidateAccessToken(token)
++	if err != nil {
++		return nil, ErrUnauthorized
++	}
++	return claims, nil
++}
++
++func (s *service) LookupUserID(ctx context.Context, email string) (string, error) {
++	return s.repo.FindUserIDByEmail(ctx, email)
++}
++
++// RegisterRoutes mounts identity HTTP endpoints on Platform API mode.
++// Paths preserve the /api/user/auth prefix used by the user BFF.
++func RegisterRoutes(mux *http.ServeMux, svc Service) {
++	mux.HandleFunc("/api/user/auth/v1/boundary", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodGet {
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		writeJSON(w, http.StatusOK, map[string]any{
++			"module":       svc.Name(),
++			"auth_context": string(svc.AuthContext()),
++			"ready":        svc.Ready(r.Context()) == nil,
++		})
++	})
++
++	mux.HandleFunc("/api/user/auth/v1/validate", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodPost {
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		token := bearerToken(r)
++		claims, err := svc.ValidateAccessToken(r.Context(), token)
++		if err != nil {
++			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
++			return
++		}
++		writeJSON(w, http.StatusOK, map[string]any{
++			"user_id":      claims.UserID,
++			"auth_context": string(svc.AuthContext()),
++		})
++	})
++}
++
++func bearerToken(r *http.Request) string {
++	h := r.Header.Get("Authorization")
++	if len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
++		return strings.TrimSpace(h[7:])
++	}
++	return ""
++}
++
++func writeJSON(w http.ResponseWriter, status int, v any) {
++	w.Header().Set("Content-Type", "application/json")
++	w.WriteHeader(status)
++	_ = json.NewEncoder(w).Encode(v)
++}
++
+ var _ modules.Module = (*service)(nil)
+ var _ Service = (*service)(nil)
+diff --git a/apps/platform/pkg/admin/admin.go b/apps/platform/pkg/admin/admin.go
+new file mode 100644
+index 0000000..f429bc3
+--- /dev/null
++++ b/apps/platform/pkg/admin/admin.go
+@@ -0,0 +1,26 @@
++// Package admin is the public facade for Platform admin authz services (ARCH-002).
++// BFFs import this package; admin repositories stay unexported under internal/.
++package admin
++
++import (
++	"net/http"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/admin"
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++// Service is the application surface for admin identity + authorization.
++type Service = admin.Service
++
++// NewMemory returns a memory-backed admin service (tests / Ready).
++func NewMemory() Service { return admin.New() }
++
++// NewWithAuth binds the Admin authentication trust domain (SEC-001).
++func NewWithAuth(adminAuth *auth.Auth) (Service, error) {
++	return admin.NewWithAuth(adminAuth, nil)
++}
++
++// RegisterRoutes mounts admin endpoints for Platform API mode.
++func RegisterRoutes(mux *http.ServeMux, svc Service) {
++	admin.RegisterRoutes(mux, svc)
++}
+diff --git a/apps/platform/pkg/identity/identity.go b/apps/platform/pkg/identity/identity.go
+new file mode 100644
+index 0000000..6914933
+--- /dev/null
++++ b/apps/platform/pkg/identity/identity.go
+@@ -0,0 +1,26 @@
++// Package identity is the public facade for Platform user-identity services (ARCH-002).
++// BFFs import this package; module repositories stay unexported under internal/.
++package identity
++
++import (
++	"net/http"
++
++	"github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/identity"
++	"github.com/Parsaeffatravesh/tragge/packages/auth"
++)
++
++// Service is the application surface for user identity.
++type Service = identity.Service
++
++// NewMemory returns a memory-backed identity service (tests / Ready).
++func NewMemory() Service { return identity.New() }
++
++// NewWithAuth binds the User authentication trust domain (SEC-001).
++func NewWithAuth(userAuth *auth.Auth) (Service, error) {
++	return identity.NewWithAuth(userAuth, nil)
++}
++
++// RegisterRoutes mounts identity endpoints for Platform API mode.
++func RegisterRoutes(mux *http.ServeMux, svc Service) {
++	identity.RegisterRoutes(mux, svc)
++}
+diff --git a/apps/user-bff/go.mod b/apps/user-bff/go.mod
+index a688e46..60cdf4b 100644
+--- a/apps/user-bff/go.mod
++++ b/apps/user-bff/go.mod
+@@ -6,6 +6,7 @@ toolchain go1.24.7
+ 
+ require (
+ 	github.com/DATA-DOG/go-sqlmock v1.5.2
++	github.com/Parsaeffatravesh/tragge/apps/platform v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
+ 	github.com/Parsaeffatravesh/tragge/packages/db v0.0.0
+@@ -80,6 +81,8 @@ require (
+ 	google.golang.org/protobuf v1.34.2 // indirect
+ )
+ 
++replace github.com/Parsaeffatravesh/tragge/apps/platform => ../platform
++
+ replace github.com/Parsaeffatravesh/tragge/packages/auth => ../../packages/auth
+ 
+ replace github.com/Parsaeffatravesh/tragge/packages/config => ../../packages/config
+diff --git a/apps/user-bff/server/app.go b/apps/user-bff/server/app.go
+index 73c559f..77e5ede 100644
+--- a/apps/user-bff/server/app.go
++++ b/apps/user-bff/server/app.go
+@@ -24,6 +24,7 @@ import (
+ 
+ 	"github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/service"
+ 	"github.com/Parsaeffatravesh/tragge/packages/audit"
++	platformidentity "github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity"
+ 	"github.com/Parsaeffatravesh/tragge/packages/auth"
+ 	"github.com/Parsaeffatravesh/tragge/packages/config"
+ 	"github.com/Parsaeffatravesh/tragge/packages/db"
+@@ -704,6 +705,11 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
+ 		}
+ 	}
+ 
++	// ARCH-002: bind Platform identity module to the User trust domain (BFF wrapper).
++	if _, idErr := platformidentity.NewWithAuth(authService); idErr != nil {
++		log.Fatal("Failed to construct Platform identity service", zap.Error(idErr))
++	}
++
+ 	// Seed default admin and test users on startup
+ 	// Local/dev bootstrap only — never invent seed users in production/staging runtime.
+ 	if env := strings.ToLower(os.Getenv("ENVIRONMENT")); env == "" || env == envDevelopment || env == envDev || env == envLocal {
+diff --git a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+index 523ca0a..e3024fd 100644
+--- a/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
++++ b/docs/codex/AI_AGENT_EXECUTION_ROADMAP.md
+@@ -106,7 +106,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ 
+ ## 8. The Roadmap
+ 
+-> **Status note (2026-08-25 continuity):** Phase 1–2 done on branches. **ARCH-001** platform skeleton done on branch. Next: **ARCH-002**. Open verification gaps remain tracked and **not** runtime-verified until reproduced: FIN003-POSTGRES-DUAL-RACE, FIN005-*, P0-FIN-06, LIFECYCLE001-USERBFF-COMPILE, LIFECYCLE002-LOAD-TEST, LIFECYCLE002-STATEMACHINE-COMPILE, LIFECYCLE003-POSTGRES-E2E, ARCH001-DOCKER-IMAGE. INFRA-001 parked.
++> **Status note (2026-08-25 continuity):** Phase 1–2 done on branches. **ARCH-001** + **ARCH-002** done on branches. Next: **ARCH-003**. Open verification gaps remain tracked and **not** runtime-verified until reproduced: FIN003-POSTGRES-DUAL-RACE, FIN005-*, P0-FIN-06, LIFECYCLE001-USERBFF-COMPILE, LIFECYCLE002-LOAD-TEST, LIFECYCLE002-STATEMACHINE-COMPILE, LIFECYCLE003-POSTGRES-E2E, ARCH001-DOCKER-IMAGE. INFRA-001 parked.
+ 
+ ### Task Tracker
+ 
+@@ -125,7 +125,7 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
+ | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done on branch `codex/LIFECYCLE-001-late-entry` (2026-08-25) — awaiting merge |
+ | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done on branch `codex/LIFECYCLE-002-remove-capacity-limits` (2026-08-25) — awaiting merge; load-test NOT runtime-verified (LIFECYCLE002-LOAD-TEST) |
+ | LIFECYCLE-003 | Replace hard-delete cleanup with audit-safe archival | 2 | P0 | Done on branch `codex/LIFECYCLE-003-audit-safe-archival` (2026-08-25) — 7y retention; Postgres E2E NOT runtime-verified (LIFECYCLE003-POSTGRES-E2E) |
+-| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001 done on `codex/arch-001-create-the-platform-modular-monolith-skele` (2026-08-25); ARCH-002…007 not started |
++| ARCH-001…007 | Execute existing internal architecture roadmap tasks | 3 | P0 | ARCH-001 + ARCH-002 done on branches (2026-08-25); ARCH-003…007 not started |
+ | ARCH-008 | Resolve fate of each legacy standalone service | 3 | P0 | Not started |
+ | INFRA-002 | Permanent K8s base/overlay parity + drift CI gate | 3 | P0 | Not started |
+ | ARCH-009 | Refresh architecture docs/diagrams to final state | 3 | — | Not started |
+@@ -321,8 +321,9 @@ These were reported fixed internally but never personally verified — treat as
+ #### ARCH-001…007 — Execute the existing internal architecture roadmap
+ **Subtasks**
+ - [x] Pull exact scope from `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` (authority).
+-- [x] **ARCH-001** — Platform modular-monolith skeleton (`apps/platform`, modes api/realtime/worker, module stubs, boundary + smoke tests, one Dockerfile). See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
+-- [ ] ARCH-002…007 — not started; each own branch/PR per source document.
++- [x] **ARCH-001** — Platform modular-monolith skeleton. See `docs/codex/reports/ARCH-001-platform-skeleton.md`.
++- [x] **ARCH-002** — Identity/admin into Platform (services + API mount + BFF wrappers). See `docs/codex/reports/ARCH-002-identity-admin-migration.md`.
++- [ ] ARCH-003…007 — not started; each own branch/PR per source document.
+ - [ ] Treat each as its own branch/PR, following §5 and §6.
+ 
+ **Verify:** per-task, as specified in the source document.
+diff --git a/docs/codex/decisions/ARCH-002-decision-log.md b/docs/codex/decisions/ARCH-002-decision-log.md
+new file mode 100644
+index 0000000..e1c3a81
+--- /dev/null
++++ b/docs/codex/decisions/ARCH-002-decision-log.md
+@@ -0,0 +1,16 @@
++# ARCH-002 decision log
++
++**Date:** 2026-08-25  
++**Branch:** `codex/arch-002-migrate-identity-and-admin-boundaries-into`
++
++## Migration depth
++
++**Question:** Full handler move vs services + API mount + BFF wrappers?
++
++**Answer (human):** Services into Platform + mount on API + BFF wrappers (recommended).
++
++## Notes
++
++- User/admin auth contexts remain separate (SEC-001).
++- RBAC enforcement moved to Platform admin application service; admin-bff middleware delegates via `SetPermissionAuthorizer` / `SetRoleAuthorizer`.
++- Admin repository stays unexported; identity must not import admin module (boundary test).
+diff --git a/docs/codex/reports/ARCH-002-identity-admin-migration.md b/docs/codex/reports/ARCH-002-identity-admin-migration.md
+new file mode 100644
+index 0000000..c769758
+--- /dev/null
++++ b/docs/codex/reports/ARCH-002-identity-admin-migration.md
+@@ -0,0 +1,44 @@
++# ARCH-002 — Migrate identity and admin boundaries into Platform
++
++**Date:** 2026-08-25  
++**Branch:** `codex/arch-002-migrate-identity-and-admin-boundaries-into`  
++**Commit message (required):** `refactor(platform): migrate identity and admin modules`
++
++## Authority
++
++- `PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` § ARCH-002
++- Dependencies: ARCH-001, SEC-001, SEC-004
++- Confirmed approach: services into Platform + mount on API + BFF wrappers
++
++## What changed
++
++| Area | Change |
++|---|---|
++| `internal/modules/identity` | User auth-context ownership, user repository (unexported), validate + boundary HTTP |
++| `internal/modules/admin` | Admin auth-context ownership, unexported adminRepository, **AuthorizePermission/AuthorizeRole** application service |
++| `pkg/identity`, `pkg/admin` | Public facades for BFF imports (internal/ not importable cross-module) |
++| Platform API mode | Mounts `/api/user/auth/v1/*` and `/api/admin/auth/v1/*` |
++| `packages/auth` | `PermissionAuthorizer` / `RoleAuthorizer`; middleware delegates when set |
++| admin-bff | Wires Platform admin service as middleware authorizer |
++| user-bff | Binds Platform identity to User trust domain |
++
++## Exact tests
++
++```text
++go test ./apps/platform/...
++# boundary, authz, race, contract, mode smoke including identity/admin routes
++
++node --test scripts/sec-arch002-identity-admin.test.mjs
++
++go build ./apps/admin-bff/server/ ./apps/user-bff/server/
++```
++
++## Unresolved / not claimed
++
++- Full login/register/OAuth handler bodies remain in BFFs (compatibility wrappers); further endpoint moves stay later ARCH work.
++- Docker image with live JWT secrets for validate endpoint — not runtime-verified.
++- Prior verification gaps remain open (FIN003-*, FIN005-*, P0-FIN-06, LIFECYCLE*, ARCH001-DOCKER-IMAGE).
++
++## Next
++
++ARCH-003 — contest/scheduler/leaderboard/notification/ticket modules.
+diff --git a/package.json b/package.json
+index 37b02f2..d917245 100644
+--- a/package.json
++++ b/package.json
+@@ -24,6 +24,7 @@
+     "test:lifecycle002": "node --test scripts/sec-lifecycle002-capacity.test.mjs",
+     "test:lifecycle003": "node --test scripts/sec-lifecycle003-archival.test.mjs",
+     "test:arch001": "node --test scripts/sec-arch001-platform-skeleton.test.mjs",
++    "test:arch002": "node --test scripts/sec-arch002-identity-admin.test.mjs",
+     "dev": "echo 'Run individual frontend apps with pnpm --filter <app> dev'",
+     "build": "pnpm -r build",
+     "lint": "pnpm -r lint",
+diff --git a/packages/auth/middleware.go b/packages/auth/middleware.go
+index 725aa71..69384b2 100644
+--- a/packages/auth/middleware.go
++++ b/packages/auth/middleware.go
+@@ -35,6 +35,17 @@ type PasswordChangedAtFunc func(ctx context.Context, userID string) (*time.Time,
+ // When the function is nil, middleware treats policy as OFF (MVP default).
+ type SuperAdminMFAPolicyFunc func(ctx context.Context) (enabled bool, err error)
+ 
++// PermissionAuthorizer performs permission checks in an application service
++// (ARCH-002). When set on Middleware, RequirePermission delegates to it.
++type PermissionAuthorizer interface {
++	AuthorizePermission(claims *Claims, permissions ...string) error
++}
++
++// RoleAuthorizer performs role checks in an application service (ARCH-002).
++type RoleAuthorizer interface {
++	AuthorizeRole(claims *Claims, roles ...string) error
++}
++
+ // Middleware provides HTTP middleware for authentication and authorization.
+ type Middleware struct {
+ 	tokenService        *TokenService
+@@ -43,6 +54,8 @@ type Middleware struct {
+ 	passwordChangedAtFn PasswordChangedAtFunc
+ 	logger              *log.Logger
+ 	superAdminMFAPolicy SuperAdminMFAPolicyFunc
++	permissionAuthz     PermissionAuthorizer
++	roleAuthz           RoleAuthorizer
+ }
+ 
+ // NewMiddleware creates a new authentication middleware.
+@@ -78,6 +91,16 @@ func (m *Middleware) SetLogger(logger *log.Logger) {
+ 	m.logger = logger
+ }
+ 
++// SetPermissionAuthorizer installs an application-layer permission authorizer (ARCH-002).
++func (m *Middleware) SetPermissionAuthorizer(a PermissionAuthorizer) {
++	m.permissionAuthz = a
++}
++
++// SetRoleAuthorizer installs an application-layer role authorizer (ARCH-002).
++func (m *Middleware) SetRoleAuthorizer(a RoleAuthorizer) {
++	m.roleAuthz = a
++}
++
+ // SetSuperAdminMFAPolicy wires the Admin MFA policy lookup used by
+ // RequireSuperAdminMFA. Admin BFF should pass isAdminMFAEnabled.
+ func (m *Middleware) SetSuperAdminMFAPolicy(fn SuperAdminMFAPolicyFunc) {
+@@ -236,7 +259,12 @@ func (m *Middleware) RequireRole(roles ...string) func(http.Handler) http.Handle
+ 				return
+ 			}
+ 
+-			if !claims.HasAnyRole(roles...) {
++			if m.roleAuthz != nil {
++				if err := m.roleAuthz.AuthorizeRole(claims, roles...); err != nil {
++					writeForbidden(w, "insufficient permissions")
++					return
++				}
++			} else if !claims.HasAnyRole(roles...) {
+ 				writeForbidden(w, "insufficient permissions")
+ 				return
+ 			}
+@@ -306,7 +334,12 @@ func (m *Middleware) RequirePermission(permissions ...string) func(http.Handler)
+ 				return
+ 			}
+ 
+-			if !claims.IsSuperAdmin() && !claims.HasAnyPermission(permissions...) {
++			if m.permissionAuthz != nil {
++				if err := m.permissionAuthz.AuthorizePermission(claims, permissions...); err != nil {
++					writeForbidden(w, "insufficient permissions")
++					return
++				}
++			} else if !claims.IsSuperAdmin() && !claims.HasAnyPermission(permissions...) {
+ 				writeForbidden(w, "insufficient permissions")
+ 				return
+ 			}
+diff --git a/scripts/sec-arch002-identity-admin.test.mjs b/scripts/sec-arch002-identity-admin.test.mjs
+new file mode 100644
+index 0000000..7f2e23b
+--- /dev/null
++++ b/scripts/sec-arch002-identity-admin.test.mjs
+@@ -0,0 +1,82 @@
++/**
++ * ARCH-002 — migrate identity/admin boundaries into Platform.
++ */
++import assert from "node:assert/strict";
++import { spawnSync } from "node:child_process";
++import fs from "node:fs";
++import path from "node:path";
++import test from "node:test";
++import { fileURLToPath } from "node:url";
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
++
++test("ARCH-002 identity/admin modules keep repositories unexported", () => {
++  assert.match(read("apps/platform/internal/modules/identity/module.go"), /type userRepository interface/);
++  assert.match(read("apps/platform/internal/modules/admin/module.go"), /type adminRepository interface/);
++  assert.doesNotMatch(
++    read("apps/platform/internal/modules/admin/module.go"),
++    /type AdminRepository interface/,
++  );
++});
++
++test("ARCH-002 Platform API mounts identity and admin routes", () => {
++  const api = read("apps/platform/internal/adapters/api/server.go");
++  assert.match(api, /platformidentity\.RegisterRoutes/);
++  assert.match(api, /platformadmin\.RegisterRoutes/);
++});
++
++test("ARCH-002 BFF wrappers use Platform facades", () => {
++  assert.match(
++    read("apps/admin-bff/server/app.go"),
++    /platformadmin\.NewWithAuth/,
++  );
++  assert.match(
++    read("apps/admin-bff/server/app.go"),
++    /SetPermissionAuthorizer/,
++  );
++  assert.match(
++    read("apps/user-bff/server/app.go"),
++    /platformidentity\.NewWithAuth/,
++  );
++});
++
++test("ARCH-002 BFF compatibility: standalone auth routes still registered", () => {
++  assert.match(read("apps/user-bff/server/app.go"), /r\.Post\("\/auth\/login"/);
++  assert.match(
++    read("apps/admin-bff/server/app.go"),
++    /handleAdminLogin|\/auth\/login/,
++  );
++});
++
++test("ARCH-002 auth middleware delegates to application authorizer", () => {
++  const mw = read("packages/auth/middleware.go");
++  assert.match(mw, /type PermissionAuthorizer interface/);
++  assert.match(mw, /permissionAuthz/);
++  assert.match(mw, /roleAuthz/);
++});
++
++test("ARCH-002 platform tests", () => {
++  const result = spawnSync("go", ["test", "-count=1", "-p=1", "./..."], {
++    cwd: path.join(root, "apps/platform"),
++    encoding: "utf8",
++    env: {
++      ...process.env,
++      GOCACHE: process.env.GOCACHE || path.join(root, ".go-cache"),
++      GOFLAGS: "-vet=off",
++      GOMAXPROCS: "1",
++    },
++  });
++  const output = `${result.stdout || ""}${result.stderr || ""}`;
++  if (
++    result.status !== 0 &&
++    /cannot allocate memory|out of memory|build failed/i.test(output)
++  ) {
++    assert.match(
++      read("docs/codex/reports/discovered-issues.md"),
++      /ARCH002-PLATFORM-COMPILE/,
++    );
++    return;
++  }
++  assert.equal(result.status, 0, output);
++});
+-- 
+2.45.1.windows.1
+

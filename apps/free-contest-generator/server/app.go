@@ -76,6 +76,13 @@ func Run() {
 // When parentCtx is non-nil, the service shuts down when the context is cancelled
 // instead of registering its own signal handler.
 func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool) {
+	// ARCH-003: Platform scheduler module is the sole contest-generation owner.
+	// Standalone generator exits unless explicitly re-enabled for emergency ops.
+	if os.Getenv("PLATFORM_ALLOW_STANDALONE_FREE_GENERATOR") != "true" {
+		fmt.Println("free-contest-generator: disabled (ARCH-003: Platform scheduler owns generation); set PLATFORM_ALLOW_STANDALONE_FREE_GENERATOR=true to override")
+		return
+	}
+
 	config := loadConfig()
 
 	// Initialize observability
