@@ -8,25 +8,27 @@ This file provides guidance for AI assistants working with the tragge repository
 
 ### Current State
 
-- **Status**: Production-ready platform with 11 Go services, 3 Vue frontends, and full infrastructure
+- **Paid-production status: NO-GO.** Authoritative decision: [`docs/architecture/current-state-audit.md`](docs/architecture/current-state-audit.md) and [`docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md`](docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md). See also [`README.md`](README.md).
+- **Do not treat `docs/codex/reports/*` PASS/FIXED labels as proven.** Re-verify independently before relying on them. Precedent: a critical UI defect survived behind audits that called the platform production-ready.
+- **Execution tracker:** [`docs/codex/AI_AGENT_EXECUTION_ROADMAP.md`](docs/codex/AI_AGENT_EXECUTION_ROADMAP.md) — follow Continuity Protocol; deliver code+tests, not more plans.
 - **Structure**: Monorepo with Go workspaces and pnpm workspaces
-- **Backend**: Go 1.24+ services with BFF (Backend-for-Frontend) pattern
-- **Frontend**: Vue 3 + Vite + TypeScript with i18n support (English/Farsi)
-- **Messaging**: Redpanda (Kafka-compatible) for event-driven communication
-- **Database**: PostgreSQL 16 with comprehensive schema (68 migration pairs, 30+ tables)
-- **Observability**: Full monitoring stack (Prometheus, Grafana, Loki, Tempo, Alertmanager)
-- **Deployment**: Docker Compose (dev) and Kubernetes (production/staging)
-- **Codebase**: ~270 Go files, ~185 Vue components, comprehensive integration tests
-- **CI/CD**: GitHub Actions pipeline (lint, test, build)
+- **Backend**: Go 1.24+ services with BFF pattern; Compose runtime merges into `api-server`, `trading-core`, and `worker` (see Architecture Overview below)
+- **Frontend**: Vue 3 + Vite + TypeScript with i18n (English/Farsi); User panel `:8080`, Admin panel `:8081`
+- **Messaging**: Redpanda (Kafka-compatible)
+- **Database**: PostgreSQL 16; migration series in `packages/db/migrations/` (100+ up migrations in current tree — do not hardcode stale “68 pairs”)
+- **Observability**: Prometheus, Grafana, Loki, Tempo, Alertmanager
+- **Deployment**: Docker Compose (dev/lab) and Kubernetes overlays (staging/production) — K8s overlay drift is an open P0 (INFRA-001)
+- **Codebase**: Order-of-magnitude inventory lives in the current-state audit (hundreds of Go/Vue/TS files); re-run `node scripts/production-baseline.mjs inventory` for live counts
+- **CI/CD**: GitHub Actions (lint, test, build) — frontend suites / required gates still tracked as CI-001/CI-003
 - **Secrets**: Docker secrets (dev) and external secrets managers (production)
 
 ### What's Implemented
 
-**Go Services (Fully Operational):**
+**Go services (present in tree; Compose merges many into bounded processes):**
 - `user-bff` - User registration, login, JWT authentication, OAuth (Google), password reset, email verification, profile/avatar management, tournament listing
 - `trade-bff` - WebSocket trading interface with real-time updates, compression, tournament feed, contest event subscriptions
 - `admin-bff` - Contest management, audit logging, role-based access, tournament templates/schedules, market hours, spread config, calendar, email template versioning
-- `market-ingestor` - Multi-provider market data (Massive primary, TwelveData fallback, Nobitex for crypto), candle aggregation, spread management
+- `market-ingestor` - Multi-provider market data (MVP lab: Deriv forex + Nobitex crypto; Massive retained as LEGACY/unused when not selected), candle aggregation, spread management
 - `trading-engine` - Order processing, pending orders, TP/SL support, sharded consumption, WAL, position locking, decimal scoring, rate limiting
 - `leaderboard-worker` - Leaderboard calculation, payout processing, contest finalization, sharded leaderboards, notification consumer
 - `payment-service` - Deposit/withdrawal processing (Jibit, NowPayments), webhook handling, KYC, exchange rates, expiry worker, inquiry worker, cleanup
@@ -34,13 +36,14 @@ This file provides guidance for AI assistants working with the tragge repository
 - `shard-router` - Request routing with circuit breakers, rate limiting, caching, alerting
 - `free-contest-generator` - Automated free practice contest generation on schedule
 - `contest-scheduler` - Contest lifecycle state machine (scheduled→running→completed), distributed locking
+- `api-server` / `trading-core` / `worker` - Merged Compose/K8s entrypoints hosting the above
 
-**Packages (24 shared packages):**
+**Packages (shared):**
 - `auth` - Full authentication suite (Argon2id hashing, JWT with separate refresh secrets, middleware, sessions, RBAC)
 - `circuitbreaker` - Circuit breaker pattern implementation
 - `config` - Configuration loading and environment variable validation
-- `contracts` - 20 versioned event types (Go + TypeScript + JSON schemas)
-- `db` - Database migrations and utilities (68 migration pairs)
+- `contracts` - Versioned event types (Go + TypeScript + JSON schemas)
+- `db` - Database migrations and utilities (`packages/db/migrations/`)
 - `exchangerate` - Currency exchange rate service
 - `health` - Health check utilities
 - `inapp` - In-app notification support with mark-as-read
@@ -681,7 +684,7 @@ Contest lifecycle state machine and scheduler.
 
 ## Database Schema
 
-The PostgreSQL schema is managed via 68 migration pairs in `packages/db/migrations/`.
+The PostgreSQL schema is managed via numbered up/down migrations in `packages/db/migrations/`. Use the current-state audit / `production-baseline` inventory for exact counts — do not assume a fixed “68 pairs.”
 
 ### Core Tables
 
