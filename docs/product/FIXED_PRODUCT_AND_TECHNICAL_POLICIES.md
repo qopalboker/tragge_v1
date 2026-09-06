@@ -1,6 +1,6 @@
 # Tragge — Fixed Product and Technical Policies
 
-**Status:** In review — POLICY-001 pending human approval/merge
+**Status:** Approved — current policy
 **Policy version:** `2026-09-06.1`
 **Canonical timezone for scheduling:** `Asia/Tehran`  
 **Canonical storage timezone:** UTC  

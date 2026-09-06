@@ -124,8 +124,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done (merged to main) â€” signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) â€” in-process harness; Compose/staging follow-ups open |
 | FIN-006 | Classify admin wallet top-ups as admin_funded_deposit | 1 | P0 | Done (merged to main) â€” signed off; gaps FIN006-* open |
-| POLICY-001 | Finalize contest funds and participant lifecycle policy | 1 | P0 | In review; pending human approval/merge; implementation intentionally not started |
-| TREASURY-001 | Canonical Super Admin Wallet and user-balance custody model | 1 | P0 | Blocked on POLICY-001 approval/merge |
+| POLICY-001 | Finalize contest funds and participant lifecycle policy | 1 | P0 | Done (merged to main) — approved; current policy |
+| TREASURY-001 | Canonical Super Admin Wallet and user-balance custody model | 1 | P0 | Implemented — Cloud unit/static checks; real-PostgreSQL certification and opening-balance cutover pending |
 | FEE-WALLET-001 | Dedicated Super-Admin-only Contest Fee Wallet | 1 | P0 | Not started |
 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Not started |
 | LIFECYCLE-004 | Remove self-leave; audited Super Admin removal/refund | 2 | P0 | Not started |

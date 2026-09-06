@@ -253,11 +253,10 @@ A date must not override a failed quality gate.
 
 ### 4.4 `contest_funds_v1` financial-policy implementation order
 
-Upon human approval and merge, POLICY-001 supersedes conflicting contest-funds,
+POLICY-001 is approved and merged and supersedes conflicting contest-funds,
 participant-removal, Rank-0, and missing-winner semantics with policy version
-`2026-09-06.1`. It remains in review and is a documentation gate only. Do not
-fold implementation into the policy PR; TREASURY-001 remains blocked until this
-approval and merge.
+`2026-09-06.1`. It is the current policy; implementation may proceed according
+to the ordered roadmap below, one task per branch/PR.
 
 Execute one task per branch/PR in this exact order:
 
