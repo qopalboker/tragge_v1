@@ -33,6 +33,20 @@ Issues found while executing the AI agent roadmap that are out of the current ta
 This ledger tracks open verification gaps. Entries from the stacked architecture
 branches (ARCH-001…009, ENG/DATA/MD) remain open until those PRs merge and
 runtime evidence exists. **Do not treat documentation as gap closure.**
+
+## POLICY001-AFFILIATE-CHEATING-NO-REFUND
+| **ID** | POLICY001-AFFILIATE-CHEATING-NO-REFUND |
+| **Severity** | P0 policy decision before LIFECYCLE-004/FIN-CLEAN-001 completion |
+| **Found during** | POLICY-001 (2026-09-06) |
+| **Status** | Open — requires human product/financial decision |
+
+Current join behavior creates pending affiliate commission from base contest
+entry, while `contest_funds_v1` permits cheating removal with Refund NO. Existing
+approved policy does not establish whether that affiliate commission is retained,
+cancelled, or reversed. Implementations must not infer the answer from contest-fee
+or forfeiture treatment. Evidence is recorded in
+`docs/codex/decisions/POLICY-001-decision-log.md`.
+
 ## INFRA002-POSTGRES-HA-OVERLAY
 | **ID** | INFRA002-POSTGRES-HA-OVERLAY |
 | **Severity** | P2 (desired-state gap) |
@@ -133,9 +147,9 @@ Scheduled staging-like reconciliation guard not configured (no staging environme
 | **ID** | P0-FIN-06-ECONOMICS-LOCK-AT-CUTOFF |
 | **Severity** | P0 (audit) / deferred from LIFECYCLE-001 |
 | **Found during** | LIFECYCLE-001 (2026-08-25) |
-| **Status** | Open — **not implemented in LIFECYCLE-001** |
+| **Status** | Implemented in P0-FIN-06 — real-PostgreSQL race execution pending |
 
-Policy §4.4 requires economics immutability when the **late-entry window closes**. Current code locks fee fields on first join and still allows late joiners to increment `prize_pool_net_cents` until cutoff. A dedicated cutoff-time economics snapshot freeze remains outstanding (audit P0-FIN-06).
+Policy §4.4 requires economics immutability when the **late-entry window closes**. P0-FIN-06 adds the canonical `contest_economics_snapshot`, freezes the transactionally accumulated per-join totals after reconciling them to wallet debits, uses PostgreSQL-authoritative cutoff time, serializes both endpoints of membership moves, makes duplicate locks idempotent, and makes settlement fail closed when a modern required snapshot is absent. Completed/cancelled contests are deliberately not backfilled or recalculated. Static and package coverage is local; `packages/db/economics_cutoff_postgres_test.go` is present, but the container has neither Docker nor `TEST_DATABASE_URL`, so its real-PostgreSQL trigger/concurrency/parity cases remain **NOT VERIFIED** and must execute before production approval.
 
 ---
 
