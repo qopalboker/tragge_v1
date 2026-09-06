@@ -1,7 +1,7 @@
 # Tragge — Fixed Product and Technical Policies
 
-**Status:** Approved baseline for production implementation  
-**Policy version:** `2026-08-09.1`
+**Status:** In review — POLICY-001 pending human approval/merge
+**Policy version:** `2026-09-06.1`
 **Canonical timezone for scheduling:** `Asia/Tehran`  
 **Canonical storage timezone:** UTC  
 **Technical language:** English  
@@ -9,8 +9,10 @@
 
 > This document is the product and engineering source of truth. Code, database
 > constraints, API contracts, previews, settlement, admin tools, tests, and
-> documentation must conform to it. Any future change requires a versioned
-> decision record and must never mutate already-started contests.
+> documentation must conform to it. A newer policy/version requires a versioned
+> decision record and must never be applied retroactively to an already-started
+> contest. This does not prohibit an authorized adjustment already defined by
+> that contest's active policy version.
 
 ---
 
@@ -182,7 +184,8 @@ Example for a `100 USDT` base entry fee:
 
 ### 4.4 Economics lock
 
-Contest economics are immutable immediately after the late-entry window closes:
+The economics snapshot is immutable immediately after the late-entry window
+closes. It records the historical cutoff values for:
 
 - Final real-participant count
 - Gross base entry total
@@ -194,8 +197,16 @@ Contest economics are immutable immediately after the late-entry window closes:
 - Rank-band version
 - Weight-decay version
 
-No participant, fee, winner count, or prize amount may change after this lock.
-The immutable record is named `contest_economics_snapshot`.
+The immutable record is named `contest_economics_snapshot`. It is never rewritten.
+Authorized Super Admin participant removals may subsequently change only
+`effective_participant_count`, `effective_prize_pool`, and
+`effective_planned_winners` through durable append-only adjustment records using
+the snapshot's locked policy versions:
+
+```text
+effective settlement economics
+= immutable cutoff snapshot + authorized append-only adjustments
+```
 
 ---
 
@@ -795,14 +806,17 @@ Canonical rank bands:
 
 - Planned winner count uses all real registered participants captured in the
   economics snapshot.
+- Settlement derives effective planned winners from effective participant count
+  using the same locked distribution version after authorized adjustments.
 - Prize eligibility requires at least one Filled Trade.
 - Users with no Filled Trade do not appear in the prize table.
 - The practice system user is excluded.
-- `actual_winners = min(planned_winners, eligible_ranked_users)`.
-- If eligible users are fewer than planned winners, preserve the weights of the
-  remaining occupied ranks and renormalize them to 100%.
-- No unallocated prize amount becomes Platform Revenue.
-- No prize amount remains undistributed.
+- `actual_winners = min(effective_planned_winners, eligible_ranked_users)`.
+- If eligible users are fewer than the effective planned winner count, preserve
+  the locked rank shares; do not renormalize occupied ranks.
+- Prize slots without an eligible recipient become an auditable unawarded
+  residual. A failed payout to an eligible recipient remains a liability and is
+  not an unawarded residual.
 
 ### 11.4 Small-contest prize shares
 
@@ -859,7 +873,10 @@ An exact score tie uses a pooled-position rule:
 
 - Prize calculations use rational or fixed-point arithmetic.
 - Final money allocation is exact in integer minor units.
-- Sum of all prize payouts equals the locked Prize Pool exactly.
+- Effective Prize Pool equals valid winner liabilities/successful payouts plus
+  the unawarded residual exactly. A failed payout to a valid winner remains that
+  winner's liability; only an empty slot caused by insufficient eligible ranked
+  recipients is unawarded, and remaining shares are not renormalized.
 - Members of a grouped rank band receive exactly equal amounts.
 - Members of a tie group receive exactly equal amounts.
 - Residual minor units are assigned only to the highest individual non-tied
@@ -883,7 +900,8 @@ Canonical sequence:
 7. Build final eligible rankings once.
 8. Calculate prizes once using `tralent_v1`.
 9. Write double-entry ledger transactions.
-10. Reconcile Prize Pool liability to payouts exactly.
+10. Reconcile effective Prize Pool to winner liabilities/payouts plus the
+    unawarded residual exactly.
 11. Mark settlement completed.
 12. Mark contest completed.
 13. Publish final notifications and read-model events.
@@ -1264,7 +1282,281 @@ Paid public launch is prohibited until all conditions pass:
 
 ---
 
-## 20. Change-Control Rule
+## 20. Contest Funds and Participant Lifecycle — `contest_funds_v1`
+
+**Decision ID:** `POLICY-001`
+**Effective boundary:** applies to contests created after all implementation tasks
+listed in §20.14 are deployed and the boundary is recorded in PostgreSQL. Existing
+ledger entries, settled contests, and P0-FIN-06 snapshots remain historical
+records under their original policy; they are never rewritten to simulate
+`contest_funds_v1` behavior.
+
+### 20.1 Engineering principle and financial authority
+
+> **Simple paths, strong invariants, explicit money movement.**
+
+PostgreSQL ledger and balance state is authoritative. Redis and events are
+projections, not financial truth. Authoritative money uses integer minor units
+and rates use integer basis points; binary floating-point money is forbidden.
+Prefer one canonical ledger, explicit account ownership, short transactions,
+narrow interfaces, minimal cross-system commands, append-only history,
+deterministic settlement, and stable idempotency keys. Avoid hidden fallback
+calculations, counters presented as custody, internal HTTP between Platform
+modules, extra services, and generic workflow/event-sourcing abstractions.
+
+The four distinct concepts are:
+
+1. **Super Admin Wallet** — one stable system/platform custody identity, never a
+   logged-in human administrator's personal wallet. Human Super Admins are
+   authorized actors controlling it.
+2. **Contest Prize Pool** — an identifiable ledger-backed allocation for one
+   paid contest.
+3. **Contest Fee Wallet** — one dedicated contest-fee-revenue wallet.
+4. **User balance accounting** — each user's exact ledger-backed entitlement to
+   funds held in platform custody.
+
+### 20.2 Deposits, custody, and user balances
+
+An external deposit increases the Super Admin Wallet's actual custody and, in
+the same authoritative accounting flow, increases the depositing user's exact
+ledger-backed entitlement. Every user's available and reserved balances must be
+individually reconstructable from PostgreSQL; they are not derived from Redis or
+request-time event replay.
+
+```text
+external deposit -> Super Admin Wallet custody -> user balance attribution
+```
+
+### 20.3 Contest Fee Wallet
+
+Allowed inflows are only valid, non-refunded:
+
+- base contest platform fees;
+- late-entry surcharges;
+- less explicit authorized reversals for refunds.
+
+It must not contain deposits, user balances, Prize Pool custody, winner payouts,
+normal refunds, withdrawals, unrelated revenue, or participant forfeitures.
+Only Super Admin may view its balance, transactions, history, and reconciliation
+in the Admin financial area; ordinary Admin roles have no such access. Existing
+Super Admin RBAC, MFA, sensitive-action reauthentication, and immutable audit
+controls apply.
+
+### 20.4 Paid entry transaction
+
+A successful join is one durable, idempotent internal ledger/account transaction.
+It does not imply an external blockchain transfer among platform accounts:
+
+```text
+validate -> durable locks -> idempotency check -> fixed-point quote
+-> verify/debit user available entitlement by the total charge
+-> debit Super Admin Wallet custody by the same total charge
+-> credit that contest's Prize Pool contribution
+-> credit Contest Fee Wallet base fee and any late surcharge
+-> register participant -> ledger entries -> required outbox -> commit
+```
+
+For a regular `100 USDT` entry, user available entitlement decreases by `100`
+and Super Admin Wallet custody is debited `100`: `80` is credited to that
+contest's Prize Pool and `20` to Contest Fee Wallet. For a late entry, user
+entitlement and Super Admin Wallet custody each decrease by `110`: `80` is
+credited to Prize Pool, `20` base fee and `10` surcharge to Contest Fee Wallet.
+The late surcharge never enters the Prize Pool. These are internal authoritative
+account movements, not external blockchain transfers. Counters alone are not
+proof of movement; every allocation must have financial journal evidence.
+
+Before lock, each contest Prize Pool balance equals the sum of active,
+non-reversed participant prize contributions and is reconciled to original join
+transactions.
+
+### 20.5 Cutoff lock and custody return
+
+At `late_join_cutoff_at`, atomically and idempotently:
+
+1. lock the final normal-entry Prize Pool amount and participant count;
+2. write the immutable `contest_economics_snapshot` with cutoff participant,
+   gross base entry, base fee, late surcharge, Prize Pool, planned winners,
+   distribution/rank-band/weight-decay versions, and `locked_at`;
+3. debit the entire contest Prize Pool financial balance to zero and return that
+   custody to the Super Admin Wallet;
+4. retain an explicit locked contest-prize obligation sub-ledger attribution.
+
+After the exactly-once return, `Contest Prize Pool custodial balance = 0`; the
+locked obligation remains explicit and auditable.
+
+Shared physical custody does not erase the distinction among user liabilities,
+locked contest obligations, and Treasury funds. Retrying the lock must not
+repeat the custody transfer or rewrite the snapshot.
+
+### 20.6 Participation and Super Admin removal
+
+A successful join is irreversible by the user in every contest state. There is
+no user self-leave or self-refund endpoint. A user may ask support for immediate
+exit, but only Super Admin may remove/disqualify a participant, before settlement
+or eligibility finalization begins.
+
+Removal is an audited state transition, never a hard delete. It preserves the
+participant, join and original charge/split, late surcharge, orders, fills,
+positions, scores, reason, refund decision, note, Super Admin actor, timestamp,
+financial adjustments, correlation ID, and stable removal operation ID.
+
+Exactly three reasons exist:
+
+| Reason | Refund | Additional requirement |
+|---|---|---|
+| `cheating` | Super Admin must explicitly choose YES or NO; no default | Persist choice |
+| `user_requested_immediate_exit` | Required; `false` is invalid | — |
+| `other` | Required; `false` is invalid | Human-readable note required |
+
+A repeat operation cannot refund, reverse allocations, decrement effective
+participants, classify forfeiture, close positions, or write audit effects twice.
+
+Before contest start, removal applies the same matrix and financial adjustments
+without an Engine close. While running it immediately prevents new orders,
+sends versioned administrative commands to the Trading Engine to cancel pending
+orders and force-close positions under canonical close policy, preserves history,
+removes the user from leaderboard/final eligibility, applies accounting, and
+audits the result. Platform must not mutate Engine-private tables.
+
+### 20.7 Refund and forfeiture accounting
+
+A refund is the exact original ledger-backed contest-entry charge, never a
+reconstruction from current configuration. Thus a late-entry refund includes
+both original base entry and original surcharge.
+
+Before Prize Pool lock, refund reverses the original Prize Pool contribution and
+base-fee/surcharge allocations back through Super Admin Wallet custody, then
+restores the user entitlement. After lock, Prize Pool custody has already
+returned; do not return it twice. Reverse only allocations still outside Super
+Admin Wallet (including refundable Fee Wallet amounts), record the obligation
+adjustment, and restore the exact user charge.
+
+For cheating with Refund NO, user refund is zero, but the participant and their
+Prize Pool contribution are excluded from effective economics. Before lock the
+contribution returns from that Prize Pool to Super Admin Wallet; after lock it
+is not moved again. It becomes explicit `contest_entry_forfeiture` retained
+Treasury classification. It is never Contest Fee Wallet revenue. Original base
+fee and late surcharge remain fee revenue.
+
+### 20.8 Immutable snapshot and effective economics
+
+Keep these values separate:
+
+```text
+participant_count_at_cutoff       immutable history
+effective_participant_count       cutoff count plus authorized adjustments
+eligible_ranked_participant_count active effective users with a qualifying fill
+
+prize_pool_at_cutoff              immutable history
+effective_prize_pool              snapshot plus append-only authorized adjustments
+
+planned_winners_at_cutoff         immutable history
+effective_planned_winners         recomputed from effective participant count
+```
+
+Never rewrite the cutoff snapshot after an authorized removal. Post-cutoff
+changes are append-only adjustments (a minimal later implementation may use
+`contest_economics_adjustments`; no generic event framework). Effective planned
+winners use the same locked distribution algorithm/version, so administrative
+removal may reduce the count.
+
+### 20.9 Rank 0 and leaderboard eligibility
+
+Until a real, active participant completes at least one qualifying Filled Trade,
+their rank is `0`: not ranked, absent from the Redis ranked leaderboard, and
+ineligible for prizes. Order submission or cancellation does not qualify. The
+durable fill is the eligibility evidence. A participant who has traded may have
+score zero and still receive a positive compact rank; score value never proves
+eligibility. Removed/system participants receive no positive final rank.
+
+Do not seed all joined participants into a Redis sorted set at zero. Redis remains
+a projection. At settlement, eligible users are real, active/not removed, and
+have a qualifying fill; they receive compact ranks `1..N`.
+
+### 20.10 Winner schedule and unawarded residual
+
+Effective planned winners are calculated from effective participant count using
+the locked policy. Actual winners can be fewer when effective participants remain
+Rank 0. Preserve the planned rank schedule: if shares are `50%, 30%, 20%` and
+only ranks 1 and 2 have eligible recipients, pay `50%` and `30%`; do not
+renormalize. The remaining `20%` is `unawarded_prize`:
+
+```text
+unawarded_prize = effective_prize_pool - sum(valid intended winner allocations)
+```
+
+A failed payment to a valid winner remains that winner's liability, not
+unawarded money. Because custody returned at lock, an unawarded residual requires
+no second Super Admin Wallet credit; it changes from contest liability to an
+auditable retained-balance classification.
+
+### 20.11 Settlement, payouts, refunds, and withdrawals
+
+Settlement is the sole finalization owner. Winner payouts debit the Super Admin
+Wallet and credit winner user entitlements with exactly-once, retry-safe ledger
+entries linked to contest, settlement, winner, and rank.
+
+An approved withdrawal atomically/durably deducts the user's entitlement and the
+corresponding Super Admin Wallet custody before/with external payout. Merely
+requesting withdrawal does not pay it. Contest Fee Wallet never funds normal
+withdrawals. Refund payment likewise restores user entitlement through Super
+Admin Wallet accounting; refundable contest fees first reverse from Contest Fee
+Wallet to Super Admin Wallet.
+
+### 20.12 Conservation and no-double-counting invariants
+
+```text
+user entitlement debit = total successful contest entry charge
+contest join Super Admin Wallet debit = Contest Prize Pool credit + Contest Fee Wallet credit
+regular entry charge = Prize Pool contribution + Contest Fee Wallet base fee
+late entry charge = Prize Pool contribution + base fee + late surcharge
+refund restored amount = exact reversed original allocations
+Prize Pool lock debit = funds returned to Super Admin Wallet
+settlement effective Prize Pool = winner liabilities/payouts + unawarded residual
+```
+
+Prohibit double custody return, fee credit, refund, Prize Pool reduction,
+forfeiture classification, winner payout, and withdrawal. Every financial command
+has a stable idempotency key and transactional boundary.
+
+### 20.13 Affiliate commission
+
+Refunded contest entries must not leave affiliate revenue outstanding, and any
+financial reversal must be authoritative rather than best effort. The treatment
+of affiliate commission for `cheating` with Refund NO is not defined by existing
+approved policy and remains an explicit POLICY-001 open question; implementation
+must not guess it.
+
+### 20.14 Ordered implementation boundary
+
+`contest_funds_v1` becomes effective only after these tasks land in order:
+
+```text
+POLICY-001
+-> TREASURY-001
+-> FEE-WALLET-001
+-> CONTEST-POOL-001
+-> LIFECYCLE-004
+-> RANK-001
+-> ECON-ADJ-001
+-> SETTLE-001
+-> WITHDRAW-001
+-> FIN-CLEAN-001
+-> Linux full runtime certification
+```
+
+P0-FIN-06 runtime verification remains open. Certification must exercise real
+PostgreSQL; Redis and Kafka/Redpanda where applicable; fresh migration and
+supported rollback; joins and concurrent joins; join/cutoff races; Prize Pool
+funding and lock-return; Fee Wallet; participant removal and refund YES/NO;
+duplicate refunds; Rank 0/first fill; effective settlement and residual; winner
+payout; withdrawal; reconciliation; retries; crash windows; and relevant race
+checks. Paid production remains NO-GO until that evidence and human financial
+review exist.
+
+---
+
+## 21. Change-Control Rule
 
 Any future change to money, prize distribution, contest timing, ranking,
 eligibility, late entry, settlement, or provider execution policy requires:

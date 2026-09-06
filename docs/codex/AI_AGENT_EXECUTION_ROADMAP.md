@@ -124,6 +124,16 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | FIN-004 | Reconcile prize distribution algorithm vs. `tralent_v1` | 1 | P0 | Done (merged to main) â€” signed off; Power Law divergence-only |
 | FIN-005 | End-to-end financial reconciliation test harness | 1 | P0 | Done (merged to main) â€” in-process harness; Compose/staging follow-ups open |
 | FIN-006 | Classify admin wallet top-ups as admin_funded_deposit | 1 | P0 | Done (merged to main) â€” signed off; gaps FIN006-* open |
+| POLICY-001 | Finalize contest funds and participant lifecycle policy | 1 | P0 | In review; pending human approval/merge; implementation intentionally not started |
+| TREASURY-001 | Canonical Super Admin Wallet and user-balance custody model | 1 | P0 | Blocked on POLICY-001 approval/merge |
+| FEE-WALLET-001 | Dedicated Super-Admin-only Contest Fee Wallet | 1 | P0 | Not started |
+| CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Not started |
+| LIFECYCLE-004 | Remove self-leave; audited Super Admin removal/refund | 2 | P0 | Not started |
+| RANK-001 | Rank 0 until first qualifying fill | 2 | P0 | Not started |
+| ECON-ADJ-001 | Append-only effective economics adjustments | 2 | P0 | Not started |
+| SETTLE-001 | Effective winner plan, residual, and Treasury payout | 2 | P0 | Not started |
+| WITHDRAW-001 | Couple withdrawal to user entitlement and custody debit | 2 | P0 | Not started |
+| FIN-CLEAN-001 | Remove float and legacy duplicate financial authorities | 2 | P0 | Not started |
 | MD-005A | Admin Forex/Crypto provider selection with audit | 3 | P1 | Done (merged to main); MD-005 AUTO/FORCE/PAUSE deferred |
 | LIFECYCLE-001 | Support valid late entry to running contests | 2 | P0 | Done (merged to main) |
 | LIFECYCLE-002 | Remove participant capacity limits | 2 | P0 | Done (merged to main) |
@@ -216,6 +226,42 @@ These were reported fixed internally but never personally verified â€” trea
 ---
 
 ### Phase 1 â€” Financial Integrity
+
+#### POLICY-001 follow-up implementation sequence
+
+Canonical policy is `contest_funds_v1` in
+`docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md` §20. Execute exactly in
+this order; each ID is a separate branch/PR and none is implemented by
+POLICY-001:
+
+1. **TREASURY-001** — add the stable Super Admin Wallet custody identity and
+   reconcile user available/reserved entitlements to canonical ledger accounts.
+2. **FEE-WALLET-001** — add the contest-fee-only wallet, base-fee/surcharge
+   transfers, reversals, and Super-Admin-only financial visibility.
+3. **CONTEST-POOL-001** — make every contest Prize Pool ledger-backed and add
+   the exactly-once cutoff return to Super Admin Wallet while retaining the
+   locked obligation.
+4. **LIFECYCLE-004** — remove user self-leave and implement idempotent,
+   non-destructive Super Admin removal with the fixed reason/refund matrix and
+   Engine commands for running participants.
+5. **RANK-001** — keep participants at Rank 0 and outside Redis ranking until
+   durable qualifying fill evidence exists.
+6. **ECON-ADJ-001** — add minimal append-only authorized adjustments and derive
+   effective participant count, Prize Pool, and planned winners without changing
+   cutoff history.
+7. **SETTLE-001** — consume effective economics, preserve planned shares without
+   renormalization, account for residual, and debit Super Admin Wallet for
+   winner payouts.
+8. **WITHDRAW-001** — couple approval to an idempotent user-entitlement debit,
+   Super Admin Wallet custody reduction, and external payout evidence.
+9. **FIN-CLEAN-001** — remove obsolete counters/fallbacks/float financial paths
+   only after all replacements are proven authoritative.
+10. **Linux full runtime certification** — exercise the complete financial and
+    concurrency matrix; P0-FIN-06 real-PostgreSQL verification remains open.
+
+The unresolved cheating/Refund-NO affiliate treatment in the POLICY-001
+decision log requires a human policy decision before the relevant removal and
+affiliate implementation is finalized.
 *Highest real-money risk: three divergent prize-calculation paths and dual finalize authority. Do not defer this phase or shrink its verification steps.*
 
 #### FIN-001 â€” Single source of truth for platform fee
@@ -293,6 +339,20 @@ These were reported fixed internally but never personally verified â€” trea
 - [x] `TestJoinAllowed` + cutoff examples + charge tests in economics; CI `lifecycle-001-late-entry`.
 
 **Done when:** that suite passes.
+
+#### P0-FIN-06 — Freeze contest economics at late-entry cutoff
+**Subtasks**
+- [x] Added one immutable PostgreSQL `contest_economics_snapshot` per contest with exact minor-unit totals and fixed policy versions.
+- [x] Serialized checkout and cutoff on the contest row; duplicate locks return the authoritative row and post-lock membership changes are rejected durably.
+- [x] Scheduler locks due contests and settlement consumes locked participant, pool, fee, and distribution inputs without a mutable fallback.
+- [x] Human-review fixes freeze per-join accumulated/ledger-reconciled totals, use PostgreSQL time, validate both membership-move endpoints, and fail modern missing-snapshot settlement closed.
+- [x] Historical completed/cancelled contests are not backfilled or newly locked.
+- [ ] Execute the concurrent lock and join-vs-lock integration cases on real PostgreSQL (Docker/PostgreSQL unavailable in the implementation container).
+
+**Verify**
+- [x] `scripts/sec-fin006-economics-cutoff-lock.test.mjs` guards the durable authority and the 3-participant fixed-point reconciliation oracle.
+- [ ] `packages/db/economics_cutoff_postgres_test.go` provides trigger, idempotency, concurrency, database-time, irregular-rounding, and Go/SQL winner-policy parity coverage; execution awaits `TEST_DATABASE_URL`.
+- [ ] Real-PostgreSQL concurrency verification before production approval.
 
 #### LIFECYCLE-002 â€” Remove participant capacity limits
 **Subtasks**
@@ -466,5 +526,3 @@ Believed already fixed by code reading (`config.go` fails closed if `WAL_PERSIST
 ## Starting a Session
 
 Point your coding agent at this file and say: *"Follow `docs/codex/AI_AGENT_EXECUTION_ROADMAP.md`. Run the Continuity Protocol in Â§2, then resume the current task."* Attach a fresh GitHub PAT (Â§5) if code needs to be pushed this session.
-
-

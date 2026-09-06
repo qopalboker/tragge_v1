@@ -2,9 +2,9 @@
 
 **Status:** Approved terminology and version baseline
 
-**Catalog version:** `2026-08-09.1`
+**Catalog version:** `2026-09-06.1`
 
-**Date:** 2026-08-09
+**Date:** 2026-09-06
 
 **Scope:** Backend, frontend, SQL, contracts, tests, and technical documentation
 
@@ -92,7 +92,7 @@ permission to infer a number from a legacy artifact.
 | **Late Entry** | A permitted paid-contest join after start and before Join Cutoff when the Contest enables it. It charges the Base Entry Fee plus the Late-Entry Surcharge; it is not available for Free Practice. |
 | **Real Participant** | A real user registered in a Contest. Real Participant count controls paid start qualification, economics, Planned Winners, and Engine activation. System Participants are excluded. |
 | **Free Practice Contest** | A one-hour, zero-entry-fee Crypto or Forex Contest with no Prize Pool, prize table, or Official Ranking impact; maximum Trading QTY is 10 and entry after start is disabled. |
-| **System Participant** | The persistent practice system account's registration in a Free Practice Contest. It is not a real user, displays rank `0`, cannot join paid contests or place user-initiated orders, and is never prize/economics/winner/Official Ranking eligible. |
+| **System Participant** | The persistent practice system account's registration in a Free Practice Contest. It is not a real user, remains unranked, cannot join paid contests or place user-initiated orders, and is never prize/economics/winner/Official Ranking eligible. |
 | **Participant Capacity** | Product-level Participant Capacity does not exist. Fields such as `max_participants`, `participant_capacity`, or a UI capacity label are deprecated and must be removed. Operational circuit breakers are infrastructure safety limits and must be named as such, not exposed as Contest capacity. |
 | **Quantity (unqualified)** | An ambiguous term prohibited in domain fields and UI labels. Use Trading QTY for order/position reservation and Real Participant count for people. Never use `quantity` to mean both concepts. |
 | **Trading QTY** | The integer-only order/position resource owned by Trading Engine, conventionally represented as `qty`. Pending orders and active positions reserve it; total reserved QTY cannot exceed the Contest's maximum Trading QTY. It never means participant count. |
@@ -104,17 +104,22 @@ permission to infer a number from a legacy artifact.
 | **Base Entry Fee** | The USDT-denominated Contest entry amount before any Late-Entry Surcharge. For a regular paid entry, 20% is Platform Fee and 80% contributes to Prize Pool. |
 | **Late-Entry Surcharge** | The additional amount charged for Late Entry, equal to 10% of Base Entry Fee. It is entirely Platform revenue and contributes nothing to Prize Pool. |
 | **Platform Fee** | The Platform's 20% share of Base Entry Fee. The sole canonical base-fee field is `platform_fee_bps = 2000`; `commission_rate` is not a source of truth. |
-| **Prize Pool** | The locked, USDT-denominated amount fully distributable to eligible winners. Regular paid entries contribute 80% of Base Entry Fee; Late-Entry Surcharge contributes zero. Final prize payouts must equal it exactly in minor units. |
+| **Prize Pool** | One contest's identifiable ledger-backed financial allocation. Regular paid entries contribute 80% of Base Entry Fee; Late-Entry Surcharge contributes zero. At cutoff its custody returns to Super Admin Wallet while its immutable obligation remains recorded. |
 | **Gross Prize** | A deprecated ambiguous label with no separate canonical financial amount. Use Prize Pool for distributable winner funds and `gross_base_entry_total` for the sum of Base Entry Fees before fee split. Do not create a `gross_prize` source of truth. |
-| **Economics Lock** | The idempotent operation immediately after Join Cutoff that freezes Real Participant count, gross base entry total, Base Platform Fee, Late-Entry Surcharge revenue, net Prize Pool, Planned Winners, and all governing rule versions in `contest_economics_snapshot`. |
+| **Economics Lock** | The idempotent operation immediately after Join Cutoff that freezes historical Real Participant count, gross base entry total, Base Platform Fee, Late-Entry Surcharge revenue, net Prize Pool, Planned Winners, and governing rule versions in immutable `contest_economics_snapshot`. Authorized append-only adjustments may later produce effective economics without rewriting it. |
 | **Filled Trade** | A trade for which Trading Engine recorded an execution fill. An accepted, pending, canceled, or otherwise unfilled order is not a Filled Trade. At least one Filled Trade is required for prize eligibility. |
-| **Planned Winners** | The winner-slot count computed from all locked Real Participants under `tralent_v1`, before Filled Trade eligibility is applied. It is recorded in the economics snapshot. |
+| **Planned Winners** | The cutoff winner-slot count computed from all locked Real Participants under `tralent_v1`, before Filled Trade eligibility. It remains immutable history; settlement separately derives Effective Planned Winners after authorized adjustments. |
 | **Eligible Users** | Real Participants with at least one Filled Trade in the immutable settlement input. System Participants and no-trade users are excluded from the prize table. |
-| **Actual Winners** | `min(planned_winners, eligible_ranked_users)`. If fewer Eligible Users exist, occupied Reward Weights are preserved and renormalized so the entire Prize Pool is distributed. |
+| **Actual Winners** | Eligible ranked recipients occupying the effective planned rank schedule. Fewer eligible recipients do not renormalize shares; empty slots become Unawarded Prize. |
+| **Effective Participant Count** | Participant count at cutoff plus append-only authorized removal adjustments. It is distinct from immutable cutoff count and Eligible Ranked Participant Count. |
+| **Effective Prize Pool** | Immutable Prize Pool at cutoff plus append-only authorized financial adjustments. It is the settlement amount reconciled to winner liabilities/payouts plus Unawarded Prize. |
+| **Effective Planned Winners** | Winner-slot count recalculated from Effective Participant Count using the same locked distribution version. It does not overwrite Planned Winners at cutoff. |
+| **Rank 0** | State of a real active participant with no qualifying Filled Trade: unranked, absent from ranked Redis leaderboard, and prize-ineligible. A traded participant may have score zero and a positive rank. |
+| **Unawarded Prize** | Effective planned slot value without an eligible recipient. It becomes auditable retained balance without a second custody transfer; a failed payout owed to a valid winner is not Unawarded Prize. |
 | **Rank Band** | A versioned consecutive-rank grouping in `tralent_v1`. Ranks 1 through 10 are individual bands; later canonical ranges are grouped buckets whose share is divided equally among occupied ranks. |
 | **Reward Weight** | The prize-distribution weighting value named `reward_weight`, defined by policy as Real Participant count multiplied by individual prize share. It is part of `tralent_v1` allocation terminology and is not T-Score. |
 | **T-Score** | The canonical cumulative Contest performance/ranking score generated by Trading Engine from simulated trading results. T-Score must not name Reward Weight, prize share, participant count, or Platform revenue. |
-| **Official Ranking** | The ranking output that may affect recognized competitive results. Free Practice and System Participants have no Official Ranking impact. Rank `0` is a System Participant display convention, not an official competitive rank. |
+| **Official Ranking** | The ranking output that may affect recognized competitive results. Free Practice and System Participants have no Official Ranking impact. Rank `0` means a real participant has not yet produced qualifying fill evidence and is not in the ranked output. |
 | **Commission Rate** | Deprecated for Base Entry Fee economics. Existing `commission_rate` fields/read fallbacks migrate to Platform Fee in integer basis points, specifically `platform_fee_bps`. Unrelated provider/affiliate rates must be explicitly qualified and cannot substitute for Platform Fee. |
 
 ### Wallet, settlement, projection, and control terms
@@ -122,7 +127,9 @@ permission to infer a number from a legacy artifact.
 | Term | Canonical meaning |
 |---|---|
 | **Wallet** | Platform's internal USDT-denominated accounting view backed by the Double-Entry Ledger. It does not hold private keys or generate/manage blockchain deposit addresses. |
-| **Available Balance** | Confirmed Wallet value currently spendable by the user. Paid Contest join requires sufficient Available Balance. It is derived from authoritative ledger postings, not Redis. |
+| **Super Admin Wallet** | The stable system/platform identity holding main custody for user funds, returned locked Prize Pools, winner payouts, refunds, and withdrawals. It is controlled by authorized human Super Admin actors but is not any actor's personal Wallet. |
+| **Contest Fee Wallet** | The Super-Admin-only financial account receiving only valid base contest fees and late surcharges less authorized reversals. It excludes deposits, Prize Pools, payouts, withdrawals, and forfeitures. |
+| **Available Balance** | Confirmed user entitlement currently spendable from funds held in Super Admin Wallet custody. Paid Contest join requires sufficient Available Balance. It is derived from authoritative ledger postings, not Redis, and is distinct from the custody account itself. |
 | **Reserved Balance** | Wallet value moved out of Available Balance for a pending obligation, such as a withdrawal or other explicitly modeled hold. It is represented by ledger accounts/postings and is not independently mutable cache state. |
 | **Double-Entry Ledger** | Platform's immutable accounting record in which every transaction has balancing postings. Corrections use compensating entries; existing rows are never edited. |
 | **Settlement** | The sole owner of final Contest completion and payout: freeze, close/barrier, immutable Engine result, final eligible ranking, `tralent_v1` allocation, ledger posting, Prize Pool reconciliation, completion, and final events. |
@@ -162,8 +169,8 @@ permission to infer a number from a legacy artifact.
 | **Immutable Snapshot** | A versioned, non-overwritten record of all inputs/state needed for later settlement, audit, restore, or dispute reconstruction. Changes create new records or compensating history, never edits to the snapshot. |
 | **Replay** | Deterministic reprocessing of retained events, Engine WAL, or snapshots to reconstruct state. Inbox/event/command identities prevent replay from duplicating external effects. |
 | **KYC** | Manual identity verification reviewed by Support Admin or Super Admin, with extensible document evidence, status, reviewer, reason, and immutable audit timestamps. Completed KYC is mandatory for Withdrawal. |
-| **Deposit** | A gateway-confirmed addition to Wallet through Rial, USDT TRC20, or TRX methods. Platform credits the exact net confirmed amount through idempotent ledger posting after gateway verification. |
-| **Withdrawal** | A KYC-gated manual external USDT TRC20 transfer. Amount moves from Available Balance to Withdrawal Pending, Super Admin executes externally, records the transaction hash, and completes or rejects through audited ledger actions. |
+| **Deposit** | A gateway-confirmed custody inflow to Super Admin Wallet through Rial, USDT TRC20, or TRX methods, paired with exact idempotent user-entitlement ledger attribution. |
+| **Withdrawal** | A KYC-gated manual external USDT TRC20 transfer whose approval couples user-entitlement deduction, Super Admin Wallet custody reduction, transaction evidence, and audited completion/rejection. |
 | **Second Chance** | Removed product capability. It is not active, must not be implemented, restored, displayed, versioned, or used to alter late entry, fees, prizes, T-Score, Official Ranking, or Settlement. |
 
 ## Collision rules
@@ -195,10 +202,11 @@ being mistaken for an approved target.
 
 | Versioned item | Canonical current or planned identifier | Status | Source and responsible roadmap task |
 |---|---|---|---|
-| Fixed product-policy document | `2026-08-09.1` | current | Approved [fixed policy](FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md), including implemented SEC-007 Super Admin MFA and the [Payment4 retirement](payment4-retirement-policy-amendment.md) decision. |
-| Production roadmap | `2026-08-09.1` | current | Current [roadmap](../codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md), including completed `SEC-006` and implemented `SEC-007`. |
+| Fixed product-policy document | `2026-09-06.1` | in review; pending human approval | Proposed [fixed policy](FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md), including `contest_funds_v1`, SEC-007 Super Admin MFA, and the [Payment4 retirement](payment4-retirement-policy-amendment.md) decision. |
+| Production roadmap | `2026-09-06.1` | current | Current [roadmap](../codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md), including the ordered POLICY-001 financial implementation sequence. |
 | Target architecture ADR | `ADR-0001` | current | Accepted [target runtime architecture](../adr/0001-target-runtime-architecture.md). |
 | Contest policy ruleset | `2026-07-29.1` policy sections 4-7 and 10-12 | current policy; target implementation incomplete | `CON-001` through `CON-005`, `PRIZE-001` through `PRIZE-008`, and `DATA-005` implement the approved rules without inventing a parallel policy ID. |
+| Contest funds and participant lifecycle | `contest_funds_v1` | in review; pending human approval; implementation not started | Proposed fixed policy §20 and [POLICY-001 decision](../codex/decisions/POLICY-001-decision-log.md); implementation remains blocked until approval, then follows the ordered TREASURY-001 through FIN-CLEAN-001 sequence. |
 | Scheduler Template Version | Not assigned (planned); identity field `schedule_template_version_id` | planned | `CON-005` introduces immutable versions and stores their IDs on generated Contests. |
 | Symbol registry | Not assigned (planned); future family follows `{family}_vN` and immutable version ID rules | planned | The approved launch contents are in policy section 8; `MD-002` owns the registry/capability evidence and `CON-003` records the selected version in locked economics. |
 | Scoring / T-Score rules | Not assigned (planned) | planned | `DATA-001` defines fixed-point score types and `ENG-002` implements deterministic Engine scoring. No prize Reward Weight version may be reused as scoring version. |

@@ -41,6 +41,9 @@ const expectedTerms = [
   "Late-Entry Surcharge",
   "Platform Fee",
   "Prize Pool",
+  "Effective Participant Count",
+  "Effective Prize Pool",
+  "Effective Planned Winners",
   "Gross Prize",
   "Economics Lock",
   "Filled Trade",
@@ -51,6 +54,8 @@ const expectedTerms = [
   "Reward Weight",
   "T-Score",
   "Official Ranking",
+  "Rank 0",
+  "Unawarded Prize",
   "Commission Rate",
   "Wallet",
   "Available Balance",
@@ -75,6 +80,8 @@ const expectedTerms = [
   "Replay",
   "Support Admin",
   "Super Admin",
+  "Super Admin Wallet",
+  "Contest Fee Wallet",
   "Sensitive-Action Password Reauthentication",
   "Reauthentication Grant",
   "Super Admin MFA",
@@ -89,11 +96,14 @@ const expectedCatalogItems = [
   "Production roadmap",
   "Target architecture ADR",
   "Contest policy ruleset",
+  "Contest funds and participant lifecycle",
   "Scheduler Template Version",
   "Symbol registry",
   "Scoring / T-Score rules",
   "Prize distribution",
   "Money and rate representation",
+  "Canonical money minor units",
+  "Canonical price/rate/PnL/score",
   "Contest economics snapshot",
   "Legacy shared event schemas",
   "Market Data event contract",
@@ -202,8 +212,12 @@ test("collision rules preserve policy meanings", () => {
 
   assert.match(rows.get("Base Entry Fee"), /20%.*80%/);
   assert.match(rows.get("Late-Entry Surcharge"), /10%/);
-  assert.match(rows.get("Prize Pool"), /entirely.*distributed|fully distributable/);
-  assert.match(rows.get("Actual Winners"), /min\(planned_winners, eligible_ranked_users\)/);
+  assert.match(rows.get("Prize Pool"), /ledger-backed financial allocation/);
+  assert.match(rows.get("Prize Pool"), /custody returns to Super Admin Wallet/);
+  assert.match(rows.get("Actual Winners"), /effective planned rank schedule/);
+  assert.match(rows.get("Actual Winners"), /do not renormalize/);
+  assert.match(rows.get("Rank 0"), /qualifying Filled Trade/);
+  assert.match(rows.get("Contest Fee Wallet"), /Super-Admin-only/);
   assert.ok(glossary.includes("`tralent_v1`"));
 });
 
@@ -236,10 +250,12 @@ test("version catalog distinguishes current, planned, and legacy versions", () =
   const rows = versionRows(read(glossaryPath));
   assert.deepEqual([...rows.keys()].sort(), [...expectedCatalogItems].sort());
 
-  assert.equal(rows.get("Fixed product-policy document").identifier, "`2026-08-09.1`");
-  assert.equal(rows.get("Production roadmap").identifier, "`2026-08-09.1`");
+  assert.equal(rows.get("Fixed product-policy document").identifier, "`2026-09-06.1`");
+  assert.match(rows.get("Fixed product-policy document").status, /in review; pending human approval/);
+  assert.equal(rows.get("Production roadmap").identifier, "`2026-09-06.1`");
   assert.equal(rows.get("Target architecture ADR").identifier, "`ADR-0001`");
   assert.equal(rows.get("Prize distribution").identifier, "`tralent_v1`");
+  assert.match(rows.get("Contest funds and participant lifecycle").status, /in review; pending human approval/);
   assert.equal(rows.get("Market Data event contract").identifier, "`v2`");
   assert.equal(rows.get("Payment-provider retirement decision").identifier, "`PAYMENT4-RETIREMENT-2026-08-01`");
   assert.match(rows.get("Payment-provider retirement decision").status, /current product decision/);
@@ -329,6 +345,24 @@ test("financial terminology and contract README do not bless legacy floats", () 
   assert.ok(contractsReadme.includes("Legacy v1 prices"));
   assert.ok(contractsReadme.includes("Trading QTY"));
   assert.doesNotMatch(contractsReadme, /\*\*Prices\*\* are always float64/);
+});
+
+test("POLICY-001 preserves custody and effective-economics invariants", () => {
+  const policy = read(policyPath);
+  const catalog = versionRows(read(glossaryPath));
+  for (const required of [
+    "user entitlement debit = total successful contest entry charge",
+    "contest join Super Admin Wallet debit = Contest Prize Pool credit + Contest Fee Wallet credit",
+    "effective settlement economics",
+    "= immutable cutoff snapshot + authorized append-only adjustments",
+    "settlement effective Prize Pool = winner liabilities/payouts + unawarded residual",
+    "Contest Prize Pool custodial balance = 0",
+    "In review — POLICY-001 pending human approval/merge",
+  ]) {
+    assert.ok(policy.includes(required), `POLICY-001 missing ${required}`);
+  }
+  assert.match(catalog.get("Fixed product-policy document").status, /in review; pending human approval/);
+  assert.match(catalog.get("Contest funds and participant lifecycle").status, /in review; pending human approval/);
 });
 
 test("FND-003 Markdown has clean baseline style", () => {

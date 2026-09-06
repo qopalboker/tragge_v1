@@ -1,6 +1,6 @@
 # Tragge — Production Roadmap and Independent Codex Tasks
 
-**Roadmap version:** `2026-08-09.1`
+**Roadmap version:** `2026-09-06.1`
 **Current production decision:** **NO-GO**  
 **Execution goal:** fastest safe launch without preserving broken architecture or
 creating avoidable rework  
@@ -250,6 +250,34 @@ A date must not override a failed quality gate.
 3. Invite-only low-value paid contests.
 4. Capped public paid service.
 5. Gradual template and limit expansion.
+
+### 4.4 `contest_funds_v1` financial-policy implementation order
+
+Upon human approval and merge, POLICY-001 supersedes conflicting contest-funds,
+participant-removal, Rank-0, and missing-winner semantics with policy version
+`2026-09-06.1`. It remains in review and is a documentation gate only. Do not
+fold implementation into the policy PR; TREASURY-001 remains blocked until this
+approval and merge.
+
+Execute one task per branch/PR in this exact order:
+
+| Order | ID | Required outcome |
+|---:|---|---|
+| 1 | TREASURY-001 | Stable system Super Admin Wallet plus reconciled user-balance custody accounting |
+| 2 | FEE-WALLET-001 | Contest-fee-only wallet with Super-Admin-only inspection |
+| 3 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pools and exactly-once cutoff return |
+| 4 | LIFECYCLE-004 | No self-leave; audited non-destructive Super Admin removal/refund |
+| 5 | RANK-001 | Rank 0 and no Redis ranking until first qualifying fill |
+| 6 | ECON-ADJ-001 | Append-only adjustments and effective contest economics |
+| 7 | SETTLE-001 | Effective winner plan, no renormalization, residual accounting, Treasury payout |
+| 8 | WITHDRAW-001 | User entitlement and Super Admin custody debit coupled to approved payout |
+| 9 | FIN-CLEAN-001 | Remove superseded float, counter-only, and duplicate authority paths |
+| 10 | Linux certification | Real dependencies, migrations, concurrency, retries, crash windows, and full reconciliation |
+
+The canonical requirements, effective boundary, conflict inventory, and one
+open affiliate-policy question are in §20 of the fixed policy and
+`docs/codex/decisions/POLICY-001-decision-log.md`. P0-FIN-06 real-PostgreSQL
+runtime verification remains open and must be included in certification.
 
 ---
 
@@ -2119,11 +2147,14 @@ Required implementation:
 - Use locked real participant count for planned winners.
 - Eligible users require at least one Filled Trade.
 - Exclude system accounts and no-trade users from prize table.
-- If eligible count is lower, trim occupied weights and renormalize to 100%.
+- If eligible count is lower, preserve occupied planned shares without
+  renormalization; classify empty-slot shares as unawarded residual under
+  `contest_funds_v1`/SETTLE-001.
 
 Acceptance criteria:
 - No-trade and system users never receive a prize row.
-- All locked Prize Pool funds remain distributable to eligible winners.
+- Effective Prize Pool reconciles to winner liabilities/payouts plus unawarded
+  residual; a failed valid-winner payout remains a liability.
 - Eligibility input is immutable and auditable.
 
 Verification:
@@ -2167,7 +2198,8 @@ Required implementation:
 - Assign residual only where equality is not broken.
 
 Acceptance criteria:
-- Sum payouts equals Prize Pool for every generated property case.
+- Sum winner liabilities/payouts plus unawarded residual equals effective Prize
+  Pool for every generated property case.
 - Tie and band equality always holds.
 - No float-based comparison or O(n squared) tie loop remains.
 
@@ -2347,12 +2379,14 @@ Primary scope:
 
 Required implementation:
 - Post all winner payouts in one idempotent settlement operation or resumable batches with unique keys.
-- Reconcile locked Prize Pool liability to payout total.
+- Reconcile effective Prize Pool to valid winner liabilities/payouts plus
+  unawarded residual without renormalizing missing-recipient shares.
 - Record failed external notification separately from financial completion.
 - Provide retry without double credit.
 
 Acceptance criteria:
-- Prize Pool closes to zero liability after successful settlement.
+- Winner liabilities and unawarded residual fully explain effective Prize Pool
+  after successful settlement; failed valid-winner payouts remain liabilities.
 - A crash after any posting resumes safely.
 - Duplicate payout count is zero.
 
