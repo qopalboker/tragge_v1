@@ -24,6 +24,15 @@ import (
 	"time"
 )
 
+// SuperAdminTreasuryPurpose is the durable, system-owned custody account key.
+// It is deliberately not a user ID and cannot be supplied by API callers.
+const SuperAdminTreasuryPurpose = "super_admin_treasury"
+
+// TreasuryReconciliationForwardOnly marks the account as containing only
+// qualifying deposits posted after TREASURY-001. It is not a reconciled view of
+// historical platform custody.
+const TreasuryReconciliationForwardOnly = "forward_only_unreconciled"
+
 // WalletStatus represents the status of a wallet.
 type WalletStatus string
 

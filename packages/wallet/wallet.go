@@ -420,6 +420,122 @@ func (s *Service) CreditIdempotentWithReason(
 	return entry, nil
 }
 
+// PostConfirmedDeposit atomically records a qualifying external deposit as a
+// custody asset in the system-owned Super Admin Treasury and as an entitlement
+// in the beneficiary's user wallet. The caller owns the PostgreSQL transaction
+// and must commit it together with the payment-intent status transition.
+//
+// The payment intent is the shared operation identity. Replays return
+// alreadyPosted=true without an additional financial effect. The Treasury row
+// is locked first, serializing custody balance updates and concurrent replays;
+// the user wallet lock then composes with reservations and withdrawals.
+func (s *Service) PostConfirmedDeposit(
+	ctx context.Context,
+	tx TxExecutor,
+	userID string,
+	amountCents int64,
+	paymentIntentID string,
+) (alreadyPosted bool, err error) {
+	if amountCents <= 0 {
+		return false, errors.New("confirmed deposit amount must be positive")
+	}
+	if userID == "" {
+		return false, errors.New("confirmed deposit user ID is required")
+	}
+	if paymentIntentID == "" {
+		return false, errors.New("confirmed deposit payment intent ID is required")
+	}
+
+	var treasuryBalance int64
+	var reconciliationStatus string
+	err = tx.QueryRowContext(ctx,
+		`SELECT balance_cents, reconciliation_status
+		 FROM treasury_accounts
+		 WHERE purpose = $1
+		 FOR UPDATE`,
+		SuperAdminTreasuryPurpose,
+	).Scan(&treasuryBalance, &reconciliationStatus)
+	if err != nil {
+		return false, fmt.Errorf("failed to lock Super Admin Treasury: %w", err)
+	}
+	if reconciliationStatus != TreasuryReconciliationForwardOnly {
+		return false, fmt.Errorf("unexpected Super Admin Treasury reconciliation status %q", reconciliationStatus)
+	}
+
+	var existingUserID string
+	var existingAmount int64
+	err = tx.QueryRowContext(ctx,
+		`SELECT beneficiary_user_id, amount_cents
+		 FROM treasury_ledger
+		 WHERE payment_intent_id = $1`,
+		paymentIntentID,
+	).Scan(&existingUserID, &existingAmount)
+	if err == nil {
+		if existingUserID != userID || existingAmount != amountCents {
+			return false, errors.New("confirmed deposit replay does not match original custody posting")
+		}
+		idempotencyKey := "deposit:" + paymentIntentID
+		var entitlementExists bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT EXISTS (
+				SELECT 1 FROM wallet_ledger
+				WHERE idempotency_key = $1
+				  AND user_id = $2
+				  AND type = 'deposit'
+				  AND amount_cents = $3
+				  AND ref_type = 'payment_intent'
+				  AND ref_id = $4
+			)`,
+			idempotencyKey, userID, amountCents, paymentIntentID,
+		).Scan(&entitlementExists); err != nil {
+			return false, fmt.Errorf("failed to verify existing deposit entitlement: %w", err)
+		}
+		if !entitlementExists {
+			return false, errors.New("custody posting exists without matching user entitlement")
+		}
+		return true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, fmt.Errorf("failed to check existing custody posting: %w", err)
+	}
+
+	newTreasuryBalance := treasuryBalance + amountCents
+	if newTreasuryBalance < treasuryBalance {
+		return false, errors.New("Super Admin Treasury balance overflow")
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE treasury_accounts
+		 SET balance_cents = $1, updated_at = NOW()
+		 WHERE purpose = $2`,
+		newTreasuryBalance, SuperAdminTreasuryPurpose,
+	); err != nil {
+		return false, fmt.Errorf("failed to update Super Admin Treasury: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO treasury_ledger (
+			treasury_purpose, entry_kind, amount_cents,
+			balance_after_cents, payment_intent_id, beneficiary_user_id
+		) VALUES ($1, 'external_deposit', $2, $3, $4, $5)`,
+		SuperAdminTreasuryPurpose, amountCents, newTreasuryBalance, paymentIntentID, userID,
+	); err != nil {
+		return false, fmt.Errorf("failed to create Treasury custody entry: %w", err)
+	}
+
+	refType := LedgerRefTypePaymentIntent
+	idempotencyKey := "deposit:" + paymentIntentID
+	if _, err := s.CreditIdempotent(
+		ctx, tx, userID, amountCents, LedgerTypeDeposit,
+		&refType, &paymentIntentID, nil, idempotencyKey,
+	); err != nil {
+		if _, duplicate := err.(*DuplicateCreditError); duplicate {
+			return false, errors.New("user entitlement exists without matching Treasury custody posting")
+		}
+		return false, fmt.Errorf("failed to post deposit user entitlement: %w", err)
+	}
+
+	return false, nil
+}
+
 // createLedgerEntry creates a new ledger entry.
 func (s *Service) createLedgerEntry(
 	ctx context.Context,

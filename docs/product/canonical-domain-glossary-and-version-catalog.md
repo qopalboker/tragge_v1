@@ -202,11 +202,11 @@ being mistaken for an approved target.
 
 | Versioned item | Canonical current or planned identifier | Status | Source and responsible roadmap task |
 |---|---|---|---|
-| Fixed product-policy document | `2026-09-06.1` | in review; pending human approval | Proposed [fixed policy](FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md), including `contest_funds_v1`, SEC-007 Super Admin MFA, and the [Payment4 retirement](payment4-retirement-policy-amendment.md) decision. |
+| Fixed product-policy document | `2026-09-06.1` | approved; current policy | Current [fixed policy](FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md), including `contest_funds_v1`, SEC-007 Super Admin MFA, and the [Payment4 retirement](payment4-retirement-policy-amendment.md) decision. |
 | Production roadmap | `2026-09-06.1` | current | Current [roadmap](../codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md), including the ordered POLICY-001 financial implementation sequence. |
 | Target architecture ADR | `ADR-0001` | current | Accepted [target runtime architecture](../adr/0001-target-runtime-architecture.md). |
 | Contest policy ruleset | `2026-07-29.1` policy sections 4-7 and 10-12 | current policy; target implementation incomplete | `CON-001` through `CON-005`, `PRIZE-001` through `PRIZE-008`, and `DATA-005` implement the approved rules without inventing a parallel policy ID. |
-| Contest funds and participant lifecycle | `contest_funds_v1` | in review; pending human approval; implementation not started | Proposed fixed policy §20 and [POLICY-001 decision](../codex/decisions/POLICY-001-decision-log.md); implementation remains blocked until approval, then follows the ordered TREASURY-001 through FIN-CLEAN-001 sequence. |
+| Contest funds and participant lifecycle | `contest_funds_v1` | approved; current policy; implementation may proceed according to the ordered roadmap | Current fixed policy §20 and [POLICY-001 decision](../codex/decisions/POLICY-001-decision-log.md); implementation follows the ordered TREASURY-001 through FIN-CLEAN-001 sequence. |
 | Scheduler Template Version | Not assigned (planned); identity field `schedule_template_version_id` | planned | `CON-005` introduces immutable versions and stores their IDs on generated Contests. |
 | Symbol registry | Not assigned (planned); future family follows `{family}_vN` and immutable version ID rules | planned | The approved launch contents are in policy section 8; `MD-002` owns the registry/capability evidence and `CON-003` records the selected version in locked economics. |
 | Scoring / T-Score rules | Not assigned (planned) | planned | `DATA-001` defines fixed-point score types and `ENG-002` implements deterministic Engine scoring. No prize Reward Weight version may be reused as scoring version. |

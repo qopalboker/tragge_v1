@@ -47,6 +47,32 @@ cancelled, or reversed. Implementations must not infer the answer from contest-f
 or forfeiture treatment. Evidence is recorded in
 `docs/codex/decisions/POLICY-001-decision-log.md`.
 
+## TREASURY001-OPENING-BALANCE-CUTOVER
+| **ID** | TREASURY001-OPENING-BALANCE-CUTOVER |
+| **Severity** | P0 production cutover prerequisite |
+| **Found during** | TREASURY-001 (2026-09-06) |
+| **Status** | Open — requires controlled external-custody reconciliation |
+
+TREASURY-001 creates the canonical custody account at zero and records only
+qualifying external deposits posted after migration 0115. Existing user wallet
+balances are liabilities/entitlements and do not prove historical external
+custody. Before production activation, actual externally held custody must be
+reconciled against ledger liabilities and the cutover boundary must be recorded;
+no synthetic opening asset was created from application balances.
+
+## TREASURY001-ADMIN-FUNDED-CUSTODY-SEMANTICS
+| **ID** | TREASURY001-ADMIN-FUNDED-CUSTODY-SEMANTICS |
+| **Severity** | P0 financial-policy clarification before custody treatment |
+| **Found during** | TREASURY-001 (2026-09-06) |
+| **Status** | Open — source of funds is not durably classified |
+
+FIN-006 proves that Admin Panel top-ups are user entitlement assignments and
+must not count as gateway deposit revenue. Current records do not prove whether
+each top-up represents new external funds or a reclassification of custody that
+the platform already holds. TREASURY-001 therefore leaves `admin_funded_deposit`
+unchanged and does not increase Treasury custody for it; later policy/schema work
+must durably classify source-of-funds before any custody posting is added.
+
 ## INFRA002-POSTGRES-HA-OVERLAY
 | **ID** | INFRA002-POSTGRES-HA-OVERLAY |
 | **Severity** | P2 (desired-state gap) |

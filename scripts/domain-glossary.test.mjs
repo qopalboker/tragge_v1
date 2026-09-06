@@ -251,11 +251,11 @@ test("version catalog distinguishes current, planned, and legacy versions", () =
   assert.deepEqual([...rows.keys()].sort(), [...expectedCatalogItems].sort());
 
   assert.equal(rows.get("Fixed product-policy document").identifier, "`2026-09-06.1`");
-  assert.match(rows.get("Fixed product-policy document").status, /in review; pending human approval/);
+  assert.match(rows.get("Fixed product-policy document").status, /approved; current policy/);
   assert.equal(rows.get("Production roadmap").identifier, "`2026-09-06.1`");
   assert.equal(rows.get("Target architecture ADR").identifier, "`ADR-0001`");
   assert.equal(rows.get("Prize distribution").identifier, "`tralent_v1`");
-  assert.match(rows.get("Contest funds and participant lifecycle").status, /in review; pending human approval/);
+  assert.match(rows.get("Contest funds and participant lifecycle").status, /approved; current policy/);
   assert.equal(rows.get("Market Data event contract").identifier, "`v2`");
   assert.equal(rows.get("Payment-provider retirement decision").identifier, "`PAYMENT4-RETIREMENT-2026-08-01`");
   assert.match(rows.get("Payment-provider retirement decision").status, /current product decision/);
@@ -357,12 +357,12 @@ test("POLICY-001 preserves custody and effective-economics invariants", () => {
     "= immutable cutoff snapshot + authorized append-only adjustments",
     "settlement effective Prize Pool = winner liabilities/payouts + unawarded residual",
     "Contest Prize Pool custodial balance = 0",
-    "In review — POLICY-001 pending human approval/merge",
+    "Approved — current policy",
   ]) {
     assert.ok(policy.includes(required), `POLICY-001 missing ${required}`);
   }
-  assert.match(catalog.get("Fixed product-policy document").status, /in review; pending human approval/);
-  assert.match(catalog.get("Contest funds and participant lifecycle").status, /in review; pending human approval/);
+  assert.match(catalog.get("Fixed product-policy document").status, /approved; current policy/);
+  assert.match(catalog.get("Contest funds and participant lifecycle").status, /approved; current policy/);
 });
 
 test("FND-003 Markdown has clean baseline style", () => {

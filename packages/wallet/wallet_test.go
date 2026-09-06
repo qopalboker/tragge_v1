@@ -147,6 +147,43 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 		 ON wallet_ledger(idempotency_key)
 		 WHERE idempotency_key IS NOT NULL`,
 
+		// TREASURY-001 system custody account. It is deliberately separate from
+		// user-owned wallets and starts forward-only at zero.
+		`CREATE TABLE IF NOT EXISTS treasury_accounts (
+			purpose VARCHAR(64) PRIMARY KEY CHECK (purpose = 'super_admin_treasury'),
+			account_kind VARCHAR(32) NOT NULL CHECK (account_kind = 'system_custody'),
+			balance_cents BIGINT NOT NULL DEFAULT 0 CHECK (balance_cents >= 0),
+			currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+			reconciliation_status VARCHAR(32) NOT NULL CHECK (reconciliation_status = 'forward_only_unreconciled'),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS treasury_ledger (
+			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			treasury_purpose VARCHAR(64) NOT NULL REFERENCES treasury_accounts(purpose) ON DELETE RESTRICT,
+			entry_kind VARCHAR(32) NOT NULL CHECK (entry_kind = 'external_deposit'),
+			amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
+			balance_after_cents BIGINT NOT NULL CHECK (balance_after_cents >= 0),
+			payment_intent_id UUID NOT NULL UNIQUE,
+			beneficiary_user_id UUID NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE OR REPLACE FUNCTION prevent_treasury_account_delete()
+		RETURNS TRIGGER AS $$
+		BEGIN
+			RAISE EXCEPTION 'canonical Super Admin Treasury cannot be deleted';
+		END;
+		$$ LANGUAGE plpgsql`,
+		`DROP TRIGGER IF EXISTS treasury_account_not_deletable ON treasury_accounts`,
+		`CREATE TRIGGER treasury_account_not_deletable
+			BEFORE DELETE ON treasury_accounts
+			FOR EACH ROW EXECUTE FUNCTION prevent_treasury_account_delete()`,
+		`INSERT INTO treasury_accounts (
+			purpose, account_kind, balance_cents, currency, reconciliation_status
+		) VALUES (
+			'super_admin_treasury', 'system_custody', 0, 'USD', 'forward_only_unreconciled'
+		) ON CONFLICT (purpose) DO NOTHING`,
+
 		// Payout status enum
 		`DO $$ BEGIN
 			CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'succeeded', 'failed', 'cancelled', 'rejected');

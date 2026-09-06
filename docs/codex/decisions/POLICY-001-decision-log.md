@@ -2,7 +2,8 @@
 
 ## 2026-09-06 — `contest_funds_v1`
 
-**Status:** In review; pending human approval/merge; implementation not started.
+**Status:** Approved; current policy; implementation may proceed according to the
+ordered roadmap.
 **Canonical source:** `docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md` §20.
 **Effective boundary:** contests created after TREASURY-001 through
 FIN-CLEAN-001 are deployed and a PostgreSQL boundary is recorded. Historical

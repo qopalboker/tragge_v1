@@ -497,27 +497,18 @@ func (h *WebhookHandler) processWebhookEvent(ctx context.Context, event *provide
 	return nil
 }
 
-// creditWallet credits the user's wallet with the deposit amount using an
-// idempotency key for double-credit protection. It accepts an external
-// TxExecutor so the credit is part of the caller's transaction.
+// creditWallet posts both external custody and the user's entitlement through
+// the canonical wallet boundary. It accepts an external TxExecutor so both
+// financial effects remain part of the caller's transaction.
 func (h *WebhookHandler) creditWallet(ctx context.Context, tx wallet.TxExecutor, paymentIntentID, userID string, amountCents int64) error {
-	refType := wallet.LedgerRefTypePaymentIntent
-	idempotencyKey := fmt.Sprintf("deposit:%s", paymentIntentID)
-
-	_, err := h.walletService.CreditIdempotent(ctx, tx, userID, amountCents,
-		wallet.LedgerTypeDeposit, &refType, &paymentIntentID, nil, idempotencyKey)
+	alreadyPosted, err := h.walletService.PostConfirmedDeposit(ctx, tx, userID, amountCents, paymentIntentID)
 	if err != nil {
-		// DuplicateCreditError means the ledger entry already exists — this is
-		// a second layer of defense. Log it but treat as success.
-		if dupErr, ok := err.(*wallet.DuplicateCreditError); ok {
-			h.logger.Warn("Duplicate deposit credit detected via idempotency key",
-				zap.String("payment_intent_id", paymentIntentID),
-				zap.String("idempotency_key", dupErr.IdempotencyKey))
-			return nil
-		}
 		return err
 	}
-
+	if alreadyPosted {
+		h.logger.Warn("Duplicate confirmed deposit detected",
+			zap.String("payment_intent_id", paymentIntentID))
+	}
 	return nil
 }
 

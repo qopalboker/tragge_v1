@@ -212,22 +212,18 @@ func processStuckIntent(
 	// If payment succeeded, credit wallet within the same transaction
 	if statusResp.Status == providers.PaymentStatusFinished || statusResp.Status == providers.PaymentStatusConfirmed {
 		txWrapper := &wallet.TxAdapter{Tx: tx}
-		idempotencyKey := "deposit:" + pi.ID
-		refType := wallet.LedgerRefTypePaymentIntent
-		_, err := walletService.CreditIdempotent(ctx, txWrapper, pi.UserID, pi.AmountCents,
-			wallet.LedgerTypeDeposit, &refType, &pi.ID, nil, idempotencyKey)
+		alreadyPosted, err := walletService.PostConfirmedDeposit(ctx, txWrapper, pi.UserID, pi.AmountCents, pi.ID)
 		if err != nil {
-			if _, ok := err.(*wallet.DuplicateCreditError); ok {
-				logger.Warn("Duplicate deposit credit detected by inquiry worker",
-					zap.String("provider", providerName),
-					zap.String("payment_intent_id", pi.ID))
-			} else {
-				logger.Error("Failed to credit wallet from inquiry",
-					zap.Error(err),
-					zap.String("provider", providerName),
-					zap.String("payment_intent_id", pi.ID))
-				return
-			}
+			logger.Error("Failed to post confirmed deposit from inquiry",
+				zap.Error(err),
+				zap.String("provider", providerName),
+				zap.String("payment_intent_id", pi.ID))
+			return
+		}
+		if alreadyPosted {
+			logger.Warn("Duplicate confirmed deposit detected by inquiry worker",
+				zap.String("provider", providerName),
+				zap.String("payment_intent_id", pi.ID))
 		}
 		intentStatus = "succeeded"
 	}
