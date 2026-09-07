@@ -3,6 +3,8 @@ package wallet
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -88,6 +90,11 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS contests (
+			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			name TEXT NOT NULL
+		)`,
+
 		// Wallet status enum
 		`DO $$ BEGIN
 			CREATE TYPE wallet_status AS ENUM ('active', 'frozen', 'closed');
@@ -161,12 +168,15 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS treasury_ledger (
 			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 			treasury_purpose VARCHAR(64) NOT NULL REFERENCES treasury_accounts(purpose) ON DELETE RESTRICT,
-			entry_kind VARCHAR(32) NOT NULL CHECK (entry_kind = 'external_deposit'),
-			amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
+			entry_kind VARCHAR(32) NOT NULL,
+			amount_cents BIGINT NOT NULL,
 			balance_after_cents BIGINT NOT NULL CHECK (balance_after_cents >= 0),
 			payment_intent_id UUID NOT NULL UNIQUE,
 			beneficiary_user_id UUID NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			CONSTRAINT chk_treasury_external_deposit_kind CHECK (entry_kind = 'external_deposit'),
+			CONSTRAINT chk_treasury_ledger_amount_positive CHECK (amount_cents > 0),
+			CONSTRAINT chk_treasury_ledger_balance_non_negative CHECK (balance_after_cents >= 0)
 		)`,
 		`CREATE OR REPLACE FUNCTION prevent_treasury_account_delete()
 		RETURNS TRIGGER AS $$
@@ -219,6 +229,13 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, m); err != nil {
 			return err
 		}
+	}
+	feeMigration, err := os.ReadFile(filepath.Join("..", "db", "migrations", "0116_contest_fee_wallet.up.sql"))
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, string(feeMigration)); err != nil {
+		return err
 	}
 
 	return nil

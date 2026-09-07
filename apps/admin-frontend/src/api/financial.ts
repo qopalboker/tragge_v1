@@ -96,6 +96,30 @@ export interface TransactionListParams {
   limit?: number;
 }
 
+export interface ContestFeeEntry {
+  id: string;
+  kind: 'contest_base_fee' | 'contest_late_surcharge' | 'contest_fee_refund_reversal';
+  amount_cents: number;
+  contest_id: string;
+  participant_user_id: string;
+  admission_id: string;
+  policy_version: string;
+  created_at: string;
+}
+
+export interface ContestFeeWalletResponse {
+  wallet: {
+    balance_cents: number;
+    base_fee_total_cents: number;
+    late_surcharge_total_cents: number;
+    reversal_total_cents: number;
+    total_entries: number;
+    entries: ContestFeeEntry[];
+  };
+  page: number;
+  per_page: number;
+}
+
 // API functions
 export async function getFinancialSummary(params: FinancialSummaryParams = {}): Promise<FinancialSummaryResponse> {
   const searchParams = new URLSearchParams();
@@ -135,6 +159,13 @@ export async function getTransactions(params: TransactionListParams = {}): Promi
   const url = `/api/admin/financial/transactions${queryString ? `?${queryString}` : ''}`;
 
   const response = await api.get<TransactionListResponse>(url);
+  return response.data;
+}
+
+export async function getContestFeeWallet(page = 1, limit = 25): Promise<ContestFeeWalletResponse> {
+  const response = await api.get<ContestFeeWalletResponse>(
+    `/api/admin/financial/contest-fee-wallet?page=${page}&limit=${limit}`,
+  );
   return response.data;
 }
 

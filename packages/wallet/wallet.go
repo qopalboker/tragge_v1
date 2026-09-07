@@ -446,20 +446,9 @@ func (s *Service) PostConfirmedDeposit(
 		return false, errors.New("confirmed deposit payment intent ID is required")
 	}
 
-	var treasuryBalance int64
-	var reconciliationStatus string
-	err = tx.QueryRowContext(ctx,
-		`SELECT balance_cents, reconciliation_status
-		 FROM treasury_accounts
-		 WHERE purpose = $1
-		 FOR UPDATE`,
-		SuperAdminTreasuryPurpose,
-	).Scan(&treasuryBalance, &reconciliationStatus)
+	treasuryBalance, err := s.LockTreasuryForFinancialOperation(ctx, tx)
 	if err != nil {
-		return false, fmt.Errorf("failed to lock Super Admin Treasury: %w", err)
-	}
-	if reconciliationStatus != TreasuryReconciliationForwardOnly {
-		return false, fmt.Errorf("unexpected Super Admin Treasury reconciliation status %q", reconciliationStatus)
+		return false, err
 	}
 
 	var existingUserID string
@@ -534,6 +523,194 @@ func (s *Service) PostConfirmedDeposit(
 	}
 
 	return false, nil
+}
+
+// LockTreasuryForFinancialOperation establishes the canonical cross-flow
+// financial lock order. Callers that will also lock a user wallet must acquire
+// and hold Treasury first: Treasury -> user wallet -> purpose account.
+func (s *Service) LockTreasuryForFinancialOperation(ctx context.Context, tx TxExecutor) (int64, error) {
+	var treasuryBalance int64
+	var reconciliationStatus string
+	err := tx.QueryRowContext(ctx,
+		`SELECT balance_cents, reconciliation_status
+		 FROM treasury_accounts
+		 WHERE purpose = $1
+		 FOR UPDATE`,
+		SuperAdminTreasuryPurpose,
+	).Scan(&treasuryBalance, &reconciliationStatus)
+	if err != nil {
+		return 0, fmt.Errorf("failed to lock Super Admin Treasury: %w", err)
+	}
+	if reconciliationStatus != TreasuryReconciliationForwardOnly {
+		return 0, fmt.Errorf("unexpected Super Admin Treasury reconciliation status %q", reconciliationStatus)
+	}
+	return treasuryBalance, nil
+}
+
+// PostContestFee records one canonical fee allocation inside the caller's paid
+// admission transaction. The account row lock serializes balance changes; the
+// durable inflow (admission_id, entry_kind) index makes retries exactly-once.
+// alreadyPosted is true only when the existing entry exactly matches the retry.
+func (s *Service) PostContestFee(
+	ctx context.Context,
+	tx TxExecutor,
+	contestID, participantUserID string,
+	kind ContestFeeKind,
+	amountCents int64,
+	platformFeeBps int,
+) (alreadyPosted bool, err error) {
+	if kind != ContestFeeKindBase && kind != ContestFeeKindLateSurcharge {
+		return false, fmt.Errorf("unsupported contest fee kind %q", kind)
+	}
+	if amountCents <= 0 {
+		return false, errors.New("contest fee amount must be positive")
+	}
+	if platformFeeBps <= 0 || platformFeeBps > 10000 {
+		return false, errors.New("contest fee basis points out of range")
+	}
+	if _, err := uuid.Parse(contestID); err != nil {
+		return false, errors.New("invalid contest ID")
+	}
+	if _, err := uuid.Parse(participantUserID); err != nil {
+		return false, errors.New("invalid participant user ID")
+	}
+
+	admissionID := contestID + ":" + participantUserID
+	treasuryBalance, err := s.LockTreasuryForFinancialOperation(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+	var balance int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT balance_cents FROM contest_fee_accounts
+		WHERE purpose = $1 FOR UPDATE`, ContestFeeWalletPurpose).Scan(&balance); err != nil {
+		return false, fmt.Errorf("failed to lock Contest Fee Wallet: %w", err)
+	}
+
+	var existingAmount int64
+	var existingContest, existingUser, existingPolicy string
+	var existingBps int
+	feeErr := tx.QueryRowContext(ctx, `
+		SELECT amount_cents, contest_id::text, participant_user_id::text,
+		       policy_version, platform_fee_bps
+		FROM contest_fee_ledger
+		WHERE admission_id = $1 AND entry_kind = $2`, admissionID, kind).Scan(
+		&existingAmount, &existingContest, &existingUser, &existingPolicy, &existingBps,
+	)
+	var treasuryAmount int64
+	var treasuryContest, treasuryUser string
+	treasuryErr := tx.QueryRowContext(ctx, `
+		SELECT amount_cents, contest_id::text, participant_user_id::text
+		FROM treasury_ledger
+		WHERE entry_kind = 'contest_fee_allocation' AND admission_id = $1 AND fee_kind = $2`,
+		admissionID, kind,
+	).Scan(&treasuryAmount, &treasuryContest, &treasuryUser)
+	if feeErr != nil && !errors.Is(feeErr, sql.ErrNoRows) {
+		return false, fmt.Errorf("failed to check contest fee idempotency: %w", feeErr)
+	}
+	if treasuryErr != nil && !errors.Is(treasuryErr, sql.ErrNoRows) {
+		return false, fmt.Errorf("failed to check Treasury fee allocation: %w", treasuryErr)
+	}
+	if feeErr == nil && treasuryErr == nil {
+		if existingAmount != amountCents || existingContest != contestID ||
+			existingUser != participantUserID || existingPolicy != ContestFundsPolicyVersion ||
+			existingBps != platformFeeBps || treasuryAmount != -amountCents ||
+			treasuryContest != contestID || treasuryUser != participantUserID {
+			return false, errors.New("contest fee idempotency conflict")
+		}
+		return true, nil
+	}
+	if feeErr == nil || treasuryErr == nil {
+		return false, errors.New("contest fee posting has no matching financial counterpart")
+	}
+	if treasuryBalance < amountCents {
+		return false, &InsufficientBalanceError{Required: amountCents, Available: treasuryBalance}
+	}
+
+	newBalance := balance + amountCents
+	if newBalance < balance {
+		return false, errors.New("Contest Fee Wallet balance overflow")
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE treasury_accounts SET balance_cents = $1, updated_at = NOW()
+		WHERE purpose = $2`, treasuryBalance-amountCents, SuperAdminTreasuryPurpose); err != nil {
+		return false, fmt.Errorf("failed to allocate Treasury custody to Contest Fee Wallet: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE contest_fee_accounts SET balance_cents = $1, updated_at = NOW()
+		WHERE purpose = $2`, newBalance, ContestFeeWalletPurpose); err != nil {
+		return false, fmt.Errorf("failed to update Contest Fee Wallet: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO treasury_ledger (
+			treasury_purpose, entry_kind, amount_cents, balance_after_cents,
+			contest_id, participant_user_id, admission_id, fee_kind
+		) VALUES ($1,'contest_fee_allocation',$2,$3,$4,$5,$6,$7)`,
+		SuperAdminTreasuryPurpose, -amountCents, treasuryBalance-amountCents,
+		contestID, participantUserID, admissionID, kind,
+	); err != nil {
+		return false, fmt.Errorf("failed to append Treasury fee allocation: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO contest_fee_ledger (
+			fee_wallet_purpose, entry_kind, amount_cents, balance_after_cents,
+			contest_id, participant_user_id, admission_id, policy_version, platform_fee_bps
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		ContestFeeWalletPurpose, kind, amountCents, newBalance, contestID,
+		participantUserID, admissionID, ContestFundsPolicyVersion, platformFeeBps,
+	); err != nil {
+		return false, fmt.Errorf("failed to append contest fee ledger: %w", err)
+	}
+	return false, nil
+}
+
+// GetContestFeeWallet returns the balance and paginated append-only history.
+// Authorization belongs to the Admin BFF; this method accepts no account key.
+func (s *Service) GetContestFeeWallet(ctx context.Context, limit, offset int) (*ContestFeeWalletView, error) {
+	if limit < 1 || limit > 100 || offset < 0 {
+		return nil, errors.New("invalid contest fee wallet pagination")
+	}
+	view := &ContestFeeWalletView{}
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT a.balance_cents,
+		       COALESCE(SUM(l.amount_cents) FILTER (WHERE l.entry_kind = 'contest_base_fee'), 0),
+		       COALESCE(SUM(l.amount_cents) FILTER (WHERE l.entry_kind = 'contest_late_surcharge'), 0),
+		       COALESCE(SUM(l.amount_cents) FILTER (WHERE l.entry_kind = 'contest_fee_refund_reversal'), 0),
+		       COUNT(l.id)
+		FROM contest_fee_accounts a
+		LEFT JOIN contest_fee_ledger l ON l.fee_wallet_purpose = a.purpose
+		WHERE a.purpose = $1 GROUP BY a.purpose, a.balance_cents`, ContestFeeWalletPurpose,
+	).Scan(&view.BalanceCents, &view.BaseFeeTotalCents, &view.SurchargeTotalCents,
+		&view.ReversalTotalCents, &view.TotalEntries); err != nil {
+		return nil, fmt.Errorf("failed to read Contest Fee Wallet: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id::text, entry_kind, amount_cents, balance_after_cents,
+		       contest_id::text, participant_user_id::text, admission_id,
+		       policy_version, platform_fee_bps, original_entry_id::text, created_at
+		FROM contest_fee_ledger ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contest fee ledger: %w", err)
+	}
+	defer rows.Close()
+	view.Entries = make([]ContestFeeEntry, 0)
+	for rows.Next() {
+		var entry ContestFeeEntry
+		var original sql.NullString
+		if err := rows.Scan(&entry.ID, &entry.Kind, &entry.AmountCents, &entry.BalanceAfterCents,
+			&entry.ContestID, &entry.ParticipantUserID, &entry.AdmissionID,
+			&entry.PolicyVersion, &entry.PlatformFeeBps, &original, &entry.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan contest fee ledger: %w", err)
+		}
+		if original.Valid {
+			entry.OriginalEntryID = &original.String
+		}
+		view.Entries = append(view.Entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate contest fee ledger: %w", err)
+	}
+	return view, nil
 }
 
 // createLedgerEntry creates a new ledger entry.

@@ -33,6 +33,44 @@ const SuperAdminTreasuryPurpose = "super_admin_treasury"
 // historical platform custody.
 const TreasuryReconciliationForwardOnly = "forward_only_unreconciled"
 
+// ContestFeeWalletPurpose is the stable system identity for contest-fee
+// revenue. It is not a user ID and is never accepted from public input.
+const ContestFeeWalletPurpose = "contest_fee_wallet"
+
+// ContestFundsPolicyVersion records the economics policy used by fee postings.
+const ContestFundsPolicyVersion = "2026-09-06.1"
+
+// ContestFeeKind is deliberately closed to canonical contest-fee classes.
+type ContestFeeKind string
+
+const (
+	ContestFeeKindBase          ContestFeeKind = "contest_base_fee"
+	ContestFeeKindLateSurcharge ContestFeeKind = "contest_late_surcharge"
+)
+
+type ContestFeeEntry struct {
+	ID                string         `json:"id"`
+	Kind              ContestFeeKind `json:"kind"`
+	AmountCents       int64          `json:"amount_cents"`
+	BalanceAfterCents int64          `json:"balance_after_cents"`
+	ContestID         string         `json:"contest_id"`
+	ParticipantUserID string         `json:"participant_user_id"`
+	AdmissionID       string         `json:"admission_id"`
+	PolicyVersion     string         `json:"policy_version"`
+	PlatformFeeBps    int            `json:"platform_fee_bps"`
+	OriginalEntryID   *string        `json:"original_entry_id,omitempty"`
+	CreatedAt         time.Time      `json:"created_at"`
+}
+
+type ContestFeeWalletView struct {
+	BalanceCents        int64             `json:"balance_cents"`
+	BaseFeeTotalCents   int64             `json:"base_fee_total_cents"`
+	SurchargeTotalCents int64             `json:"late_surcharge_total_cents"`
+	ReversalTotalCents  int64             `json:"reversal_total_cents"`
+	TotalEntries        int               `json:"total_entries"`
+	Entries             []ContestFeeEntry `json:"entries"`
+}
+
 // WalletStatus represents the status of a wallet.
 type WalletStatus string
 

@@ -776,6 +776,13 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	// Charge total join amount (base + late surcharge when applicable).
 	charge := economics.ComputeJoinCharge(int64(entryFeeCents), feeBps, isLateJoin)
 	if charge.TotalCents > 0 {
+		// Canonical cross-flow order: Treasury -> user wallet -> Fee Wallet.
+		// This composes with confirmed deposits, which use the same first two locks.
+		if _, err = a.wallet.LockTreasuryForFinancialOperation(ctx, tx); err != nil {
+			a.log().Error("Failed to lock Treasury for paid join", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
 		_, err = a.wallet.DeductContestEntryFeeWithName(ctx, tx, userID, contestID, contestName, charge.TotalCents)
 		if err != nil {
 			if insufficientErr, ok := err.(*wallet.InsufficientBalanceError); ok {
@@ -846,6 +853,24 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 			a.log().Error("Failed to update contest prize pool and commission",
 				zap.Error(err),
 				zap.String("contest_id", contestID))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+	}
+
+	// Allocate canonical fee revenue in the same transaction as the user debit
+	// and admission. Prize custody remains the transitional contest counter until
+	// CONTEST-POOL-001; this boundary must not be bypassed by BFF-owned SQL.
+	if charge.PlatformCents > 0 {
+		if _, err = a.wallet.PostContestFee(ctx, tx, contestID, userID, wallet.ContestFeeKindBase, charge.PlatformCents, feeBps); err != nil {
+			a.log().Error("Failed to post contest base fee", zap.Error(err), zap.String("contest_id", contestID))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+	}
+	if charge.SurchargeCents > 0 {
+		if _, err = a.wallet.PostContestFee(ctx, tx, contestID, userID, wallet.ContestFeeKindLateSurcharge, charge.SurchargeCents, feeBps); err != nil {
+			a.log().Error("Failed to post contest late surcharge", zap.Error(err), zap.String("contest_id", contestID))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 			return
 		}
