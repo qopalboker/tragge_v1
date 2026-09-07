@@ -73,6 +73,22 @@ the platform already holds. TREASURY-001 therefore leaves `admin_funded_deposit`
 unchanged and does not increase Treasury custody for it; later policy/schema work
 must durably classify source-of-funds before any custody posting is added.
 
+## FEEWALLET001-JOIN-CUSTODY-CONSERVATION
+| **ID** | FEEWALLET001-JOIN-CUSTODY-CONSERVATION |
+|---|---|
+| **Severity** | P0 production activation prerequisite |
+| **Found during** | FEE-WALLET-001 (2026-09-07) |
+| **Status** | Open — ordered dependency on Treasury cutover and CONTEST-POOL-001 |
+
+FEE-WALLET-001 records each canonical fee allocation atomically as an equal
+Treasury debit and Fee Wallet credit. It cannot yet perform the remaining Prize
+Pool contribution movement because CONTEST-POOL-001 has not created that
+allocation account. TREASURY-001 is also explicitly forward-only and
+unreconciled, so paid joins now fail closed when recorded custody cannot cover
+their fee allocation. Production activation requires the controlled Treasury
+cutover plus the ordered Contest Pool implementation; no hidden fallback was
+added.
+
 ## INFRA002-POSTGRES-HA-OVERLAY
 | **ID** | INFRA002-POSTGRES-HA-OVERLAY |
 | **Severity** | P2 (desired-state gap) |

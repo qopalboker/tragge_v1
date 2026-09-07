@@ -12,9 +12,13 @@ import {
   type FinancialSummaryResponse,
   type Deposit,
   type Transaction,
+  getContestFeeWallet,
+  type ContestFeeWalletResponse,
 } from '@/api/financial';
+import { useAuthStore } from '@/stores/auth';
 
 const toast = useToast();
+const auth = useAuthStore();
 
 // State
 const loading = ref(true);
@@ -22,6 +26,7 @@ const error = ref<string | null>(null);
 const summary = ref<FinancialSummaryResponse | null>(null);
 const recentDeposits = ref<Deposit[]>([]);
 const recentWithdrawals = ref<Transaction[]>([]);
+const feeWallet = ref<ContestFeeWalletResponse['wallet'] | null>(null);
 
 // Date range state
 const dateRange = ref<'7d' | '30d' | '90d' | 'custom'>('30d');
@@ -112,6 +117,9 @@ async function fetchData(): Promise<void> {
     summary.value = summaryData;
     recentDeposits.value = depositsData.deposits || [];
     recentWithdrawals.value = withdrawalsData.transactions || [];
+	if (auth.isSuperAdmin) {
+		feeWallet.value = (await getContestFeeWallet()).wallet;
+	}
   } catch {
     error.value = t('financial.loadError');
     toast.error(t('financial.loadError'));
@@ -219,6 +227,22 @@ watch([dateRange, customFrom, customTo], () => {
 
     <!-- Content -->
     <template v-else-if="summary">
+      <section v-if="auth.isSuperAdmin && feeWallet" class="table-card fee-wallet">
+        <h2>Contest Fee Wallet</h2>
+        <div class="summary-cards">
+          <div class="summary-card"><span class="card-label">Balance</span><span class="card-value">{{ formatAmount(feeWallet.balance_cents) }}</span></div>
+          <div class="summary-card"><span class="card-label">Base fees</span><span class="card-value">{{ formatAmount(feeWallet.base_fee_total_cents) }}</span></div>
+          <div class="summary-card"><span class="card-label">Late surcharges</span><span class="card-value">{{ formatAmount(feeWallet.late_surcharge_total_cents) }}</span></div>
+          <div class="summary-card"><span class="card-label">Reversals</span><span class="card-value">{{ formatAmount(feeWallet.reversal_total_cents) }}</span></div>
+        </div>
+        <table v-if="feeWallet.entries.length" class="data-table">
+          <thead><tr><th>Type</th><th>Amount</th><th>Contest</th><th>Participant</th><th>Date</th></tr></thead>
+          <tbody><tr v-for="entry in feeWallet.entries" :key="entry.id">
+            <td>{{ entry.kind }}</td><td>{{ formatAmount(entry.amount_cents) }}</td>
+            <td>{{ entry.contest_id }}</td><td>{{ entry.participant_user_id }}</td><td>{{ formatDate(entry.created_at) }}</td>
+          </tr></tbody>
+        </table>
+      </section>
       <!-- Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card deposits">
