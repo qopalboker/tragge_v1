@@ -48,6 +48,8 @@ secrets:
     file: ./secrets/jwt_secret_admin.txt
   jwt_refresh_secret_admin:
     file: ./secrets/jwt_refresh_secret_admin.txt
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token.txt
   resend_api_key:
     file: ./secrets/resend_api_key.txt
   security_code_hash_secret:
@@ -366,7 +368,7 @@ services:
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       # Optional Mini App auth (server-side HMAC only). Leave empty for web-only local stacks.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_BOT_TOKEN_FILE: ${TELEGRAM_BOT_TOKEN_FILE:-}
+      TELEGRAM_BOT_TOKEN_FILE: ${TELEGRAM_BOT_TOKEN_FILE:-/run/secrets/telegram_bot_token}
       # payment-service: Jibit PPG
       JIBIT_API_KEY_FILE: /run/secrets/jibit_api_key
       JIBIT_SECRET_KEY_FILE: /run/secrets/jibit_secret_key
@@ -395,6 +397,7 @@ services:
       - jibit_kyc_secret_key
       - totp_encryption_key
       - admin_mfa_encryption_key
+      - telegram_bot_token
       - admin_mfa_recovery_pepper
       - nowpayments_api_key
       - nowpayments_ipn_secret

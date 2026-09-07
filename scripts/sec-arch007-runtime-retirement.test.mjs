@@ -50,9 +50,16 @@ test("ARCH-007 legacy wrappers labeled and not deleted", () => {
   assert.match(compose, /api-server:/);
   assert.match(compose, /trading-core:/);
   assert.match(compose, /worker:/);
-  assert.match(read("apps/api-server/main.go"), /DEPRECATED wrapper/);
-  assert.match(read("apps/trading-core/main.go"), /DEPRECATED wrapper/);
-  assert.match(read("apps/worker/main.go"), /DEPRECATED wrapper/);
+  // Deprecation notice may live in main.go or env_helpers.go (helper extraction).
+  const deprecatedBlob = (appDir) =>
+    ["main.go", "env_helpers.go"]
+      .map((name) => path.posix.join(appDir, name))
+      .filter((rel) => fs.existsSync(path.join(root, rel)))
+      .map((rel) => read(rel))
+      .join("\n");
+  assert.match(deprecatedBlob("apps/api-server"), /DEPRECATED wrapper/);
+  assert.match(deprecatedBlob("apps/trading-core"), /DEPRECATED wrapper/);
+  assert.match(deprecatedBlob("apps/worker"), /DEPRECATED wrapper/);
   assert.ok(fs.existsSync(path.join(root, "apps/api-server/main.go")));
   assert.ok(fs.existsSync(path.join(root, "apps/trading-core/main.go")));
   assert.ok(fs.existsSync(path.join(root, "apps/worker/main.go")));

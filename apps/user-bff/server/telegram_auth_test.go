@@ -80,7 +80,8 @@ func TestHandleTelegramMiniAppAuthRejectsUntrustedIdentityAndInvalidInitData(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{telegramVerifier: verifier}
+	app := &App{}
+	app.telegramVerifier.Store(verifier)
 
 	// Client-supplied telegram_id must never be trusted.
 	body, _ := json.Marshal(map[string]interface{}{
@@ -111,7 +112,7 @@ func TestHandleTelegramMiniAppAuthRejectsUntrustedIdentityAndInvalidInitData(t *
 	}
 
 	// Unavailable when verifier is nil.
-	app.telegramVerifier = nil
+	app.telegramVerifier.Store(nil)
 	body, _ = json.Marshal(map[string]string{"init_data": "x"})
 	req = httptest.NewRequest(http.MethodPost, "/api/user/auth/telegram", bytes.NewReader(body))
 	rec = httptest.NewRecorder()
@@ -132,7 +133,8 @@ func TestHandleTelegramMiniAppAuthRejectsExpiredSignedPayload(t *testing.T) {
 		"auth_date": fmt.Sprintf("%d", time.Now().Add(-2*time.Hour).Unix()),
 		"user":      string(userJSON),
 	})
-	app := &App{telegramVerifier: verifier}
+	app := &App{}
+	app.telegramVerifier.Store(verifier)
 	body, _ := json.Marshal(map[string]string{"init_data": initData})
 	req := httptest.NewRequest(http.MethodPost, "/api/user/auth/telegram", bytes.NewReader(body))
 	rec := httptest.NewRecorder()

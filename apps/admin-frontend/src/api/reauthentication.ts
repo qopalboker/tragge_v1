@@ -7,6 +7,7 @@ export const SensitiveAdminAction = {
   ElevatedUserCreate: 'user.create.elevated',
   AdminMFAReset: 'admin.mfa.reset',
   AdminMFAPolicy: 'admin.mfa.policy',
+  TelegramBotToken: 'settings.telegram_bot_token',
 } as const;
 
 export type SensitiveAdminAction = typeof SensitiveAdminAction[keyof typeof SensitiveAdminAction];

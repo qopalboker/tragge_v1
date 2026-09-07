@@ -53,6 +53,11 @@ test("CI-003 live protection (optional with token)", async (t) => {
     t.skip("main not yet protected — run scripts/ci003-apply-branch-protection.mjs after merge");
     return;
   }
+  // default GITHUB_TOKEN often lacks Administration read for branch protection (403).
+  if (res.status === 403) {
+    t.skip("GITHUB_TOKEN cannot read branch protection (need administration permission); static checks remain the Actions guarantee");
+    return;
+  }
   assert.equal(res.status, 200, await res.text());
   const data = await res.json();
   const contexts = data.required_status_checks?.contexts || data.required_status_checks?.checks?.map((c) => c.context) || [];

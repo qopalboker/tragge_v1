@@ -108,10 +108,10 @@ func TestTelegramMiniAppOnboardingFirstTimeAndReturningUser(t *testing.T) {
 		pool:             db.NewPoolFromDB(sqlDB),
 		redis:            redisClient,
 		auth:             userAuth,
-		telegramVerifier: verifier,
 		config:           &Config{},
 		obs:              &observability.Observability{Logger: logger},
 	}
+	app.telegramVerifier.Store(verifier)
 
 	const telegramID int64 = 9_001_234_567
 	tgUser := auth.TelegramUser{

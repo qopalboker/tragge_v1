@@ -821,6 +821,24 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 			app.auth.Middleware.RequirePermission("settings.manage"),
 			app.requireAdminMFAPolicySensitive(),
 		).Put("/mfa", app.handleSetAdminMFAPolicy)
+
+		// System Settings → Telegram bot token (encrypted). Writes require Super Admin + reauth.
+		r.With(app.auth.Middleware.RequirePermission("settings.manage")).Get("/telegram", app.handleGetTelegramSettings)
+		r.With(
+			app.auth.Middleware.RequireSuperAdmin,
+			app.auth.Middleware.RequirePermission("settings.manage"),
+			app.requireTelegramBotTokenSensitive(),
+		).Put("/telegram", app.handlePutTelegramSettings)
+		r.With(
+			app.auth.Middleware.RequireSuperAdmin,
+			app.auth.Middleware.RequirePermission("settings.manage"),
+			app.requireTelegramBotTokenSensitive(),
+		).Delete("/telegram", app.handleDeleteTelegramSettings)
+		r.With(
+			app.auth.Middleware.RequireSuperAdmin,
+			app.auth.Middleware.RequirePermission("settings.manage"),
+			app.requireTelegramBotTokenSensitive(),
+		).Post("/telegram/test", app.handleTestTelegramSettings)
 	})
 
 	// Email template management routes - permission-protected

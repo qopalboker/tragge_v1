@@ -23,6 +23,8 @@ const (
 	actionElevatedUserCreate    = "user.create.elevated"
 	actionAdminMFAReset         = "admin.mfa.reset"
 	actionAdminMFAPolicy        = "admin.mfa.policy"
+	//nolint:gosec // G101: sensitive-action id, not a credential value
+	actionTelegramBotToken = "settings.telegram_bot_token"
 )
 
 type sensitiveActionSpec struct {
@@ -36,6 +38,7 @@ var sensitiveAdminActions = map[string]sensitiveActionSpec{
 	actionElevatedUserCreate: {Permission: "users.edit"},
 	actionAdminMFAReset:      {Permission: "users.edit"},
 	actionAdminMFAPolicy:     {Permission: "settings.manage"},
+	actionTelegramBotToken:   {Permission: "settings.manage"},
 }
 
 type adminSecurityState struct {

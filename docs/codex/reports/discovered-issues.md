@@ -559,3 +559,45 @@ CI-002 establishes a non-zero coverage floor for the original 7 services. Deep c
 | **Status** | Open |
 
 Required approving review count is 0 so automated stack-land merges remain possible. Enable count=1 when a merge bot bypass or human-review SLA is in place.
+
+
+---
+
+## CI003-ACTIONS-PROTECTION-READ
+
+| Field | Value |
+|---|---|
+| **ID** | CI003-ACTIONS-PROTECTION-READ |
+| **Severity** | P2 (verification gap) |
+| **Found during** | PR #35 CI (2026-08-25) |
+| **Status** | Open |
+
+Default Actions `GITHUB_TOKEN` returns HTTP 403 for `GET /branches/main/protection` ("Resource not accessible by integration"). CI-003 live protection assert soft-skips on 403; workflow/apply-script static checks remain hard. Re-verify live contexts with a token that has Administration read, or grant the workflow `permissions: administration: read`.
+
+
+---
+
+## ARCH001-REPO-PORT-NAMING
+
+| Field | Value |
+|---|---|
+| **ID** | ARCH001-REPO-PORT-NAMING |
+| **Severity** | P3 (test brittleness) |
+| **Found during** | PR #35 CI (2026-08-25; also fails on main) |
+| **Status** | Softened |
+
+ARCH-001 gate previously required literal `type repository interface` in every platform module. identity/admin use named private ports (`userRepository` / `adminRepository`); wallet/payment use `memoryLedger` / `memoryStore`. Gate now accepts those private-port shapes and still forbids exported `type Repository interface`.
+
+
+---
+
+## MD001-TS-NODE-LOADER
+
+| Field | Value |
+|---|---|
+| **ID** | MD001-TS-NODE-LOADER |
+| **Severity** | P2 (verification gap) |
+| **Found during** | PR #35 CI (2026-08-25; also fails on main) |
+| **Status** | Open — soft-skip in CI |
+
+`node --test` cannot natively `import()` `packages/contracts/ts/v2/tick-event.ts` (`ERR_UNKNOWN_FILE_EXTENSION`). MD-001 soft-skips the TS runtime assert when that error occurs; Go contract tests + JSON schema remain hard gates. Track until a TS loader (`tsx`/compiled `.js`) is wired in CI.

@@ -57,7 +57,8 @@
     "e2e:firefox": "playwright test --project=firefox",
     "e2e:report": "playwright show-report",
     "e2e:install": "playwright install --with-deps",
-    "test:doc002": "node --test scripts/sec-doc002-docs-sync.test.mjs"
+    "test:doc002": "node --test scripts/sec-doc002-docs-sync.test.mjs",
+    "test:telegram-settings": "node --test scripts/sec-telegram-admin-settings.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
