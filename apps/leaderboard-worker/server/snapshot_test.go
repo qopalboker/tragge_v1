@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
 	"github.com/Parsaeffatravesh/tragge/packages/observability"
 	pkgredis "github.com/Parsaeffatravesh/tragge/packages/redis"
@@ -19,7 +21,7 @@ import (
 // newTestApp creates a minimal App suitable for snapshot/batch tests.
 // It wires up a real miniredis instance and a sharded worker so that
 // Redis operations in writeSnapshots / processPnLDeltaBatch work end-to-end.
-func newTestApp(t *testing.T, mr *miniredis.Miniredis, client *pkgredis.Client) *App {
+func newTestApp(t *testing.T, mr *miniredis.Miniredis, client *pkgredis.Client) (*App, sqlmock.Sqlmock) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -49,14 +51,29 @@ func newTestApp(t *testing.T, mr *miniredis.Miniredis, client *pkgredis.Client) 
 		Logger: &observability.Logger{Logger: zap.NewNop()},
 	}
 
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Close() })
 	return &App{
 		config:        cfg,
+		db:            database,
 		redis:         client,
 		obs:           obs,
 		shardedWorker: NewShardedLeaderboardWorker(client, shardedCfg),
 		dirtyContests: make(map[string]bool),
 		ctx:           ctx,
 		cancel:        cancel,
+	}, mock
+}
+
+func expectSnapshotTestEligible(mock sqlmock.Sqlmock, deltas []contracts.PnLDelta) {
+	for _, delta := range deltas {
+		mock.ExpectExec(regexp.QuoteMeta(rankActivationSQL)).WithArgs(delta.ContestID, delta.UserID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery(regexp.QuoteMeta(rankEligibilitySQL)).WithArgs(delta.ContestID, delta.UserID).
+			WillReturnRows(sqlmock.NewRows([]string{"eligible"}).AddRow(true))
 	}
 }
 
@@ -85,7 +102,7 @@ func TestDirtyContestTracking(t *testing.T) {
 	mr, client := setupTestRedis(t)
 	defer mr.Close()
 
-	app := newTestApp(t, mr, client)
+	app, _ := newTestApp(t, mr, client)
 
 	// Seed two contests into Redis
 	seedLeaderboard(t, client, "contest-A", map[string]float64{
@@ -175,7 +192,7 @@ func TestFullSnapshotFallback(t *testing.T) {
 	mr, client := setupTestRedis(t)
 	defer mr.Close()
 
-	app := newTestApp(t, mr, client)
+	app, _ := newTestApp(t, mr, client)
 
 	// Seed three contests into Redis
 	seedLeaderboard(t, client, "contest-X", map[string]float64{
@@ -253,7 +270,7 @@ func TestBatchPnLDeltaProcessing(t *testing.T) {
 	mr, client := setupTestRedis(t)
 	defer mr.Close()
 
-	app := newTestApp(t, mr, client)
+	app, mock := newTestApp(t, mr, client)
 
 	// Create 50 PnL deltas for the same contest with 50 different users
 	const contestID = "contest-batch"
@@ -261,15 +278,17 @@ func TestBatchPnLDeltaProcessing(t *testing.T) {
 	deltas := make([]contracts.PnLDelta, numDeltas)
 	for i := 0; i < numDeltas; i++ {
 		deltas[i] = contracts.PnLDelta{
-			UserID:          fmt.Sprintf("user-%d", i),
-			ContestID:       contestID,
-			DeltaScore:      float64(10 + i),
-			RealizedScore:   float64(100 + i*10),
-			UnrealizedScore: float64(50 + i*5),
-			TotalScore:      float64(150 + i*15),
-			Ts:              time.Now().UnixMilli(),
+			UserID:            fmt.Sprintf("user-%d", i),
+			ContestID:         contestID,
+			DeltaScore:        float64(10 + i),
+			RealizedScore:     float64(100 + i*10),
+			UnrealizedScore:   float64(50 + i*5),
+			TotalScore:        float64(150 + i*15),
+			TotalScoreDecimal: fmt.Sprintf("%d.00000000", 150+i*15),
+			Ts:                time.Now().UnixMilli(),
 		}
 	}
+	expectSnapshotTestEligible(mock, deltas)
 
 	// Process the batch — this should group all 50 deltas by contestID
 	// and call BatchUpdateScores once with a pipeline containing all 50 members
@@ -306,12 +325,14 @@ func TestBatchPnLDeltaProcessing(t *testing.T) {
 	duplicateDeltas := make([]contracts.PnLDelta, 10)
 	for i := 0; i < 10; i++ {
 		duplicateDeltas[i] = contracts.PnLDelta{
-			UserID:     "user-dup",
-			ContestID:  contestID,
-			TotalScore: float64((i + 1) * 100), // 100, 200, ..., 1000
-			Ts:         time.Now().UnixMilli(),
+			UserID:            "user-dup",
+			ContestID:         contestID,
+			TotalScore:        float64((i + 1) * 100), // 100, 200, ..., 1000
+			TotalScoreDecimal: fmt.Sprintf("%d.00000000", (i+1)*100),
+			Ts:                time.Now().UnixMilli(),
 		}
 	}
+	expectSnapshotTestEligible(mock, duplicateDeltas)
 
 	app.processPnLDeltaBatch(duplicateDeltas)
 
@@ -339,16 +360,17 @@ func TestBatchPnLDeltaMultiContest(t *testing.T) {
 	mr, client := setupTestRedis(t)
 	defer mr.Close()
 
-	app := newTestApp(t, mr, client)
+	app, mock := newTestApp(t, mr, client)
 
 	// Create deltas spread across 3 contests
 	deltas := []contracts.PnLDelta{
-		{UserID: "u1", ContestID: "c1", TotalScore: 100, Ts: time.Now().UnixMilli()},
-		{UserID: "u2", ContestID: "c2", TotalScore: 200, Ts: time.Now().UnixMilli()},
-		{UserID: "u3", ContestID: "c1", TotalScore: 300, Ts: time.Now().UnixMilli()},
-		{UserID: "u4", ContestID: "c3", TotalScore: 400, Ts: time.Now().UnixMilli()},
-		{UserID: "u5", ContestID: "c2", TotalScore: 500, Ts: time.Now().UnixMilli()},
+		{UserID: "u1", ContestID: "c1", TotalScore: 100, TotalScoreDecimal: "100.00000000", Ts: time.Now().UnixMilli()},
+		{UserID: "u2", ContestID: "c2", TotalScore: 200, TotalScoreDecimal: "200.00000000", Ts: time.Now().UnixMilli()},
+		{UserID: "u3", ContestID: "c1", TotalScore: 300, TotalScoreDecimal: "300.00000000", Ts: time.Now().UnixMilli()},
+		{UserID: "u4", ContestID: "c3", TotalScore: 400, TotalScoreDecimal: "400.00000000", Ts: time.Now().UnixMilli()},
+		{UserID: "u5", ContestID: "c2", TotalScore: 500, TotalScoreDecimal: "500.00000000", Ts: time.Now().UnixMilli()},
 	}
+	expectSnapshotTestEligible(mock, deltas)
 
 	app.processPnLDeltaBatch(deltas)
 
@@ -379,7 +401,7 @@ func TestMarkContestDirtyConcurrent(t *testing.T) {
 	mr, client := setupTestRedis(t)
 	defer mr.Close()
 
-	app := newTestApp(t, mr, client)
+	app, _ := newTestApp(t, mr, client)
 
 	const numGoroutines = 100
 	var wg sync.WaitGroup

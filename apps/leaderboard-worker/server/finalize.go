@@ -399,13 +399,15 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 		return err
 	}
 
-	// Get all participants from Redis leaderboard (use sharded worker for consistent key format)
-	count, err := a.shardedWorker.GetLeaderboardSize(ctx, contestID)
+	// Final membership and ordering come from durable PostgreSQL state. Redis is
+	// only a live projection and may be empty, stale, or unavailable after loss.
+	rankedUsers, err := a.prepareFinalRankings(ctx, contestID)
 	if err != nil {
-		a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to get leaderboard size: %v", err))
-		a.sendLeaderboardCalculationError(contestID, fmt.Errorf("failed to get leaderboard size: %w", err))
+		a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to prepare final rankings: %v", err))
+		a.sendLeaderboardCalculationError(contestID, fmt.Errorf("failed to prepare final rankings: %w", err))
 		return err
 	}
+	count := len(rankedUsers)
 
 	// Edge case: 0 participants — projection only. FIN-003: settlement owns
 	// status (cancel/complete) and must not race leaderboard Cancel/Complete.
@@ -418,14 +420,6 @@ func (a *App) finalizeContest(ctx context.Context, contestID string) error {
 				zap.Error(err))
 		}
 		return nil
-	}
-
-	// Get all ranked users (sharded worker decodes tiebreaker for clean DB writes)
-	rankedUsers, err := a.shardedWorker.GetTop(ctx, contestID, int(count))
-	if err != nil {
-		a.recordFinalizationError(ctx, contestID, fmt.Sprintf("failed to get ranked users: %v", err))
-		a.sendLeaderboardCalculationError(contestID, fmt.Errorf("failed to get ranked users: %w", err))
-		return err
 	}
 
 	// Edge case: 1 participant — write ranks only. FIN-003: settlement-service
@@ -1051,7 +1045,8 @@ func (a *App) writeFinalRanksAndPrizesInternal(
 	rankStmt, err := tx.PrepareContext(ctx,
 		`UPDATE contest_participants
 		 SET final_rank = $1, total_score = $2
-		 WHERE contest_id = $3 AND user_id = $4`,
+		 WHERE contest_id = $3 AND user_id = $4
+		   AND lifecycle_status = 'ACTIVE' AND has_started_trading = TRUE`,
 	)
 	if err != nil {
 		a.log().Error("Failed to prepare rank update statement",

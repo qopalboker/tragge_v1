@@ -269,6 +269,10 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 	// Initialize enhanced leaderboard manager with score breakdowns and usernames
 	app.enhancedLB = NewEnhancedLeaderboardManager(app.redis.Client(), app.db)
 	log.Info("Enhanced leaderboard manager initialized")
+	if err := app.rebuildLiveLeaderboards(ctx); err != nil {
+		log.Fatal("Failed to rebuild Redis leaderboards from PostgreSQL authority", zap.Error(err))
+	}
+	log.Info("Redis leaderboards rebuilt from PostgreSQL authority")
 
 	// Initialize notification service
 	app.initNotifications(ctx, log)
@@ -540,6 +544,19 @@ func (a *App) processPnLDeltaBatch(deltas []contracts.PnLDelta) {
 
 	for i := range deltas {
 		d := &deltas[i]
+		eligible, err := a.rankingEligible(a.ctx, *d)
+		if err != nil {
+			a.log().Error("Failed closed while resolving ranking eligibility",
+				zap.String("contest_id", d.ContestID), zap.String("user_id", d.UserID), zap.Error(err))
+			continue
+		}
+		if !eligible {
+			if err := a.removeLeaderboardProjection(a.ctx, d.ContestID, d.UserID); err != nil {
+				a.log().Error("Failed to remove ineligible leaderboard projection",
+					zap.String("contest_id", d.ContestID), zap.String("user_id", d.UserID), zap.Error(err))
+			}
+			continue
+		}
 		users, ok := contestUpdates[d.ContestID]
 		if !ok {
 			users = make(map[string]*userScore)
@@ -1025,9 +1042,22 @@ func (a *App) handleUserRank(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rank == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error": "user not found in leaderboard",
+		var participantExists bool
+		if err := a.db.QueryRowContext(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM contest_participants WHERE contest_id=$1 AND user_id=$2)`,
+			contestID, userID).Scan(&participantExists); err != nil {
+			a.log().Error("Failed to resolve rank-zero participant", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to retrieve user rank"})
+			return
+		}
+		if !participantExists {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "contest participant not found"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"contest_id": contestID, "user_id": userID, "rank": 0, "score": 0, "surrounding": []LeaderboardEntry{},
 		})
 		return
 	}
