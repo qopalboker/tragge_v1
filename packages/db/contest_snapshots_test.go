@@ -147,7 +147,6 @@ func TestContestSnapshotsPostgresCertification(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_, _ = database.Exec(`DELETE FROM contest_snapshots WHERE contest_id=$1`, contestID) // trigger intentionally rejects
-		_, _ = database.Exec(`DELETE FROM contest_participants WHERE contest_id=$1`, contestID)
 	})
 	users := make([]string, 3)
 	for i := range users {
@@ -226,7 +225,7 @@ func TestContestSnapshotsPostgresCertification(t *testing.T) {
 	if confirmed.ParticipantCount != 2 {
 		t.Fatalf("confirmation count=%d want 2", confirmed.ParticipantCount)
 	}
-	if _, err = database.ExecContext(ctx, `DELETE FROM contest_participants WHERE contest_id=$1 AND user_id=$2`, contestID, users[2]); err != nil {
+	if _, err = database.ExecContext(ctx, `UPDATE contest_participants SET lifecycle_status='REMOVED',lifecycle_changed_at=NOW() WHERE contest_id=$1 AND user_id=$2`, contestID, users[2]); err != nil {
 		t.Fatal(err)
 	}
 	again, err := EnsureContestConfirmed(ctx, database, contestID)

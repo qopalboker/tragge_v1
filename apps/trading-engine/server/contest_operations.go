@@ -221,7 +221,7 @@ func (a *App) forceCloseAllContestPositions(ctx context.Context, contestID, reas
 			_, err = tx.ExecContext(ctx, `
 				UPDATE contest_participants
 				SET qty_available = qty_available + $1, total_score = total_score + $2
-				WHERE contest_id = $3 AND user_id = $4
+				WHERE contest_id = $3 AND user_id = $4 AND lifecycle_status = 'ACTIVE'
 			`, pos.QtyUsed, realizedPnL, contestID, pos.UserID)
 			if err != nil {
 				return fmt.Errorf("update participant for position %s: %w", pos.PositionID, err)
@@ -517,7 +517,7 @@ func (a *App) cancelAllContestOrders(ctx context.Context, contestID string, reas
 			_, err := tx.ExecContext(ctx, `
 				UPDATE contest_participants
 				SET qty_available = qty_available + $1
-				WHERE contest_id = $2 AND user_id = $3
+				WHERE contest_id = $2 AND user_id = $3 AND lifecycle_status = 'ACTIVE'
 			`, qty, contestID, userID)
 			if err != nil {
 				return fmt.Errorf("return qty to user %s: %w", userID, err)
@@ -765,7 +765,7 @@ func batchQueryTotalScores(ctx context.Context, db *sql.DB, logger *zap.Logger, 
 		}
 
 		query := `SELECT user_id, total_score FROM contest_participants
-			WHERE contest_id = $1 AND user_id IN (` + strings.Join(placeholders, ",") + `)`
+			WHERE contest_id = $1 AND lifecycle_status = 'ACTIVE' AND user_id IN (` + strings.Join(placeholders, ",") + `)`
 
 		rows, err := db.QueryContext(ctx, query, args...)
 		if err != nil {

@@ -64,6 +64,15 @@ type ContestPrizePoolView struct {
 	Entries       []ContestPrizePoolEntry `json:"entries"`
 }
 
+type ContestReversal struct {
+	WalletOriginalID string
+	WalletReversalID string
+	WalletCents      int64
+	FeeCents         int64
+	PrizePoolCents   int64
+	TreasuryCents    int64
+}
+
 // ContestFeeKind is deliberately closed to canonical contest-fee classes.
 type ContestFeeKind string
 
