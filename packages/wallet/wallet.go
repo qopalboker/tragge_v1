@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -662,6 +663,122 @@ func (s *Service) PostContestFee(
 		return false, fmt.Errorf("failed to append contest fee ledger: %w", err)
 	}
 	return false, nil
+}
+
+// PostContestPrizeContribution moves one admission's validated PrizeCents from
+// Treasury into the contest's pre-provisioned pool. Callers must already hold
+// locks in contest -> Treasury -> user -> Fee Wallet order; this method takes
+// the final Prize Pool lock. Re-locking Treasury here is harmless for the
+// admission transaction and makes the controlled operation safe for retries.
+func (s *Service) PostContestPrizeContribution(ctx context.Context, tx TxExecutor, contestID, participantUserID string, amountCents int64) (bool, error) {
+	if amountCents <= 0 {
+		return false, errors.New("contest Prize Pool contribution must be positive")
+	}
+	if _, err := uuid.Parse(contestID); err != nil {
+		return false, errors.New("invalid contest ID")
+	}
+	if _, err := uuid.Parse(participantUserID); err != nil {
+		return false, errors.New("invalid participant user ID")
+	}
+	admissionID := contestID + ":" + participantUserID
+	key := "contest_pool:" + admissionID + ":v1"
+	treasuryBalance, err := s.LockTreasuryForFinancialOperation(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+
+	var accountID, policy string
+	var poolBalance int64
+	if err := tx.QueryRowContext(ctx, `SELECT a.id::text,a.balance_cents,c.funds_policy_version
+		FROM contests c JOIN contest_prize_pool_accounts a ON a.contest_id=c.id
+		WHERE c.id=$1 FOR UPDATE OF a`, contestID).Scan(&accountID, &poolBalance, &policy); err != nil {
+		return false, fmt.Errorf("failed to lock contest Prize Pool: %w", err)
+	}
+	if policy != ContestPrizePoolPolicyV1 {
+		return false, errors.New("contest is not on contest_funds_v1")
+	}
+
+	var existingAmount int64
+	var existingContest, existingAccount, existingUser, existingReference string
+	poolErr := tx.QueryRowContext(ctx, `SELECT amount_cents,contest_id::text,pool_account_id::text,
+		participant_user_id::text,reference_id FROM contest_prize_pool_ledger WHERE idempotency_key=$1`, key).
+		Scan(&existingAmount, &existingContest, &existingAccount, &existingUser, &existingReference)
+	var treasuryAmount int64
+	var treasuryContest, treasuryUser string
+	treasuryErr := tx.QueryRowContext(ctx, `SELECT amount_cents,contest_id::text,participant_user_id::text
+		FROM treasury_ledger WHERE entry_kind='contest_pool_allocation' AND admission_id=$1`, admissionID).
+		Scan(&treasuryAmount, &treasuryContest, &treasuryUser)
+	if poolErr != nil && !errors.Is(poolErr, sql.ErrNoRows) {
+		return false, fmt.Errorf("failed to check Prize Pool idempotency: %w", poolErr)
+	}
+	if treasuryErr != nil && !errors.Is(treasuryErr, sql.ErrNoRows) {
+		return false, fmt.Errorf("failed to check Treasury pool allocation: %w", treasuryErr)
+	}
+	if poolErr == nil && treasuryErr == nil {
+		if existingAmount != amountCents || existingContest != contestID || existingAccount != accountID ||
+			existingUser != participantUserID || existingReference != admissionID || treasuryAmount != -amountCents ||
+			treasuryContest != contestID || treasuryUser != participantUserID {
+			return false, errors.New("contest Prize Pool idempotency conflict")
+		}
+		return true, nil
+	}
+	if poolErr == nil || treasuryErr == nil {
+		return false, errors.New("contest Prize Pool posting has no matching financial counterpart")
+	}
+
+	if treasuryBalance < amountCents {
+		return false, &InsufficientBalanceError{Required: amountCents, Available: treasuryBalance}
+	}
+	if amountCents > math.MaxInt64-poolBalance {
+		return false, errors.New("contest Prize Pool balance overflow")
+	}
+	newPoolBalance := poolBalance + amountCents
+	if _, err := tx.ExecContext(ctx, `UPDATE treasury_accounts SET balance_cents=$1,updated_at=NOW() WHERE purpose=$2`, treasuryBalance-amountCents, SuperAdminTreasuryPurpose); err != nil {
+		return false, fmt.Errorf("failed to allocate Treasury custody to Prize Pool: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO treasury_ledger(treasury_purpose,entry_kind,amount_cents,balance_after_cents,
+		contest_id,participant_user_id,admission_id) VALUES($1,'contest_pool_allocation',$2,$3,$4,$5,$6)`,
+		SuperAdminTreasuryPurpose, -amountCents, treasuryBalance-amountCents, contestID, participantUserID, admissionID); err != nil {
+		return false, fmt.Errorf("failed to append Treasury pool allocation: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO contest_prize_pool_ledger(contest_id,pool_account_id,amount_cents,direction,
+		reason,reference_type,reference_id,participant_user_id,policy_version,balance_after_cents,idempotency_key)
+		VALUES($1,$2,$3,'credit','contest_admission','contest_admission',$4,$5,$6,$7,$8)`, contestID, accountID,
+		amountCents, admissionID, participantUserID, ContestPrizePoolPolicyV1, newPoolBalance, key); err != nil {
+		return false, fmt.Errorf("failed to append contest Prize Pool ledger: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE contest_prize_pool_accounts SET balance_cents=$1,updated_at=NOW() WHERE id=$2`, newPoolBalance, accountID); err != nil {
+		return false, fmt.Errorf("failed to update contest Prize Pool: %w", err)
+	}
+	return false, nil
+}
+
+func (s *Service) GetContestPrizePool(ctx context.Context, contestID string, limit, offset int) (*ContestPrizePoolView, error) {
+	if _, err := uuid.Parse(contestID); err != nil || limit < 1 || limit > 100 || offset < 0 {
+		return nil, errors.New("invalid contest Prize Pool request")
+	}
+	view := &ContestPrizePoolView{ContestID: contestID}
+	if err := s.db.QueryRowContext(ctx, `SELECT id::text,balance_cents,status,created_at FROM contest_prize_pool_accounts WHERE contest_id=$1`, contestID).
+		Scan(&view.PoolAccountID, &view.BalanceCents, &view.Status, &view.CreatedAt); err != nil {
+		return nil, fmt.Errorf("failed to read contest Prize Pool: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,amount_cents,direction,reason,reference_type,reference_id,
+		participant_user_id::text,idempotency_key,created_at FROM contest_prize_pool_ledger WHERE contest_id=$1
+		ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, contestID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contest Prize Pool ledger: %w", err)
+	}
+	defer rows.Close()
+	view.Entries = make([]ContestPrizePoolEntry, 0)
+	for rows.Next() {
+		var entry ContestPrizePoolEntry
+		if err := rows.Scan(&entry.ID, &entry.AmountCents, &entry.Direction, &entry.Reason, &entry.ReferenceType,
+			&entry.ReferenceID, &entry.ParticipantUserID, &entry.IdempotencyKey, &entry.CreatedAt); err != nil {
+			return nil, err
+		}
+		view.Entries = append(view.Entries, entry)
+	}
+	return view, rows.Err()
 }
 
 // GetContestFeeWallet returns the balance and paginated append-only history.

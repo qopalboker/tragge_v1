@@ -40,6 +40,30 @@ const ContestFeeWalletPurpose = "contest_fee_wallet"
 // ContestFundsPolicyVersion records the economics policy used by fee postings.
 const ContestFundsPolicyVersion = "2026-09-06.1"
 
+// ContestPrizePoolPolicyV1 is the explicit forward-only custody boundary.
+const ContestPrizePoolPolicyV1 = "contest_funds_v1"
+
+type ContestPrizePoolEntry struct {
+	ID                string    `json:"id"`
+	AmountCents       int64     `json:"amount_cents"`
+	Direction         string    `json:"direction"`
+	Reason            string    `json:"reason"`
+	ReferenceType     string    `json:"reference_type"`
+	ReferenceID       string    `json:"reference_id"`
+	ParticipantUserID string    `json:"participant_user_id"`
+	IdempotencyKey    string    `json:"idempotency_key"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+type ContestPrizePoolView struct {
+	ContestID     string                  `json:"contest_id"`
+	PoolAccountID string                  `json:"pool_account_id"`
+	BalanceCents  int64                   `json:"balance_cents"`
+	Status        string                  `json:"status"`
+	CreatedAt     time.Time               `json:"created_at"`
+	Entries       []ContestPrizePoolEntry `json:"entries"`
+}
+
 // ContestFeeKind is deliberately closed to canonical contest-fee classes.
 type ContestFeeKind string
 

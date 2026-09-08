@@ -128,8 +128,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | TREASURY-001 | Canonical Super Admin Wallet and user-balance custody model | 1 | P0 | Implemented — Cloud unit/static checks; real-PostgreSQL certification and opening-balance cutover pending |
 | FEE-WALLET-001 | Dedicated Super-Admin-only Contest Fee Wallet | 1 | P0 | Implemented — Cloud unit/static checks; real-PostgreSQL certification pending; Treasury/Prize Pool conservation remains ordered follow-up |
 | CONTEST-SNAPSHOT-001 | Immutable contest lifecycle and historical snapshot foundation | 1 | P0 | Implemented — Cloud verified; real PostgreSQL certification pending |
-| CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Unblocked / Not started |
-| LIFECYCLE-004 | Remove self-leave; audited Super Admin removal/refund | 2 | P0 | Not started |
+| CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Implemented — Cloud verified; PostgreSQL certification pending |
+| LIFECYCLE-004 | Remove self-leave; audited Super Admin removal/refund | 2 | P0 | Unblocked |
 | RANK-001 | Rank 0 until first qualifying fill | 2 | P0 | Not started |
 | ECON-ADJ-001 | Append-only effective economics adjustments | 2 | P0 | Not started |
 | SETTLE-001 | Effective winner plan, residual, and Treasury payout | 2 | P0 | Not started |

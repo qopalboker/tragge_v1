@@ -265,8 +265,8 @@ Execute one task per branch/PR in this exact order:
 | 1 | TREASURY-001 | Stable system Super Admin Wallet plus reconciled user-balance custody accounting |
 | 2 | FEE-WALLET-001 | Contest-fee-only wallet with Super-Admin-only inspection |
 | 3 | CONTEST-SNAPSHOT-001 | Immutable confirmation, economics-cutoff, start, and finalized-result lifecycle history; absorbs P0-FIN-06 cutoff snapshot |
-| 4 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pools and exactly-once cutoff return (unblocked, not started) |
-| 5 | LIFECYCLE-004 | No self-leave; audited non-destructive Super Admin removal/refund |
+| 4 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool custody (Implemented — Cloud verified; PostgreSQL certification pending) |
+| 5 | LIFECYCLE-004 | No self-leave; audited non-destructive Super Admin removal/refund (Unblocked) |
 | 6 | RANK-001 | Rank 0 and no Redis ranking until first qualifying fill |
 | 7 | ECON-ADJ-001 | Append-only adjustments and effective contest economics |
 | 8 | SETTLE-001 | Effective winner plan, no renormalization, residual accounting, Treasury payout |

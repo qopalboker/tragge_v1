@@ -70,6 +70,16 @@ func scanSnapshot(row interface{ Scan(...any) error }) (*Snapshot, error) {
 // EnsureContestConfirmed creates the one-way confirmation fact inside the caller's admission transaction.
 // The caller must already hold the contest row lock.
 func EnsureContestConfirmed(ctx context.Context, tx SnapshotDB, contestID string) (*Snapshot, error) {
+	var fundsPolicy string
+	var poolAccounts int
+	if err := tx.QueryRowContext(ctx, `SELECT c.funds_policy_version,
+		(SELECT COUNT(*) FROM contest_prize_pool_accounts a WHERE a.contest_id=c.id)
+		FROM contests c WHERE c.id=$1`, contestID).Scan(&fundsPolicy, &poolAccounts); err != nil {
+		return nil, err
+	}
+	if fundsPolicy == "contest_funds_v1" && poolAccounts != 1 {
+		return nil, fmt.Errorf("%w: modern contest %s has %d Prize Pool accounts", ErrSnapshotIntegrity, contestID, poolAccounts)
+	}
 	row := tx.QueryRowContext(ctx, `
 WITH facts AS (
  SELECT c.id, c.min_participants,
@@ -109,6 +119,7 @@ type cutoffContest struct {
 	feeBps           int
 	lateJoin         bool
 	policy           string
+	fundsPolicy      string
 }
 
 type cutoffParticipant struct {
@@ -126,12 +137,12 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 		SELECT c.starts_at,c.ends_at,s.event_at,
 		       COALESCE(c.locked_entry_fee_cents,c.entry_fee_cents),
 		       COALESCE(c.locked_platform_fee_bps,c.platform_fee_bps),
-		       COALESCE(c.late_join_enabled,TRUE),c.lifecycle_policy_version
+		       COALESCE(c.late_join_enabled,TRUE),c.lifecycle_policy_version,c.funds_policy_version
 		FROM contests c
 		LEFT JOIN contest_snapshots s ON s.contest_id=c.id AND s.snapshot_type='contest_started'
 		WHERE c.id=$1 FOR UPDATE OF c`, contestID).Scan(
 		&contest.startsAt, &contest.endsAt, &contest.startedAt, &contest.entryFee,
-		&contest.feeBps, &contest.lateJoin, &contest.policy,
+		&contest.feeBps, &contest.lateJoin, &contest.policy, &contest.fundsPolicy,
 	); err != nil {
 		return nil, err
 	}
@@ -192,6 +203,18 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 	if gross < 0 || baseFee < 0 || surcharge < 0 || pool < 0 || gross != baseFee+pool {
 		return nil, fmt.Errorf("%w: impossible cutoff reconciliation", ErrAdmissionEvidence)
 	}
+	if contest.fundsPolicy == "contest_funds_v1" {
+		var custodyBalance, ledgerBalance int64
+		var entryCount int
+		if err := tx.QueryRowContext(ctx, `SELECT a.balance_cents,COALESCE(SUM(l.amount_cents),0),COUNT(l.id)
+			FROM contest_prize_pool_accounts a LEFT JOIN contest_prize_pool_ledger l ON l.pool_account_id=a.id
+			WHERE a.contest_id=$1 GROUP BY a.id,a.balance_cents`, contestID).Scan(&custodyBalance, &ledgerBalance, &entryCount); err != nil {
+			return nil, fmt.Errorf("%w: missing Prize Pool custody: %v", ErrSnapshotIntegrity, err)
+		}
+		if err := validatePrizePoolReconciliation(custodyBalance, ledgerBalance, entryCount, pool, len(participants)); err != nil {
+			return nil, err
+		}
+	}
 	plannedWinners := prizedistribution.TralentV1PlannedWinners(len(participants))
 
 	row := tx.QueryRowContext(ctx, `
@@ -214,6 +237,14 @@ SELECT `+snapshotColumns+` FROM inserted UNION ALL SELECT `+snapshotColumns+` FR
 		return nil, ErrSnapshotNotReady
 	}
 	return s, err
+}
+
+func validatePrizePoolReconciliation(custodyBalance, ledgerBalance int64, entryCount int, expectedPool int64, expectedAdmissions int) error {
+	if custodyBalance != expectedPool || ledgerBalance != expectedPool || entryCount != expectedAdmissions {
+		return fmt.Errorf("%w: Prize Pool custody=%d ledger=%d entries=%d expected=%d/%d",
+			ErrSnapshotIntegrity, custodyBalance, ledgerBalance, entryCount, expectedPool, expectedAdmissions)
+	}
+	return nil
 }
 
 func validateAdmissionEvidence(ctx context.Context, tx SnapshotDB, contestID string, contest cutoffContest, participant cutoffParticipant) (int64, int64, error) {
