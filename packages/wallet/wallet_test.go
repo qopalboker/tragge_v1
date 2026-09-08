@@ -92,7 +92,28 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 
 		`CREATE TABLE IF NOT EXISTS contests (
 			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-			name TEXT NOT NULL
+			name TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'registration_open',
+			current_participants INT NOT NULL DEFAULT 0,
+			prize_pool_net_cents BIGINT NOT NULL DEFAULT 0,
+			commission_amount BIGINT NOT NULL DEFAULT 0,
+			cancelled_at TIMESTAMPTZ,
+			cancellation_reason TEXT
+		)`,
+		`CREATE TABLE contest_participants (
+			contest_id UUID NOT NULL REFERENCES contests(id), user_id UUID NOT NULL REFERENCES users(id),
+			qty_total BIGINT NOT NULL DEFAULT 0, qty_available BIGINT NOT NULL DEFAULT 0,
+			PRIMARY KEY(contest_id,user_id)
+		)`,
+		`CREATE TYPE contest_snapshot_type AS ENUM ('contest_confirmed','economics_cutoff','contest_started','contest_finished')`,
+		`CREATE TABLE contest_snapshots (
+			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), contest_id UUID NOT NULL REFERENCES contests(id),
+			snapshot_type contest_snapshot_type NOT NULL
+		)`,
+		`CREATE TABLE audit_logs (
+			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), actor_user_id UUID REFERENCES users(id),
+			action VARCHAR(100) NOT NULL,target_type VARCHAR(50) NOT NULL,target_id UUID,payload_json JSONB,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
 		// Wallet status enum
@@ -242,6 +263,20 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, string(poolMigration)); err != nil {
+		return err
+	}
+	lifecycleMigration, err := os.ReadFile(filepath.Join("..", "db", "migrations", "0119_lifecycle004_financial_reversal.up.sql"))
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, string(lifecycleMigration)); err != nil {
+		return err
+	}
+	auditMigration, err := os.ReadFile(filepath.Join("..", "db", "migrations", "0120_lifecycle004_immutable_audit.up.sql"))
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, string(auditMigration)); err != nil {
 		return err
 	}
 

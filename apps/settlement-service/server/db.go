@@ -400,7 +400,7 @@ func (a *App) getParticipants(ctx context.Context, contestID string) ([]Particip
 			0
 		) as realized_score, qty_total, qty_available
 		 FROM contest_participants cp
-		 WHERE contest_id = $1`,
+		 WHERE contest_id = $1 AND cp.lifecycle_status = 'ACTIVE'`,
 		contestID,
 	)
 	if err != nil {
@@ -640,7 +640,7 @@ func (a *App) getPrizeWinnerEmails(ctx context.Context, contestID string, userID
 func (a *App) getTotalParticipants(ctx context.Context, contestID string) (int, error) {
 	var count int
 	err := a.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM contest_participants WHERE contest_id = $1`,
+		`SELECT COUNT(*) FROM contest_participants WHERE contest_id = $1 AND lifecycle_status = 'ACTIVE'`,
 		contestID,
 	).Scan(&count)
 	return count, err

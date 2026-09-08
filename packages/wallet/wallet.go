@@ -526,9 +526,9 @@ func (s *Service) PostConfirmedDeposit(
 	return false, nil
 }
 
-// LockTreasuryForFinancialOperation establishes the canonical cross-flow
-// financial lock order. Callers that will also lock a user wallet must acquire
-// and hold Treasury first: Treasury -> user wallet -> purpose account.
+// LockTreasuryForFinancialOperation starts the financial-account portion of the
+// canonical order. Callers first lock contest and participant(s), then hold
+// Treasury before user wallet, Fee Wallet, and contest Prize Pool.
 func (s *Service) LockTreasuryForFinancialOperation(ctx context.Context, tx TxExecutor) (int64, error) {
 	var treasuryBalance int64
 	var reconciliationStatus string
@@ -751,6 +751,162 @@ func (s *Service) PostContestPrizeContribution(ctx context.Context, tx TxExecuto
 		return false, fmt.Errorf("failed to update contest Prize Pool: %w", err)
 	}
 	return false, nil
+}
+
+// ReverseContestAdmission appends an exact reversal of every canonical money
+// movement created by one paid admission. The caller owns the surrounding
+// transaction and must have already locked contest and participant rows.
+func (s *Service) ReverseContestAdmission(ctx context.Context, tx TxExecutor, contestID, participantUserID, actorID, lifecycleEventID, reason string) (*ContestReversal, error) {
+	for name, value := range map[string]string{"contest": contestID, "participant": participantUserID, "actor": actorID, "event": lifecycleEventID} {
+		if _, err := uuid.Parse(value); err != nil {
+			return nil, fmt.Errorf("invalid %s ID", name)
+		}
+	}
+	admissionID := contestID + ":" + participantUserID
+	result := &ContestReversal{}
+	var walletAmount int64
+	if err := tx.QueryRowContext(ctx, `SELECT id::text,amount_cents FROM wallet_ledger
+		WHERE user_id=$1 AND type='contest_entry' AND ref_type='contest' AND ref_id=$2
+		ORDER BY created_at DESC,id DESC LIMIT 1`, participantUserID, contestID).
+		Scan(&result.WalletOriginalID, &walletAmount); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return result, nil
+		}
+		return nil, fmt.Errorf("find original contest entry: %w", err)
+	}
+	if walletAmount >= 0 {
+		return nil, errors.New("original contest entry has invalid sign")
+	}
+
+	treasuryBalance, err := s.LockTreasuryForFinancialOperation(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	var walletBalance int64
+	if err := tx.QueryRowContext(ctx, `SELECT balance_cents FROM wallets WHERE user_id=$1 FOR UPDATE`, participantUserID).Scan(&walletBalance); err != nil {
+		return nil, fmt.Errorf("lock participant wallet: %w", err)
+	}
+	var feeBalance int64
+	if err := tx.QueryRowContext(ctx, `SELECT balance_cents FROM contest_fee_accounts WHERE purpose=$1 FOR UPDATE`, ContestFeeWalletPurpose).Scan(&feeBalance); err != nil {
+		return nil, fmt.Errorf("lock Contest Fee Wallet: %w", err)
+	}
+	var poolID string
+	var poolBalance int64
+	if err := tx.QueryRowContext(ctx, `SELECT id::text,balance_cents FROM contest_prize_pool_accounts WHERE contest_id=$1 FOR UPDATE`, contestID).Scan(&poolID, &poolBalance); err != nil {
+		return nil, fmt.Errorf("lock contest Prize Pool: %w", err)
+	}
+
+	refund := -walletAmount
+	newWalletBalance := walletBalance + refund
+	if newWalletBalance < walletBalance {
+		return nil, errors.New("wallet balance overflow")
+	}
+	result.WalletReversalID = uuid.NewString()
+	idempotencyKey := "contest_admission_reversal:" + admissionID
+	desc := "Reversal: " + reason
+	if _, err := tx.ExecContext(ctx, `UPDATE wallets SET balance_cents=$1,updated_at=NOW() WHERE user_id=$2`, newWalletBalance, participantUserID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO wallet_ledger(id,user_id,type,amount_cents,balance_after_cents,ref_type,ref_id,
+		description,reason_code,idempotency_key,original_transaction_id,lifecycle_event_id,reversal_actor_id)
+		VALUES($1,$2,'contest_refund',$3,$4,'contest',$5,$6,'CONTEST_REFUND_ADMIN',$7,$8,$9,$10)`,
+		result.WalletReversalID, participantUserID, refund, newWalletBalance, contestID, desc, idempotencyKey,
+		result.WalletOriginalID, lifecycleEventID, actorID); err != nil {
+		return nil, fmt.Errorf("append wallet reversal: %w", err)
+	}
+	result.WalletCents = refund
+
+	feeRows, err := tx.QueryContext(ctx, `SELECT f.id::text,f.amount_cents,f.entry_kind,f.policy_version,f.platform_fee_bps,
+		t.id::text FROM contest_fee_ledger f JOIN treasury_ledger t ON t.entry_kind='contest_fee_allocation'
+		AND t.admission_id=f.admission_id AND t.fee_kind=f.entry_kind
+		WHERE f.admission_id=$1 AND f.entry_kind IN ('contest_base_fee','contest_late_surcharge') ORDER BY f.entry_kind`, admissionID)
+	if err != nil {
+		return nil, fmt.Errorf("load original fee movements: %w", err)
+	}
+	type feeOriginal struct {
+		id           string
+		amount       int64
+		kind, policy string
+		bps          int
+		treasuryID   string
+	}
+	var fees []feeOriginal
+	for feeRows.Next() {
+		var f feeOriginal
+		if err := feeRows.Scan(&f.id, &f.amount, &f.kind, &f.policy, &f.bps, &f.treasuryID); err != nil {
+			feeRows.Close()
+			return nil, err
+		}
+		fees = append(fees, f)
+	}
+	if err := feeRows.Close(); err != nil {
+		return nil, err
+	}
+	for _, f := range fees {
+		if feeBalance < f.amount {
+			return nil, errors.New("Contest Fee Wallet reversal would be negative")
+		}
+		feeBalance -= f.amount
+		treasuryBalance += f.amount
+		if _, err := tx.ExecContext(ctx, `INSERT INTO contest_fee_ledger(fee_wallet_purpose,entry_kind,amount_cents,balance_after_cents,
+			contest_id,participant_user_id,admission_id,policy_version,platform_fee_bps,original_entry_id,lifecycle_event_id,reversal_actor_id)
+			VALUES($1,'contest_fee_refund_reversal',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, ContestFeeWalletPurpose, -f.amount, feeBalance,
+			contestID, participantUserID, admissionID, f.policy, f.bps, f.id, lifecycleEventID, actorID); err != nil {
+			return nil, fmt.Errorf("append fee reversal: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO treasury_ledger(treasury_purpose,entry_kind,amount_cents,balance_after_cents,
+			contest_id,participant_user_id,admission_id,fee_kind,original_ledger_id,lifecycle_event_id,reversal_actor_id)
+			VALUES($1,'treasury_reversal',$2,$3,$4,$5,$6,$7,$8,$9,$10)`, SuperAdminTreasuryPurpose, f.amount, treasuryBalance,
+			contestID, participantUserID, admissionID, f.kind, f.treasuryID, lifecycleEventID, actorID); err != nil {
+			return nil, fmt.Errorf("append Treasury fee reversal: %w", err)
+		}
+		result.FeeCents += f.amount
+		result.TreasuryCents += f.amount
+	}
+
+	var poolLedgerID, treasuryPoolID string
+	var poolAmount int64
+	poolErr := tx.QueryRowContext(ctx, `SELECT p.id::text,p.amount_cents,t.id::text FROM contest_prize_pool_ledger p
+		JOIN treasury_ledger t ON t.entry_kind='contest_pool_allocation' AND t.admission_id=p.reference_id
+		WHERE p.contest_id=$1 AND p.participant_user_id=$2 AND p.direction='credit'`, contestID, participantUserID).
+		Scan(&poolLedgerID, &poolAmount, &treasuryPoolID)
+	if poolErr != nil && !errors.Is(poolErr, sql.ErrNoRows) {
+		return nil, poolErr
+	}
+	if poolErr == nil {
+		if poolBalance < poolAmount {
+			return nil, errors.New("Prize Pool reversal would be negative")
+		}
+		poolBalance -= poolAmount
+		treasuryBalance += poolAmount
+		if _, err := tx.ExecContext(ctx, `INSERT INTO contest_prize_pool_ledger(contest_id,pool_account_id,amount_cents,direction,reason,
+			reference_type,reference_id,participant_user_id,policy_version,balance_after_cents,idempotency_key,original_ledger_id,lifecycle_event_id,reversal_actor_id)
+			VALUES($1,$2,$3,'debit','participant_refund','lifecycle_event',$4,$5,$6,$7,$8,$9,$4,$10)`, contestID, poolID, -poolAmount,
+			lifecycleEventID, participantUserID, ContestPrizePoolPolicyV1, poolBalance, "contest_pool_reversal:"+admissionID, poolLedgerID, actorID); err != nil {
+			return nil, fmt.Errorf("append Prize Pool reversal: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO treasury_ledger(treasury_purpose,entry_kind,amount_cents,balance_after_cents,
+			contest_id,participant_user_id,admission_id,original_ledger_id,lifecycle_event_id,reversal_actor_id)
+			VALUES($1,'treasury_reversal',$2,$3,$4,$5,$6,$7,$8,$9)`, SuperAdminTreasuryPurpose, poolAmount, treasuryBalance,
+			contestID, participantUserID, admissionID, treasuryPoolID, lifecycleEventID, actorID); err != nil {
+			return nil, fmt.Errorf("append Treasury pool reversal: %w", err)
+		}
+		result.PrizePoolCents = poolAmount
+		result.TreasuryCents += poolAmount
+	}
+	if result.FeeCents+result.PrizePoolCents != refund {
+		return nil, errors.New("contest admission does not reconcile to canonical allocations")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE contest_fee_accounts SET balance_cents=$1,updated_at=NOW() WHERE purpose=$2`, feeBalance, ContestFeeWalletPurpose); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE contest_prize_pool_accounts SET balance_cents=$1,updated_at=NOW() WHERE id=$2`, poolBalance, poolID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE treasury_accounts SET balance_cents=$1,updated_at=NOW() WHERE purpose=$2`, treasuryBalance, SuperAdminTreasuryPurpose); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) GetContestPrizePool(ctx context.Context, contestID string, limit, offset int) (*ContestPrizePoolView, error) {

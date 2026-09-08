@@ -428,7 +428,7 @@ func (a *App) handleGetContestParticipants(w http.ResponseWriter, r *http.Reques
 	rows, err := a.pool.Replica().QueryContext(ctx, `
 		SELECT cp.user_id, u.username, cp.joined_at,
 		       cp.qty_total, cp.qty_available, cp.total_score,
-		       cp.final_rank, cp.final_prize_cents
+		       cp.final_rank, cp.final_prize_cents, cp.lifecycle_status
 		FROM contest_participants cp
 		JOIN users u ON cp.user_id = u.id
 		WHERE cp.contest_id = $1
@@ -446,7 +446,7 @@ func (a *App) handleGetContestParticipants(w http.ResponseWriter, r *http.Reques
 		var p ParticipantEntry
 		if err := rows.Scan(&p.UserID, &p.Username, &p.JoinedAt,
 			&p.QtyTotal, &p.QtyAvailable, &p.TotalScore,
-			&p.FinalRank, &p.FinalPrizeCents); err != nil {
+			&p.FinalRank, &p.FinalPrizeCents, &p.LifecycleStatus); err != nil {
 			a.log().Error("Failed to scan participant row", zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 			return
@@ -765,40 +765,6 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charge total join amount (base + late surcharge when applicable).
-	charge := economics.ComputeJoinCharge(int64(entryFeeCents), feeBps, isLateJoin)
-	if charge.TotalCents > 0 {
-		// Canonical cross-flow order: Treasury -> user wallet -> Fee Wallet.
-		// This composes with confirmed deposits, which use the same first two locks.
-		if _, err = a.wallet.LockTreasuryForFinancialOperation(ctx, tx); err != nil {
-			a.log().Error("Failed to lock Treasury for paid join", zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-			return
-		}
-		_, err = a.wallet.DeductContestEntryFeeWithName(ctx, tx, userID, contestID, contestName, charge.TotalCents)
-		if err != nil {
-			if insufficientErr, ok := err.(*wallet.InsufficientBalanceError); ok {
-				writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
-					"error":     msg.InsufficientBalance,
-					"required":  insufficientErr.Required,
-					"available": insufficientErr.Available,
-				})
-				return
-			}
-			if _, ok := err.(*wallet.WalletFrozenError); ok {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": msg.WalletFrozen})
-				return
-			}
-			if _, ok := err.(*wallet.WalletNotFoundError); ok {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.WalletNotFound})
-				return
-			}
-			a.log().Error("Failed to deduct entry fee", zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-			return
-		}
-	}
-
 	// Insert participant
 	var joinedAt time.Time
 	var qtyAvailable int64
@@ -831,6 +797,40 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		a.log().Error("Failed to insert participant", zap.Error(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 		return
+	}
+
+	// Charge total join amount (base + late surcharge when applicable).
+	charge := economics.ComputeJoinCharge(int64(entryFeeCents), feeBps, isLateJoin)
+	if charge.TotalCents > 0 {
+		// Contest and the newly inserted participant are already locked. Continue
+		// the canonical order: Treasury -> user wallet -> Fee Wallet -> Prize Pool.
+		if _, err = a.wallet.LockTreasuryForFinancialOperation(ctx, tx); err != nil {
+			a.log().Error("Failed to lock Treasury for paid join", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+		_, err = a.wallet.DeductContestEntryFeeWithName(ctx, tx, userID, contestID, contestName, charge.TotalCents)
+		if err != nil {
+			if insufficientErr, ok := err.(*wallet.InsufficientBalanceError); ok {
+				writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+					"error":     msg.InsufficientBalance,
+					"required":  insufficientErr.Required,
+					"available": insufficientErr.Available,
+				})
+				return
+			}
+			if _, ok := err.(*wallet.WalletFrozenError); ok {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": msg.WalletFrozen})
+				return
+			}
+			if _, ok := err.(*wallet.WalletNotFoundError); ok {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.WalletNotFound})
+				return
+			}
+			a.log().Error("Failed to deduct entry fee", zap.Error(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
 	}
 
 	// Prize pool contribution uses base entry only (late surcharge is platform revenue).
@@ -964,193 +964,19 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleLeaveContest allows a user to leave a contest before it starts running.
-// It refunds the entry fee, reverses prize pool contribution, and cancels any
-// pending affiliate commission created when the user joined.
+// handleLeaveContest preserves the legacy route as an explicit business
+// rejection. Participant commitment is immutable after admission; only the
+// separately-authorized Super Admin removal and contest cancellation flows may
+// end active participation.
 func (a *App) handleLeaveContest(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID := auth.GetUserID(ctx)
 	contestID := chi.URLParam(r, "id")
-
 	if contestID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg.ContestIDRequired})
 		return
 	}
-
-	// Read contest details (use Primary since we're about to write)
-	var status string
-	var entryFeeCents int
-	var contestName string
-	var commissionRate float64
-	var platformFeeBps int
-	err := a.pool.Primary().QueryRowContext(ctx,
-		`SELECT status, entry_fee_cents, name, COALESCE(commission_rate, 0), COALESCE(platform_fee_bps, 0)
-		 FROM contests WHERE id = $1`, contestID,
-	).Scan(&status, &entryFeeCents, &contestName, &commissionRate, &platformFeeBps)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": msg.ContestNotFound})
-			return
-		}
-		a.log().Error("Failed to query contest for leave", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-
-	// Only allow leaving during registration_open phase
-	if status != contestStatusRegistrationOpen {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": msg.CannotLeaveRunning,
-		})
-		return
-	}
-
-	// Verify the user is actually a participant
-	var joinedAt time.Time
-	err = a.pool.Primary().QueryRowContext(ctx,
-		`SELECT joined_at FROM contest_participants WHERE contest_id = $1 AND user_id = $2`,
-		contestID, userID,
-	).Scan(&joinedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": msg.NotParticipant})
-			return
-		}
-		a.log().Error("Failed to check participation", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-
-	// Check for open positions — block leave if user has active trades
-	var openPositionCount int
-	err = a.pool.Primary().QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM positions WHERE contest_id = $1 AND user_id = $2 AND qty_open > 0`,
-		contestID, userID,
-	).Scan(&openPositionCount)
-	if err != nil {
-		a.log().Error("Failed to check open positions", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-	if openPositionCount > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": msg.CannotLeaveOpenPositions,
-		})
-		return
-	}
-
-	// Begin transaction
-	tx, err := a.pool.Begin(ctx)
-	if err != nil {
-		a.log().Error("Failed to begin leave transaction", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-	defer tx.Rollback()
-
-	// Lock the contest row to prevent race conditions
-	var txStatus string
-	err = tx.QueryRowContext(ctx,
-		`SELECT status FROM contests WHERE id = $1 FOR UPDATE`, contestID,
-	).Scan(&txStatus)
-	if err != nil {
-		a.log().Error("Failed to lock contest row for leave", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-	if txStatus != contestStatusRegistrationOpen {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": msg.CannotLeaveRunning,
-		})
-		return
-	}
-
-	// Remove participant
-	result, err := tx.ExecContext(ctx,
-		`DELETE FROM contest_participants WHERE contest_id = $1 AND user_id = $2`,
-		contestID, userID,
-	)
-	if err != nil {
-		a.log().Error("Failed to delete participant", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": msg.NotParticipant})
-		return
-	}
-
-	// Refund entry fee if this was a paid contest
-	if entryFeeCents > 0 {
-		_, err = a.wallet.RefundContestEntryFeeWithReason(ctx, tx, userID, contestID, contestName, int64(entryFeeCents), wallet.ReasonCodeContestRefundLeave)
-		if err != nil {
-			a.log().Error("Failed to refund entry fee on leave",
-				zap.Error(err),
-				zap.String("user_id", userID),
-				zap.String("contest_id", contestID))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-			return
-		}
-
-		// Reverse prize pool contribution and commission
-		effectiveCommissionRate := commissionRate
-		if effectiveCommissionRate <= 0 {
-			effectiveCommissionRate = 20.00 // default 20%
-		}
-		commissionCents := int64(math.Round(float64(entryFeeCents) * effectiveCommissionRate / 100.0))
-		prizeContributionCents := int64(entryFeeCents) - commissionCents
-
-		_, err = tx.ExecContext(ctx, `
-			UPDATE contests
-			SET prize_pool_net_cents = GREATEST(COALESCE(prize_pool_net_cents, 0) - $1, 0),
-			    commission_amount = GREATEST(commission_amount - $2, 0)
-			WHERE id = $3
-		`, prizeContributionCents, commissionCents, contestID)
-		if err != nil {
-			a.log().Error("Failed to reverse contest prize pool on leave",
-				zap.Error(err),
-				zap.String("contest_id", contestID))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-			return
-		}
-
-		// Reverse affiliate commission if applicable
-		a.reverseAffiliateCommission(ctx, tx, userID, contestID)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		a.log().Error("Failed to commit leave transaction", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-		return
-	}
-
-	// Broadcast real-time update (non-blocking)
-	effectiveFeeBps := ResolveEffectiveFeeBps(platformFeeBps, commissionRate)
-	infra.SafeGo(a.log(), "contest-update-left", func() {
-		a.publishContestUpdate(contestID, "participant_left", entryFeeCents, effectiveFeeBps)
-	})
-
-	infra.SafeGo(a.log(), "tournament-feed-update-left", func() {
-		feedCtx, feedCancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer feedCancel()
-		var feedParticipants int
-		var feedNetPool int64
-		if err := a.pool.Primary().QueryRowContext(feedCtx,
-			`SELECT current_participants, COALESCE(prize_pool_net_cents, 0) FROM contests WHERE id = $1`, contestID,
-		).Scan(&feedParticipants, &feedNetPool); err == nil {
-			a.publishTournamentFeedUpdate(contestID, "participant_left", feedParticipants, feedNetPool)
-		}
-	})
-
-	a.log().Info("User left contest",
-		zap.String("user_id", userID),
-		zap.String("contest_id", contestID),
-		zap.Int("entry_fee_cents", entryFeeCents))
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"message":    msg.LeftContestSuccess,
+	writeJSON(w, http.StatusForbidden, map[string]string{
+		"error":      "PARTICIPANT_COMMITMENT_IMMUTABLE",
+		"message":    "Participants cannot leave a contest after joining",
 		"contest_id": contestID,
 	})
 }

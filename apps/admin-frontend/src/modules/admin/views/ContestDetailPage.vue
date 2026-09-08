@@ -5,10 +5,13 @@ import { t } from '@/i18n';
 import { useToast } from '@/composables/useToast';
 import { api } from '@/api';
 import { getErrorMessage } from '@/utils/errorHandler';
+import { useAuthStore } from '@/stores/auth';
+import { buildRemovalRequest, removalDecisionIsValid, type RemovalReason } from '../removalPolicy';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const auth = useAuthStore();
 
 // --- Types ---
 
@@ -57,6 +60,7 @@ interface Participant {
   total_score: number;
   final_rank: number | null;
   final_prize_cents: number | null;
+  lifecycle_status: 'ACTIVE' | 'REMOVED' | 'REFUNDED' | 'DISQUALIFIED' | 'CANCELLED';
 }
 
 interface LeaderboardEntry {
@@ -114,6 +118,14 @@ const participantSortAsc = ref(false);
 const showRemoveModal = ref(false);
 const removeTarget = ref<Participant | null>(null);
 const removeLoading = ref(false);
+const removeReason = ref<RemovalReason | ''>('');
+const removeRefund = ref<boolean | null>(null);
+const removeAdminNote = ref('');
+const removeCanSubmit = computed(() => removalDecisionIsValid(
+  removeReason.value,
+  removeRefund.value,
+  removeAdminNote.value,
+));
 
 // Leaderboard state
 const leaderboardEntries = ref<LeaderboardEntry[]>([]);
@@ -597,6 +609,9 @@ function exportSelectedParticipants(): void {
 
 function openRemoveModal(participant: Participant): void {
   removeTarget.value = participant;
+  removeReason.value = '';
+  removeRefund.value = null;
+  removeAdminNote.value = '';
   showRemoveModal.value = true;
 }
 
@@ -604,20 +619,30 @@ function closeRemoveModal(): void {
   showRemoveModal.value = false;
   removeTarget.value = null;
   removeLoading.value = false;
+  removeReason.value = '';
+  removeRefund.value = null;
+  removeAdminNote.value = '';
 }
 
 async function confirmRemoveParticipant(): Promise<void> {
-  if (!removeTarget.value || !contest.value) return;
+  if (!removeTarget.value || !contest.value || !removeCanSubmit.value) return;
+  const removedUserId = removeTarget.value.user_id;
   removeLoading.value = true;
   try {
-    await api.delete(`/api/admin/contests/${contest.value.id}/participants/${removeTarget.value.user_id}`);
+    await api.delete(`/api/admin/contests/${contest.value.id}/participants/${removedUserId}`, {
+      data: buildRemovalRequest(removeReason.value, removeRefund.value, removeAdminNote.value),
+    });
     toast.success(t('contestDetail.participants.removeSuccess'));
-    // Remove from local state
-    participants.value = participants.value.filter(p => p.user_id !== removeTarget.value!.user_id);
-    selectedParticipants.value.delete(removeTarget.value.user_id);
+    selectedParticipants.value.delete(removedUserId);
     closeRemoveModal();
+    await Promise.all([fetchParticipants(), fetchContest(), fetchState()]);
   } catch (err) {
-    const message = getErrorMessage(err, t('contestDetail.participants.removeError'));
+    const code = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+    const message = code === 'ECONOMICS_CUTOFF_ADJUSTMENT_REQUIRED'
+      ? t('contestDetail.participants.cutoffError')
+      : code === 'PARTICIPANT_NOT_ACTIVE'
+        ? t('contestDetail.participants.notActiveError')
+        : getErrorMessage(err, t('contestDetail.participants.removeError'));
     toast.error(message);
     removeLoading.value = false;
   }
@@ -1052,8 +1077,8 @@ onUnmounted(() => {
                     <td>{{ formatQty(p.qty_total) }}</td>
                     <td>{{ formatQty(p.qty_available) }}</td>
                     <td>
-                      <span :class="['participant-status', p.qty_available > 0 ? 'status-active-badge' : 'status-inactive-badge']">
-                        {{ p.qty_available > 0 ? t('contestDetail.participants.active') : t('contestDetail.participants.inactive') }}
+                      <span :class="['participant-status', p.lifecycle_status === 'ACTIVE' ? 'status-active-badge' : 'status-inactive-badge']">
+                        {{ t(`contestDetail.participants.lifecycle.${p.lifecycle_status}`) }}
                       </span>
                     </td>
                     <td v-if="isContestCompleted">{{ formatDollars(p.total_score) }}</td>
@@ -1061,6 +1086,7 @@ onUnmounted(() => {
                     <td v-if="isContestCompleted">{{ p.final_prize_cents != null ? formatCurrency(p.final_prize_cents) : '\u2014' }}</td>
                     <td>
                       <button
+                        v-if="auth.isSuperAdmin && p.lifecycle_status === 'ACTIVE'"
                         class="btn btn-action-red btn-sm"
                         @click="openRemoveModal(p)"
                       >
@@ -1210,10 +1236,33 @@ onUnmounted(() => {
           </div>
           <div class="modal-body">
             <p class="modal-message">
-              {{ t('contestDetail.participants.removeMessage', { username: removeTarget?.username ?? '' }) }}
+              {{ t('contestDetail.participants.removeMessage', { username: removeTarget?.username ?? '', contest: contest?.name ?? '' }) }}
             </p>
-            <div v-if="contest && !contest.is_free" class="remove-refund-warning">
-              {{ t('contestDetail.participants.removeRefundWarning') }}
+            <label class="form-label" for="participant-removal-reason">{{ t('contestDetail.participants.removeReason') }}</label>
+            <select id="participant-removal-reason" v-model="removeReason" class="form-input" data-testid="participant-removal-reason" @change="removeRefund = null">
+              <option disabled value="">{{ t('contestDetail.participants.removeReasonPlaceholder') }}</option>
+              <option value="CHEATING">{{ t('contestDetail.participants.reasonCheating') }}</option>
+              <option value="USER_IMMEDIATE_EXIT_REQUEST">{{ t('contestDetail.participants.reasonImmediateExit') }}</option>
+              <option value="OTHER">{{ t('contestDetail.participants.reasonOther') }}</option>
+            </select>
+            <fieldset v-if="removeReason === 'CHEATING'" class="removal-refund-choice" data-testid="participant-removal-refund">
+              <legend class="form-label">{{ t('contestDetail.participants.refundQuestion') }}</legend>
+              <label><input v-model="removeRefund" type="radio" :value="true" /> {{ t('contestDetail.participants.refundYes') }}</label>
+              <label><input v-model="removeRefund" type="radio" :value="false" /> {{ t('contestDetail.participants.refundNo') }}</label>
+            </fieldset>
+            <div v-else-if="removeReason" class="remove-refund-warning">
+              {{ t('contestDetail.participants.mandatoryRefund') }}
+            </div>
+            <label class="form-label" for="participant-removal-note">
+              {{ t('contestDetail.participants.adminNote') }}
+              <span v-if="removeReason === 'OTHER'">*</span>
+            </label>
+            <textarea id="participant-removal-note" v-model="removeAdminNote" class="form-textarea" :placeholder="t('contestDetail.participants.adminNotePlaceholder')" data-testid="participant-removal-note"></textarea>
+            <div v-if="removeReason" class="removal-summary" data-testid="participant-removal-summary">
+              <strong>{{ t('contestDetail.participants.finalConfirmation') }}</strong>
+              <div>{{ t('contestDetail.participants.summaryReason') }}: {{ t(`contestDetail.participants.reason.${removeReason}`) }}</div>
+              <div>{{ t('contestDetail.participants.summaryRefund') }}: {{ removeReason === 'CHEATING' ? (removeRefund === null ? '—' : removeRefund ? t('contestDetail.participants.refundYes') : t('contestDetail.participants.refundNo')) : t('contestDetail.participants.fullRefund') }}</div>
+              <div>{{ t('contestDetail.participants.auditedWarning') }}</div>
             </div>
           </div>
           <div class="modal-footer">
@@ -1226,7 +1275,7 @@ onUnmounted(() => {
             </button>
             <button
               class="btn btn-action-red"
-              :disabled="removeLoading"
+              :disabled="removeLoading || !removeCanSubmit"
               @click="confirmRemoveParticipant"
             >
               {{ removeLoading ? t('common.loading') : t('contestDetail.participants.remove') }}
@@ -2021,6 +2070,8 @@ onUnmounted(() => {
   width: 100%;
   max-width: 480px;
   margin: var(--spacing-md);
+  max-height: calc(100vh - 2 * var(--spacing-md));
+  overflow-y: auto;
 }
 
 .modal-header {
@@ -2063,6 +2114,25 @@ onUnmounted(() => {
 
 .form-group {
   margin-top: var(--spacing-md);
+}
+
+.removal-refund-choice {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin: var(--spacing-md) 0;
+  padding: 0;
+  border: 0;
+}
+
+.removal-summary {
+  display: grid;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .form-label {

@@ -440,7 +440,7 @@ func (sr *StateReloader) reloadContest(ctx context.Context, contestID string) er
 	participantRows, err := sr.db.QueryContext(ctx, `
 		SELECT user_id, qty_total, qty_available, total_score
 		FROM contest_participants
-		WHERE contest_id = $1
+		WHERE contest_id = $1 AND lifecycle_status = 'ACTIVE'
 	`, contestID)
 	if err != nil {
 		return fmt.Errorf("query participants: %w", err)

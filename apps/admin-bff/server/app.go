@@ -637,15 +637,15 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 				r.With(app.auth.Middleware.RequirePermission("contests.create")).Delete("/", app.handleDeleteContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.create")).Post("/symbols", app.handleAddContestSymbols)
 
-				// Participant management - require contests.manage
-				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Delete("/participants/{user_id}", app.handleRemoveContestParticipant)
+				// Financial participant lifecycle changes are Super Admin-only.
+				r.With(app.auth.Middleware.RequireSuperAdmin).Delete("/participants/{user_id}", app.handleRemoveContestParticipant)
 
 				// Lifecycle operations - require contests.manage
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/freeze", app.handlePauseContest) // Freeze reuses pause handler (state machine validated)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/publish", app.handlePublishContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/start", app.handleStartContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/end", app.handleEndContest)
-				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/cancel", app.handleCancelContest)
+				r.With(app.auth.Middleware.RequireSuperAdmin).Post("/cancel", app.handleCancelContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/pause", app.handlePauseContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/resume", app.handleResumeContest)
 				r.With(app.auth.Middleware.RequirePermission("contests.manage")).Post("/close-registration", app.handleCloseRegistration)

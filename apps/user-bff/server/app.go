@@ -1945,6 +1945,7 @@ type ParticipantEntry struct {
 	TotalScore      float64   `json:"total_score"`
 	FinalRank       *int      `json:"final_rank"`
 	FinalPrizeCents *int      `json:"final_prize_cents"`
+	LifecycleStatus string    `json:"lifecycle_status"`
 }
 
 // ContestParticipantsResponse is the response for listing contest participants.

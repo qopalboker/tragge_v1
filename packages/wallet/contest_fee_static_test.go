@@ -86,6 +86,7 @@ func TestContestAdmissionCanonicalLockOrderAndMigrationGate(t *testing.T) {
 	transaction := join[begin : begin+commit]
 	ordered := []string{
 		"FROM contests WHERE id = $1 FOR UPDATE",
+		"INSERT INTO contest_participants",
 		"a.wallet.LockTreasuryForFinancialOperation(",
 		"a.wallet.DeductContestEntryFeeWithName(",
 		"a.wallet.PostContestFee(",
@@ -106,5 +107,29 @@ func TestContestAdmissionCanonicalLockOrderAndMigrationGate(t *testing.T) {
 		if !strings.Contains(transaction, required) {
 			t.Fatalf("admission migration gate missing %q", required)
 		}
+	}
+}
+
+func TestLIFECYCLE004ReversalCanonicalLockOrder(t *testing.T) {
+	_, file, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(file)
+	walletRaw, err := os.ReadFile(filepath.Join(dir, "wallet.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(walletRaw)
+	start := strings.Index(source, "func (s *Service) ReverseContestAdmission(")
+	if start < 0 {
+		t.Fatal("reversal boundary missing")
+	}
+	body := source[start:]
+	ordered := []string{"s.LockTreasuryForFinancialOperation(", "FROM wallets", "FROM contest_fee_accounts", "FROM contest_prize_pool_accounts"}
+	previous := -1
+	for _, token := range ordered {
+		at := strings.Index(body, token)
+		if at < 0 || at <= previous {
+			t.Fatalf("reversal lock order regressed at %q", token)
+		}
+		previous = at
 	}
 }

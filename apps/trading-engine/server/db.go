@@ -68,7 +68,7 @@ func GetParticipant(ctx context.Context, db *sql.DB, contestID, userID string) (
 	row := db.QueryRowContext(ctx, `
 		SELECT contest_id, user_id, qty_total, qty_available, total_score
 		FROM contest_participants
-		WHERE contest_id = $1 AND user_id = $2
+		WHERE contest_id = $1 AND user_id = $2 AND lifecycle_status = 'ACTIVE'
 	`, contestID, userID)
 
 	p := &DBParticipant{}
@@ -86,7 +86,7 @@ func GetParticipant(ctx context.Context, db *sql.DB, contestID, userID string) (
 func GetContestParticipantCount(ctx context.Context, db *sql.DB, contestID string) (int, error) {
 	var count int
 	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM contest_participants WHERE contest_id = $1
+		SELECT COUNT(*) FROM contest_participants WHERE contest_id = $1 AND lifecycle_status = 'ACTIVE'
 	`, contestID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count participants: %w", err)
@@ -104,7 +104,7 @@ func UpdateParticipantQtyAvailableTx(ctx context.Context, tx TxExecutor, contest
 	_, err := tx.ExecContext(ctx, `
 		UPDATE contest_participants
 		SET qty_available = $3
-		WHERE contest_id = $1 AND user_id = $2
+		WHERE contest_id = $1 AND user_id = $2 AND lifecycle_status = 'ACTIVE'
 	`, contestID, userID, qtyAvailable)
 	return err
 }
@@ -119,7 +119,7 @@ func UpdateParticipantScoreTx(ctx context.Context, tx TxExecutor, contestID, use
 	_, err := tx.ExecContext(ctx, `
 		UPDATE contest_participants
 		SET total_score = $3
-		WHERE contest_id = $1 AND user_id = $2
+		WHERE contest_id = $1 AND user_id = $2 AND lifecycle_status = 'ACTIVE'
 	`, contestID, userID, totalScore.String())
 	return err
 }
@@ -129,7 +129,7 @@ func UpdateParticipantQtyAndScoreTx(ctx context.Context, tx TxExecutor, contestI
 	_, err := tx.ExecContext(ctx, `
 		UPDATE contest_participants
 		SET qty_available = $3, total_score = $4
-		WHERE contest_id = $1 AND user_id = $2
+		WHERE contest_id = $1 AND user_id = $2 AND lifecycle_status = 'ACTIVE'
 	`, contestID, userID, qtyAvailable, totalScore.String())
 	return err
 }

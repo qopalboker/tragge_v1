@@ -11,7 +11,6 @@ import (
 
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
 	"github.com/Parsaeffatravesh/tragge/packages/domain/statemachine"
-	"github.com/Parsaeffatravesh/tragge/packages/infra"
 	"github.com/Parsaeffatravesh/tragge/packages/notification"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
 	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
@@ -188,11 +187,6 @@ func (a *App) handleCancelContest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": adminMsg.ContestIDRequired})
 		return
 	}
-
-	ctx := r.Context()
-	actorUserID := auth.GetUserID(ctx)
-
-	// Parse request body for reason
 	var req StateTransitionRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -200,109 +194,18 @@ func (a *App) handleCancelContest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	if req.Reason == "" {
-		req.Reason = "Cancelled by admin"
-	}
-
-	sm := a.stateMachine
-	result, err := sm.Cancel(ctx, contestID, &actorUserID, req.Reason)
-	if err != nil {
-		a.handleStateMachineError(w, err)
+	actorID := auth.GetUserID(r.Context())
+	result, err := a.cancelContestAtomic(r.Context(), contestID, actorID, req.Reason)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": adminMsg.ContestNotFound})
 		return
 	}
-
-	// Query participants for this contest
-	participants, err := a.getContestParticipants(ctx, contestID)
 	if err != nil {
-		a.log().Error("Failed to query contest participants for cancellation emails",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		// Continue with the response - cancellation was successful
+		a.log().Error("Atomic contest cancellation failed", zap.Error(err))
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
 	}
-
-	// Query contest details for the email
-	contestDetails, err := a.getContestCancellationDetails(ctx, contestID)
-	if err != nil {
-		a.log().Error("Failed to query contest details for cancellation emails",
-			zap.String("contest_id", contestID),
-			zap.Error(err))
-		// Use defaults from result
-		contestDetails = &contestCancellationDetails{
-			Name:          result.Contest.Name,
-			StartsAt:      result.Contest.StartsAt,
-			EntryFeeCents: 0,
-		}
-	}
-
-	// Track refund totals for audit log
-	var totalRefunded int64
-	var refundCount int
-	refundResults := make(map[string]int64) // userID -> newBalance
-
-	// Process refunds if contest had an entry fee and there are participants
-	if contestDetails.EntryFeeCents > 0 && len(participants) > 0 {
-		refundResults, totalRefunded, refundCount = a.processContestRefunds(ctx, contestID, contestDetails.Name, participants, contestDetails.EntryFeeCents)
-	}
-
-	// Send cancellation emails asynchronously (don't block the response)
-	if len(participants) > 0 {
-		infra.SafeGo(a.log(), "contest-cancellation-emails", func() {
-			a.sendContestCancellationEmails(ctx, contestID, contestDetails, participants, req.Reason, refundResults)
-		})
-	}
-
-	// Create in-app notifications for each participant
-	if len(participants) > 0 {
-		infra.SafeGo(a.log(), "contest-cancellation-notifications", func() {
-			a.createContestCancellationNotifications(ctx, contestID, contestDetails.Name, req.Reason, participants, contestDetails.EntryFeeCents)
-		})
-	}
-
-	// Write audit log for the cancellation
-	auditPayload := map[string]interface{}{
-		"contest_id":            contestID,
-		"contest_name":          contestDetails.Name,
-		"reason":                req.Reason,
-		"previous_status":       result.FromStatus.String(),
-		"participants_affected": len(participants),
-		"total_refunded_cents":  totalRefunded,
-		"refund_count":          refundCount,
-	}
-	auditPayloadJSON, _ := json.Marshal(auditPayload)
-	auditErr := a.circuits.ExecuteDatabase(ctx, func(ctx context.Context) error {
-		_, execErr := a.pool.Primary().ExecContext(ctx,
-			`INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, payload_json)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			actorUserID, "contest.cancelled", "contest", contestID, auditPayloadJSON)
-		return execErr
-	})
-	if auditErr != nil {
-		a.log().Error("Failed to write audit log for contest cancellation", zap.Error(auditErr))
-	}
-
-	resp := ContestStateResponse{
-		ID:                  result.Contest.ID,
-		Name:                result.Contest.Name,
-		Status:              result.ToStatus.String(),
-		PreviousStatus:      result.FromStatus.String(),
-		CurrentParticipants: result.Contest.CurrentParticipants,
-		MinParticipants:     result.Contest.MinParticipants,
-		Timestamp:           result.Timestamp.UnixMilli(),
-		Reason:              &req.Reason,
-	}
-	if result.Contest.MaxParticipants != nil {
-		resp.MaxParticipants = result.Contest.MaxParticipants
-	}
-
-	a.log().Info("Contest cancelled",
-		zap.String("contest_id", contestID),
-		zap.String("reason", req.Reason),
-		zap.String("actor", actorUserID),
-		zap.Int("participants_affected", len(participants)),
-		zap.Int64("total_refunded_cents", totalRefunded))
-
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, map[string]any{"id": contestID, "status": "cancelled", "participants_affected": result.Participants, "refund_count": result.Refunds, "already_cancelled": result.AlreadyCancelled})
 }
 
 // getContestParticipants retrieves participants for a contest.

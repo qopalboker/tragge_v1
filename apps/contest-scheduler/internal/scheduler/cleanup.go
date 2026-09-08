@@ -642,25 +642,13 @@ func (cs *CleanupService) detectStuckRunningContests(ctx context.Context) (int, 
 	return count, rows.Err()
 }
 
-// cleanupOrphanedData removes orphaned records that reference non-existent contests.
+// cleanupOrphanedData removes disposable orphaned records. Participant
+// commitments are intentionally excluded: lifecycle history is immutable.
 func (cs *CleanupService) cleanupOrphanedData(ctx context.Context) (int, error) {
 	totalCleaned := 0
 
-	// Clean up orphaned contest_participants (referencing non-existent contests)
-	result, err := cs.pool.Primary().ExecContext(ctx, `
-		DELETE FROM contest_participants cp_del
-		WHERE NOT EXISTS (SELECT 1 FROM contests c WHERE c.id = cp_del.contest_id)
-		  AND NOT EXISTS (SELECT 1 FROM tournaments_archive ta WHERE ta.id = cp_del.contest_id)
-	`)
-	if err != nil {
-		cs.logger.Warn("Failed to clean orphaned participants", zap.Error(err))
-	} else {
-		count, _ := result.RowsAffected()
-		totalCleaned += int(count)
-	}
-
 	// Clean up orphaned contest_symbols (referencing non-existent contests)
-	result, err = cs.pool.Primary().ExecContext(ctx, `
+	result, err := cs.pool.Primary().ExecContext(ctx, `
 		DELETE FROM contest_symbols cs_del
 		WHERE NOT EXISTS (SELECT 1 FROM contests c WHERE c.id = cs_del.contest_id)
 		  AND NOT EXISTS (SELECT 1 FROM tournaments_archive ta WHERE ta.id = cs_del.contest_id)
@@ -753,4 +741,3 @@ func (cs *CleanupService) QueryArchivedContestForAudit(ctx context.Context, cont
 	}
 	return &row, nil
 }
-

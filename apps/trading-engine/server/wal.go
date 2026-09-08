@@ -1171,7 +1171,7 @@ func (so *StateOperator) checkParticipantState(ctx context.Context, contestID, u
 	err := so.db.QueryRowContext(ctx, `
 		SELECT qty_available, total_score
 		FROM contest_participants
-		WHERE contest_id = $1 AND user_id = $2
+		WHERE contest_id = $1 AND user_id = $2 AND lifecycle_status = 'ACTIVE'
 	`, contestID, userID).Scan(&qtyAvailable, &totalScore)
 	if err == sql.ErrNoRows {
 		return false, nil

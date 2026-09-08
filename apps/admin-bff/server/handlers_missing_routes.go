@@ -3,20 +3,38 @@ package server
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
 	"github.com/Parsaeffatravesh/tragge/packages/auth"
-	"github.com/Parsaeffatravesh/tragge/packages/infra"
-	"github.com/Parsaeffatravesh/tragge/packages/notification/inapp"
-	"github.com/Parsaeffatravesh/tragge/packages/notification/prefs"
-	"github.com/Parsaeffatravesh/tragge/packages/wallet"
 )
+
+type participantRemovalRequest struct {
+	Reason    string `json:"reason"`
+	Refund    *bool  `json:"refund,omitempty"`
+	AdminNote string `json:"admin_note,omitempty"`
+}
+
+func (r participantRemovalRequest) refundDecision() (bool, bool) {
+	switch r.Reason {
+	case "USER_IMMEDIATE_EXIT_REQUEST":
+		return true, r.Refund == nil || *r.Refund
+	case "OTHER":
+		return true, strings.TrimSpace(r.AdminNote) != "" && (r.Refund == nil || *r.Refund)
+	case "CHEATING":
+		return r.Refund != nil && *r.Refund, r.Refund != nil
+	default:
+		return false, false
+	}
+}
 
 // handleGetContest returns a single contest by ID.
 // GET /api/admin/contests/{id}
@@ -72,117 +90,41 @@ func (a *App) handleRemoveContestParticipant(w http.ResponseWriter, r *http.Requ
 
 	ctx := r.Context()
 	actorID := auth.GetUserID(ctx)
-
-	// Begin transaction so participant removal and refund are atomic
-	var tx *sql.Tx
-	err := a.circuits.ExecuteDatabase(ctx, func(ctx context.Context) error {
-		var beginErr error
-		tx, beginErr = a.pool.Primary().BeginTx(ctx, nil)
-		return beginErr
-	})
-	if err != nil {
-		if a.isCircuitError(w, err) {
-			return
-		}
-		a.log().Error("Failed to begin transaction", zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+	var req participantRemovalRequest
+	if r.Body == nil || json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reason is required"})
 		return
 	}
-	defer tx.Rollback()
-
-	// Fetch contest details (entry fee and name) for refund and audit
-	var entryFeeCents int64
-	var contestName string
-	err = tx.QueryRowContext(ctx,
-		`SELECT entry_fee_cents, name FROM contests WHERE id = $1`, contestID).
-		Scan(&entryFeeCents, &contestName)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": adminMsg.ContestNotFound})
-			return
-		}
-		a.log().Error("Failed to query contest details",
-			zap.String("contest_id", contestID), zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+	req.AdminNote = strings.TrimSpace(req.AdminNote)
+	_, valid := req.refundDecision()
+	if !valid {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reason/refund decision is invalid"})
 		return
 	}
 
-	// Delete from contest_participants
-	result, err := tx.ExecContext(ctx,
-		`DELETE FROM contest_participants WHERE contest_id = $1 AND user_id = $2`, contestID, userID)
-	if err != nil {
-		a.log().Error("Failed to remove contest participant",
-			zap.String("contest_id", contestID),
-			zap.String("user_id", userID),
-			zap.Error(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
+	result, err := a.removeParticipantAtomic(ctx, contestID, userID, actorID, req)
+	if errors.Is(err, errEconomicsCutoff) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "ECONOMICS_CUTOFF_ADJUSTMENT_REQUIRED"})
 		return
 	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
+	if errors.Is(err, errParticipantInactive) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "PARTICIPANT_NOT_ACTIVE"})
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": adminMsg.ParticipantNotFound})
 		return
 	}
-
-	// Refund entry fee if the contest had one
-	var refunded bool
-	if entryFeeCents > 0 {
-		walletSvc := wallet.NewService(a.pool.Primary())
-		_, err := walletSvc.RefundContestEntryFeeIdempotent(
-			ctx, tx, userID, contestID, contestName, entryFeeCents, wallet.ReasonCodeContestRefundAdmin,
-		)
-		if err != nil {
-			a.log().Error("Failed to refund entry fee for removed participant",
-				zap.String("user_id", userID),
-				zap.String("contest_id", contestID),
-				zap.Int64("amount_cents", entryFeeCents),
-				zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.RefundFailed})
-			return
-		}
-		refunded = true
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		a.log().Error("Failed to commit participant removal transaction",
-			zap.String("contest_id", contestID),
-			zap.String("user_id", userID),
-			zap.Error(err))
+	if err != nil {
+		a.log().Error("Atomic participant removal failed", zap.Error(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": adminMsg.InternalError})
 		return
 	}
 
-	// Send in-app notification asynchronously (after commit, respects user preferences)
-	infra.SafeGo(a.log(), "contest-removal-notification", func() {
-		notifCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		enabled, _ := prefs.IsEnabled(notifCtx, a.pool.Replica(), userID, inapp.NotifTypeContestLeft, "in_app")
-		if !enabled {
-			return
-		}
-		if err := inapp.CreateContestLeftNotification(notifCtx, a.pool.Primary(), userID, contestID, contestName, refunded); err != nil {
-			a.log().Error("Failed to create removal notification",
-				zap.String("user_id", userID),
-				zap.String("contest_id", contestID),
-				zap.Error(err))
-		}
-	})
-
-	// Write audit log with financial details
-	a.logAuditEvent(ctx, actorID, "contest.remove_participant", "contest_participant",
-		contestID+"/"+userID, map[string]interface{}{
-			"contest_id":      contestID,
-			"contest_name":    contestName,
-			"user_id":         userID,
-			"entry_fee_cents": entryFeeCents,
-			"refunded":        refunded,
-		})
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":  adminMsg.ParticipantRemoved,
-		"refunded": refunded,
+		"refunded": result.Refunded,
+		"event_id": result.EventID,
 	})
 }
 
