@@ -19,6 +19,10 @@ func TestContestFeeWalletRouteIsSuperAdminOnly(t *testing.T) {
 	if !strings.Contains(source, route) {
 		t.Fatal("fee wallet route lacks explicit Super Admin authorization")
 	}
+	poolRoute := `r.With(app.auth.Middleware.RequireSuperAdmin).Get("/contest-prize-pools/{contestID}", app.handleGetContestPrizePool)`
+	if !strings.Contains(source, poolRoute) {
+		t.Fatal("Prize Pool route lacks explicit Super Admin authorization")
+	}
 	if strings.Contains(source, `/api/user/financial/contest-fee-wallet`) {
 		t.Fatal("fee wallet exposed in user trust domain")
 	}

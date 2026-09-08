@@ -795,6 +795,7 @@ func RunWithSharedDeps(parentCtx context.Context, sharedPool *db.Pool, sharedRed
 		r.Get("/deposits", app.handleListDeposits)
 		r.Get("/transactions", app.handleListTransactions)
 		r.With(app.auth.Middleware.RequireSuperAdmin).Get("/contest-fee-wallet", app.handleGetContestFeeWallet)
+		r.With(app.auth.Middleware.RequireSuperAdmin).Get("/contest-prize-pools/{contestID}", app.handleGetContestPrizePool)
 	})
 
 	// Symbol management routes - permission-protected

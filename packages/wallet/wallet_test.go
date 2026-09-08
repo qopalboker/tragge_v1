@@ -237,6 +237,13 @@ func runTestMigrations(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, string(feeMigration)); err != nil {
 		return err
 	}
+	poolMigration, err := os.ReadFile(filepath.Join("..", "db", "migrations", "0118_contest_prize_pool.up.sql"))
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, string(poolMigration)); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -707,29 +707,21 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	var txStartsAt, txEndsAt time.Time
 	var txIsFree bool
 	var txLateJoinEnabled bool
+	var txFundsPolicy string
 	err = tx.QueryRowContext(ctx, `
 		SELECT status, qty_total, entry_fee_cents,
 		       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0),
 		       starts_at, ends_at, COALESCE(is_free, FALSE),
-		       COALESCE(late_join_enabled, TRUE)
+		       COALESCE(late_join_enabled, TRUE), funds_policy_version
 		FROM contests WHERE id = $1 FOR UPDATE
 	`, contestID).Scan(&txStatus, &txQtyTotal, &txEntryFeeCents, &txPlatformFeeBps, &txCommissionRate,
-		&txStartsAt, &txEndsAt, &txIsFree, &txLateJoinEnabled)
+		&txStartsAt, &txEndsAt, &txIsFree, &txLateJoinEnabled, &txFundsPolicy)
 	if err != nil {
-		// Fallback without late_join_enabled for pre-migration DBs.
-		err = tx.QueryRowContext(ctx, `
-			SELECT status, qty_total, entry_fee_cents,
-			       COALESCE(platform_fee_bps, 0), COALESCE(commission_rate, 0),
-			       starts_at, ends_at, COALESCE(is_free, FALSE)
-			FROM contests WHERE id = $1 FOR UPDATE
-		`, contestID).Scan(&txStatus, &txQtyTotal, &txEntryFeeCents, &txPlatformFeeBps, &txCommissionRate,
-			&txStartsAt, &txEndsAt, &txIsFree)
-		if err != nil {
-			a.log().Error("Failed to lock contest row", zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
-			return
-		}
-		txLateJoinEnabled = true
+		// Migration 0118 is a hard deployment prerequisite. Never convert a
+		// schema/query failure into the financially different legacy path.
+		a.log().Error("Failed to lock contest row", zap.Error(err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+		return
 	}
 	nowTx := time.Now().UTC()
 	ok, isLateJoin, reason := contestJoinAllowed(txStatus, txIsFree || txEntryFeeCents <= 0, txLateJoinEnabled, txStartsAt, txEndsAt, nowTx)
@@ -859,8 +851,8 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Allocate canonical fee revenue in the same transaction as the user debit
-	// and admission. Prize custody remains the transitional contest counter until
-	// CONTEST-POOL-001; this boundary must not be bypassed by BFF-owned SQL.
+	// and admission. Controlled wallet operations own both fee and Prize Pool
+	// custody movements; this boundary must not be bypassed by BFF-owned SQL.
 	if charge.PlatformCents > 0 {
 		if _, err = a.wallet.PostContestFee(ctx, tx, contestID, userID, wallet.ContestFeeKindBase, charge.PlatformCents, feeBps); err != nil {
 			a.log().Error("Failed to post contest base fee", zap.Error(err), zap.String("contest_id", contestID))
@@ -871,6 +863,13 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 	if charge.SurchargeCents > 0 {
 		if _, err = a.wallet.PostContestFee(ctx, tx, contestID, userID, wallet.ContestFeeKindLateSurcharge, charge.SurchargeCents, feeBps); err != nil {
 			a.log().Error("Failed to post contest late surcharge", zap.Error(err), zap.String("contest_id", contestID))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+			return
+		}
+	}
+	if txFundsPolicy == wallet.ContestPrizePoolPolicyV1 && charge.PrizeCents > 0 {
+		if _, err = a.wallet.PostContestPrizeContribution(ctx, tx, contestID, userID, charge.PrizeCents); err != nil {
+			a.log().Error("Failed to post contest Prize Pool contribution", zap.Error(err), zap.String("contest_id", contestID))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
 			return
 		}

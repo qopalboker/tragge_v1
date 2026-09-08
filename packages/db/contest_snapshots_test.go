@@ -45,6 +45,29 @@ func TestContestSnapshotMigrationContract(t *testing.T) {
 	}
 }
 
+func TestPrizePoolReconciliationFailsClosed(t *testing.T) {
+	tests := []struct {
+		name                string
+		custody, ledger     int64
+		entries, admissions int
+	}{
+		{"missing pool credit", 160, 80, 1, 2},
+		{"wrong amount", 159, 160, 2, 2},
+		{"duplicate ledger", 240, 240, 3, 2},
+		{"wrong contest excluded", 160, 80, 1, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validatePrizePoolReconciliation(tt.custody, tt.ledger, tt.entries, 160, tt.admissions); !errors.Is(err, ErrSnapshotIntegrity) {
+				t.Fatalf("corruption did not fail closed: %v", err)
+			}
+		})
+	}
+	if err := validatePrizePoolReconciliation(2550, 2550, 3, 2550, 3); err != nil {
+		t.Fatalf("999 cents at 1500 bps x3 should reconcile to fee=447 pool=2550: %v", err)
+	}
+}
+
 func TestContestSnapshotAuthoritativeOwnerContract(t *testing.T) {
 	root := filepath.Clean(filepath.Join(migrationDir(), "..", "..", ".."))
 	checks := map[string][]string{
@@ -100,8 +123,8 @@ func snapshotPostgres(t *testing.T) *sql.DB {
 		t.Skipf("PostgreSQL unavailable: %v", err)
 	}
 	var migrated bool
-	if err = database.QueryRowContext(ctx, `SELECT to_regclass('public.contest_snapshots') IS NOT NULL`).Scan(&migrated); err != nil || !migrated {
-		t.Skip("migration 0117 not applied")
+	if err = database.QueryRowContext(ctx, `SELECT to_regclass('public.contest_snapshots') IS NOT NULL AND to_regclass('public.contest_prize_pool_accounts') IS NOT NULL`).Scan(&migrated); err != nil || !migrated {
+		t.Skip("migrations 0117 and 0118 not applied")
 	}
 	return database
 }
