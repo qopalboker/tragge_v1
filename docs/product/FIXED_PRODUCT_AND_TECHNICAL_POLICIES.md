@@ -197,7 +197,7 @@ closes. It records the historical cutoff values for:
 - Rank-band version
 - Weight-decay version
 
-The immutable record is named `contest_economics_snapshot`. It is never rewritten.
+The immutable record is named the `economics_cutoff` stage of `contest_snapshots`. It is never rewritten.
 Authorized Super Admin participant removals may subsequently change only
 `effective_participant_count`, `effective_prize_pool`, and
 `effective_planned_winners` through durable append-only adjustment records using
@@ -1374,7 +1374,7 @@ transactions.
 At `late_join_cutoff_at`, atomically and idempotently:
 
 1. lock the final normal-entry Prize Pool amount and participant count;
-2. write the immutable `contest_economics_snapshot` with cutoff participant,
+2. write the immutable the `economics_cutoff` stage of `contest_snapshots` with cutoff participant,
    gross base entry, base fee, late surcharge, Prize Pool, planned winners,
    distribution/rank-band/weight-decay versions, and `locked_at`;
 3. debit the entire contest Prize Pool financial balance to zero and return that

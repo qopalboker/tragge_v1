@@ -881,6 +881,15 @@ func (a *App) handleJoinContest(w http.ResponseWriter, r *http.Request) {
 		a.processAffiliateCommission(ctx, tx, userID, contestID, int64(entryFeeCents))
 	}
 
+	// CONTEST-SNAPSHOT-001: the admission that first reaches real-user quorum
+	// establishes confirmation and its immutable history in this same transaction.
+	if _, snapshotErr := db.EnsureContestConfirmed(ctx, tx, contestID); snapshotErr != nil &&
+		!errors.Is(snapshotErr, db.ErrSnapshotNotReady) {
+		a.log().Error("Failed to establish contest confirmation snapshot", zap.Error(snapshotErr))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg.InternalError})
+		return
+	}
+
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		a.log().Error("Failed to commit transaction", zap.Error(err))

@@ -467,6 +467,11 @@ func (s *Scheduler) checkAndTransition(ctx context.Context) {
 
 	s.logger.Debug("Running scheduler check")
 
+	if err := s.ensureDueEconomicsCutoffs(ctx); err != nil {
+		s.recordError(err)
+		s.logger.Error("Failed to ensure due economics cutoffs", zap.Error(err))
+	}
+
 	// Find contests needing automatic transitions
 	candidates, err := s.stateMachine.FindContestsForAutoTransition(ctx)
 	if err != nil {
@@ -516,6 +521,50 @@ func (s *Scheduler) checkAndTransition(ctx context.Context) {
 	s.mu.Lock()
 	s.avgProcessingTimeMs = (s.avgProcessingTimeMs + elapsed.Milliseconds()) / 2
 	s.mu.Unlock()
+}
+
+// ensureDueEconomicsCutoffs only orchestrates the typed repository operation;
+// cutoff readiness, DB-time checks, locking, and durable economics stay in db.
+func (s *Scheduler) ensureDueEconomicsCutoffs(ctx context.Context) error {
+	rows, err := s.pool.Primary().QueryContext(ctx, `
+		SELECT c.id FROM contests c
+		WHERE c.lifecycle_policy_version=$1 AND c.status IN ('running','paused')
+		  AND NOT EXISTS (SELECT 1 FROM contest_snapshots x WHERE x.contest_id=c.id AND x.snapshot_type='economics_cutoff')
+		ORDER BY c.id`, db.ContestSnapshotPolicyV1)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type due struct {
+		id string
+	}
+	var contests []due
+	for rows.Next() {
+		var d due
+		if err := rows.Scan(&d.id); err != nil {
+			return err
+		}
+		contests = append(contests, d)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, c := range contests {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		_, err = db.EnsureEconomicsCutoff(ctx, tx, c.id)
+		if err == nil {
+			err = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if err != nil && !errors.Is(err, db.ErrSnapshotNotReady) {
+			return fmt.Errorf("contest %s cutoff: %w", c.id, err)
+		}
+	}
+	return nil
 }
 
 // processCandidate processes a single contest transition candidate.

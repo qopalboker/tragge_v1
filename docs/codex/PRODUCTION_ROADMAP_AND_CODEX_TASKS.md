@@ -264,19 +264,21 @@ Execute one task per branch/PR in this exact order:
 |---:|---|---|
 | 1 | TREASURY-001 | Stable system Super Admin Wallet plus reconciled user-balance custody accounting |
 | 2 | FEE-WALLET-001 | Contest-fee-only wallet with Super-Admin-only inspection |
-| 3 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pools and exactly-once cutoff return |
-| 4 | LIFECYCLE-004 | No self-leave; audited non-destructive Super Admin removal/refund |
-| 5 | RANK-001 | Rank 0 and no Redis ranking until first qualifying fill |
-| 6 | ECON-ADJ-001 | Append-only adjustments and effective contest economics |
-| 7 | SETTLE-001 | Effective winner plan, no renormalization, residual accounting, Treasury payout |
-| 8 | WITHDRAW-001 | User entitlement and Super Admin custody debit coupled to approved payout |
-| 9 | FIN-CLEAN-001 | Remove superseded float, counter-only, and duplicate authority paths |
-| 10 | Linux certification | Real dependencies, migrations, concurrency, retries, crash windows, and full reconciliation |
+| 3 | CONTEST-SNAPSHOT-001 | Immutable confirmation, economics-cutoff, start, and finalized-result lifecycle history; absorbs P0-FIN-06 cutoff snapshot |
+| 4 | CONTEST-POOL-001 | Ledger-backed per-contest Prize Pools and exactly-once cutoff return (unblocked, not started) |
+| 5 | LIFECYCLE-004 | No self-leave; audited non-destructive Super Admin removal/refund |
+| 6 | RANK-001 | Rank 0 and no Redis ranking until first qualifying fill |
+| 7 | ECON-ADJ-001 | Append-only adjustments and effective contest economics |
+| 8 | SETTLE-001 | Effective winner plan, no renormalization, residual accounting, Treasury payout |
+| 9 | WITHDRAW-001 | User entitlement and Super Admin custody debit coupled to approved payout |
+| 10 | FIN-CLEAN-001 | Remove superseded float, counter-only, and duplicate authority paths |
+| 11 | Linux certification | Real dependencies, migrations, concurrency, retries, crash windows, and full reconciliation |
 
 The canonical requirements, effective boundary, conflict inventory, and one
 open affiliate-policy question are in §20 of the fixed policy and
-`docs/codex/decisions/POLICY-001-decision-log.md`. P0-FIN-06 real-PostgreSQL
-runtime verification remains open and must be included in certification.
+`docs/codex/decisions/POLICY-001-decision-log.md`. P0-FIN-06 is superseded by
+CONTEST-SNAPSHOT-001; its real-PostgreSQL verification is now part of the
+lifecycle-snapshot certification gate.
 
 ---
 

@@ -6,6 +6,7 @@ toolchain go1.24.7
 
 require (
 	github.com/Parsaeffatravesh/tragge/packages/contracts v0.0.0
+	github.com/Parsaeffatravesh/tragge/packages/scoring v0.0.0
 	github.com/jackc/pgx/v5 v5.6.0
 )
 
@@ -20,3 +21,5 @@ require (
 )
 
 replace github.com/Parsaeffatravesh/tragge/packages/contracts => ../contracts
+
+replace github.com/Parsaeffatravesh/tragge/packages/scoring => ../scoring

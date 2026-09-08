@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.7
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Parsaeffatravesh/tragge/packages/auth v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/config v0.0.0
 	github.com/Parsaeffatravesh/tragge/packages/contracts v0.0.0
