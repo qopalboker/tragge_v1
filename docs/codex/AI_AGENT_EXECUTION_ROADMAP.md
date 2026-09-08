@@ -127,7 +127,8 @@ Self-reported "PASS" has a track record of being wrong on this project. Evidence
 | POLICY-001 | Finalize contest funds and participant lifecycle policy | 1 | P0 | Done (merged to main) — approved; current policy |
 | TREASURY-001 | Canonical Super Admin Wallet and user-balance custody model | 1 | P0 | Implemented — Cloud unit/static checks; real-PostgreSQL certification and opening-balance cutover pending |
 | FEE-WALLET-001 | Dedicated Super-Admin-only Contest Fee Wallet | 1 | P0 | Implemented — Cloud unit/static checks; real-PostgreSQL certification pending; Treasury/Prize Pool conservation remains ordered follow-up |
-| CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Not started |
+| CONTEST-SNAPSHOT-001 | Immutable contest lifecycle and historical snapshot foundation | 1 | P0 | Implemented — Cloud verified; real PostgreSQL certification pending |
+| CONTEST-POOL-001 | Ledger-backed per-contest Prize Pool funding and lock-return | 1 | P0 | Unblocked / Not started |
 | LIFECYCLE-004 | Remove self-leave; audited Super Admin removal/refund | 2 | P0 | Not started |
 | RANK-001 | Rank 0 until first qualifying fill | 2 | P0 | Not started |
 | ECON-ADJ-001 | Append-only effective economics adjustments | 2 | P0 | Not started |
@@ -238,26 +239,29 @@ POLICY-001:
    reconcile user available/reserved entitlements to canonical ledger accounts.
 2. **FEE-WALLET-001** — add the contest-fee-only wallet, base-fee/surcharge
    transfers, reversals, and Super-Admin-only financial visibility.
-3. **CONTEST-POOL-001** — make every contest Prize Pool ledger-backed and add
+3. **CONTEST-SNAPSHOT-001** — add immutable confirmation, economics-cutoff,
+   start, and finalized-result history. This absorbs the immutable cutoff
+   responsibility previously assigned to P0-FIN-06.
+4. **CONTEST-POOL-001** — make every contest Prize Pool ledger-backed and add
    the exactly-once cutoff return to Super Admin Wallet while retaining the
    locked obligation.
-4. **LIFECYCLE-004** — remove user self-leave and implement idempotent,
+5. **LIFECYCLE-004** — remove user self-leave and implement idempotent,
    non-destructive Super Admin removal with the fixed reason/refund matrix and
    Engine commands for running participants.
-5. **RANK-001** — keep participants at Rank 0 and outside Redis ranking until
+6. **RANK-001** — keep participants at Rank 0 and outside Redis ranking until
    durable qualifying fill evidence exists.
-6. **ECON-ADJ-001** — add minimal append-only authorized adjustments and derive
+7. **ECON-ADJ-001** — add minimal append-only authorized adjustments and derive
    effective participant count, Prize Pool, and planned winners without changing
    cutoff history.
-7. **SETTLE-001** — consume effective economics, preserve planned shares without
+8. **SETTLE-001** — consume effective economics, preserve planned shares without
    renormalization, account for residual, and debit Super Admin Wallet for
    winner payouts.
-8. **WITHDRAW-001** — couple approval to an idempotent user-entitlement debit,
+9. **WITHDRAW-001** — couple approval to an idempotent user-entitlement debit,
    Super Admin Wallet custody reduction, and external payout evidence.
-9. **FIN-CLEAN-001** — remove obsolete counters/fallbacks/float financial paths
+10. **FIN-CLEAN-001** — remove obsolete counters/fallbacks/float financial paths
    only after all replacements are proven authoritative.
-10. **Linux full runtime certification** — exercise the complete financial and
-    concurrency matrix; P0-FIN-06 real-PostgreSQL verification remains open.
+11. **Linux full runtime certification** — exercise the complete financial and
+    concurrency matrix; CONTEST-SNAPSHOT-001 real-PostgreSQL verification remains open.
 
 The unresolved cheating/Refund-NO affiliate treatment in the POLICY-001
 decision log requires a human policy decision before the relevant removal and
@@ -340,18 +344,26 @@ affiliate implementation is finalized.
 
 **Done when:** that suite passes.
 
-#### P0-FIN-06 — Freeze contest economics at late-entry cutoff
+#### P0-FIN-06 — Freeze contest economics at late-entry cutoff (superseded)
+**Status:** Superseded / absorbed by CONTEST-SNAPSHOT-001. The following is
+retained as historical context for why cutoff immutability was required; the
+standalone table described by the earlier plan was not implemented on main.
 **Subtasks**
-- [x] Added one immutable PostgreSQL `contest_economics_snapshot` per contest with exact minor-unit totals and fixed policy versions.
-- [x] Serialized checkout and cutoff on the contest row; duplicate locks return the authoritative row and post-lock membership changes are rejected durably.
-- [x] Scheduler locks due contests and settlement consumes locked participant, pool, fee, and distribution inputs without a mutable fallback.
-- [x] Human-review fixes freeze per-join accumulated/ledger-reconciled totals, use PostgreSQL time, validate both membership-move endpoints, and fail modern missing-snapshot settlement closed.
-- [x] Historical completed/cancelled contests are not backfilled or newly locked.
-- [ ] Execute the concurrent lock and join-vs-lock integration cases on real PostgreSQL (Docker/PostgreSQL unavailable in the implementation container).
+- [x] Absorbed the immutable cutoff record into the typed
+  `economics_cutoff_v1` lifecycle stage rather than creating a standalone
+  `contest_economics_snapshot` authority.
+- [x] Serialized admission and cutoff on the contest row; duplicate locks return
+  the existing immutable lifecycle row.
+- [x] Preserved per-admission fee rounding, PostgreSQL-time readiness, explicit
+  legacy boundaries, and no destructive historical backfill.
+- [ ] Execute the lifecycle concurrency and trigger suite on real PostgreSQL
+  (Docker/PostgreSQL unavailable in the implementation container).
 
 **Verify**
-- [x] `scripts/sec-fin006-economics-cutoff-lock.test.mjs` guards the durable authority and the 3-participant fixed-point reconciliation oracle.
-- [ ] `packages/db/economics_cutoff_postgres_test.go` provides trigger, idempotency, concurrency, database-time, irregular-rounding, and Go/SQL winner-policy parity coverage; execution awaits `TEST_DATABASE_URL`.
+- [x] `packages/db/contest_snapshots_test.go` guards architecture and the
+  three-participant fixed-point reconciliation oracle.
+- [ ] Its real-PostgreSQL trigger, idempotency, concurrency, database-time,
+  start, and finish cases await `TRAGGE_E2E_DATABASE_URL`.
 - [ ] Real-PostgreSQL concurrency verification before production approval.
 
 #### LIFECYCLE-002 â€” Remove participant capacity limits

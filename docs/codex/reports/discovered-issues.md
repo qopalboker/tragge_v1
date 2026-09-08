@@ -559,3 +559,11 @@ CI-002 establishes a non-zero coverage floor for the original 7 services. Deep c
 | **Status** | Open |
 
 Required approving review count is 0 so automated stack-land merges remain possible. Enable count=1 when a merge bot bypass or human-review SLA is in place.
+# CONTEST-SNAPSHOT-CANCELLATION-POLICY
+
+CONTEST-SNAPSHOT-001 preserves the existing explicit cancellation transitions,
+but current policy does not define additional immutable cancellation data that
+is not already represented by status history. A future policy decision must
+define whether `contest_cancelled` is a lifecycle snapshot and its required
+fields; confirmation history must never be rewritten or treated as cancelled
+merely because participant count later decreases.

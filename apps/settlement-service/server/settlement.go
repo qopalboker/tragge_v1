@@ -270,14 +270,9 @@ func (s *SettlementService) settleContestAttempt(ctx context.Context, contestID 
 	// This enables trade-bff to push real-time WebSocket notifications to users
 	s.publishUserSettlementNotifications(ctx, contestID, contestInfo, prizes, rankings, participants)
 
-	// 14. Mark settlement as completed
-	if err := s.app.updateSettlementCompleted(ctx, settlement.ID); err != nil {
-		return fmt.Errorf("update settlement completed: %w", err)
-	}
-
-	// 15. Update contest status to completed
-	if err := s.app.updateContestStatus(ctx, contestID, "completed"); err != nil {
-		s.app.log().Warn("Failed to update contest status to completed", zap.Error(err))
+	// 14-15. Atomically publish finalization completion and immutable history.
+	if err := s.app.completeContestFinalization(ctx, contestID, settlement.ID); err != nil {
+		return fmt.Errorf("complete contest finalization: %w", err)
 	}
 
 	// 16. Log completion

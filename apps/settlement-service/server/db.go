@@ -11,6 +11,7 @@ import (
 	"time"
 
 	contracts "github.com/Parsaeffatravesh/tragge/packages/contracts/v1"
+	"github.com/Parsaeffatravesh/tragge/packages/db"
 	"go.uber.org/zap"
 )
 
@@ -320,13 +321,57 @@ func (a *App) updateSettlementPrizesDistributed(ctx context.Context, settlementI
 	return err
 }
 
-// updateSettlementCompleted marks settlement as completed.
+// updateSettlementCompleted remains the cancellation/refund-path completion helper.
 func (a *App) updateSettlementCompleted(ctx context.Context, settlementID string) error {
 	_, err := a.db.ExecContext(ctx,
 		`UPDATE contest_settlements SET status = 'completed', completed_at = NOW() WHERE id = $1`,
 		settlementID,
 	)
 	return err
+}
+
+// completeContestFinalization atomically publishes the durable FIN-003 result as
+// completed contest state and, for modern contests, immutable finished history.
+func (a *App) completeContestFinalization(ctx context.Context, contestID, settlementID string) error {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var policy string
+	if err = tx.QueryRowContext(ctx, `SELECT lifecycle_policy_version FROM contests WHERE id=$1 FOR UPDATE`, contestID).Scan(&policy); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE contest_settlements
+		SET status='completed', completed_at=COALESCE(completed_at,CURRENT_TIMESTAMP)
+		WHERE id=$1 AND contest_id=$2`, settlementID, contestID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return fmt.Errorf("settlement does not belong to contest: affected=%d", affected)
+	}
+	result, err = tx.ExecContext(ctx, `UPDATE contests SET status='completed', settled_at=COALESCE(settled_at,CURRENT_TIMESTAMP) WHERE id=$1`, contestID)
+	if err != nil {
+		return err
+	}
+	affected, err = result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return fmt.Errorf("contest completion update failed: affected=%d", affected)
+	}
+	if policy == db.ContestSnapshotPolicyV1 {
+		if _, err = db.EnsureContestFinished(ctx, tx, contestID, settlementID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // updateSettlementFailed marks settlement as failed.

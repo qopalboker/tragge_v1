@@ -144,29 +144,30 @@ var (
 
 // Contest represents a contest with its current state.
 type Contest struct {
-	ID                   string
-	Name                 string
-	Status               ContestStatus
-	StartsAt             time.Time
-	EndsAt               time.Time
-	RegistrationDeadline *time.Time
-	MinParticipants      int
-	MaxParticipants      *int
-	CurrentParticipants  int
-	AutoStart            bool
-	PublishedAt          *time.Time
-	StartedAt            *time.Time
-	EndedAt              *time.Time
-	SettledAt            *time.Time
-	CancelledAt          *time.Time
-	CancellationReason   *string
-	QtyTotal             int64
-	EntryFeeCents        int
-	IsFree               bool          // Free contests bypass min participant checks
-	PausedAt             *time.Time    // When contest was paused (nil if not paused)
-	TotalPausedDuration  time.Duration // Total accumulated pause duration
-	CommissionRate       float64       // Commission rate as percentage (e.g., 20.00 = 20%). Use prize.MustCommissionPercentToFraction() to convert to fraction for prize calculations.
-	RegistrationOpensAt  *time.Time    // When registration should auto-open (nil = manual)
+	ID                     string
+	Name                   string
+	Status                 ContestStatus
+	StartsAt               time.Time
+	EndsAt                 time.Time
+	RegistrationDeadline   *time.Time
+	MinParticipants        int
+	MaxParticipants        *int
+	CurrentParticipants    int
+	AutoStart              bool
+	PublishedAt            *time.Time
+	StartedAt              *time.Time
+	EndedAt                *time.Time
+	SettledAt              *time.Time
+	CancelledAt            *time.Time
+	CancellationReason     *string
+	QtyTotal               int64
+	EntryFeeCents          int
+	IsFree                 bool          // Free contests bypass min participant checks
+	PausedAt               *time.Time    // When contest was paused (nil if not paused)
+	TotalPausedDuration    time.Duration // Total accumulated pause duration
+	CommissionRate         float64       // Commission rate as percentage (e.g., 20.00 = 20%). Use prize.MustCommissionPercentToFraction() to convert to fraction for prize calculations.
+	RegistrationOpensAt    *time.Time    // When registration should auto-open (nil = manual)
+	LifecyclePolicyVersion string        // explicit legacy/modern snapshot boundary
 }
 
 // TransitionRequest contains the data needed to request a state transition.
@@ -303,7 +304,8 @@ func (sm *StateMachine) GetContest(ctx context.Context, contestID string) (*Cont
 			qty_total, entry_fee_cents, is_free,
 			paused_at, COALESCE(total_paused_duration, '0 seconds')::text,
 			commission_rate,
-			registration_opens_at
+			registration_opens_at,
+			lifecycle_policy_version
 		FROM contests
 		WHERE id = $1
 	`, contestID).Scan(
@@ -316,6 +318,7 @@ func (sm *StateMachine) GetContest(ctx context.Context, contestID string) (*Cont
 		&pausedAt, &totalPausedDuration,
 		&contest.CommissionRate,
 		&registrationOpensAt,
+		&contest.LifecyclePolicyVersion,
 	)
 
 	if err != nil {
@@ -400,7 +403,8 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 			qty_total, entry_fee_cents, is_free,
 			paused_at, COALESCE(total_paused_duration, '0 seconds')::text,
 			commission_rate,
-			registration_opens_at
+			registration_opens_at,
+			lifecycle_policy_version
 		FROM contests
 		WHERE id = $1
 		FOR UPDATE
@@ -414,6 +418,7 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 		&pausedAt, &totalPausedDuration,
 		&contest.CommissionRate,
 		&registrationOpensAt,
+		&contest.LifecyclePolicyVersion,
 	)
 
 	if err != nil {
@@ -525,9 +530,9 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 			// Normal start (not resume from pause)
 			updateQuery = `
 				UPDATE contests
-				SET status = $1, started_at = $2
-				WHERE id = $3`
-			updateArgs = []any{req.ToStatus.String(), now, req.ContestID}
+				SET status = $1, started_at = CURRENT_TIMESTAMP
+				WHERE id = $2`
+			updateArgs = []any{req.ToStatus.String(), req.ContestID}
 		}
 
 	case StatusSettling:
@@ -606,6 +611,19 @@ func (sm *StateMachine) Transition(ctx context.Context, req TransitionRequest) (
 	_, err = tx.ExecContext(ctx, updateQuery, updateArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update contest status: %w", err)
+	}
+
+	if req.ToStatus == StatusRunning && fromStatus != StatusPaused &&
+		contest.LifecyclePolicyVersion == db.ContestSnapshotPolicyV1 {
+		if _, err := db.SnapshotByType(ctx, tx, req.ContestID, db.SnapshotConfirmed); err != nil {
+			return nil, fmt.Errorf("modern contest cannot start without confirmation snapshot: %w", err)
+		}
+		if _, err := db.EnsureContestStarted(ctx, tx, req.ContestID); err != nil {
+			return nil, fmt.Errorf("failed to create contest start snapshot: %w", err)
+		}
+		if _, err := db.EnsureEconomicsCutoff(ctx, tx, req.ContestID); err != nil && !errors.Is(err, db.ErrSnapshotNotReady) {
+			return nil, fmt.Errorf("failed to ensure due economics cutoff after start: %w", err)
+		}
 	}
 
 	// Record the transition in history
