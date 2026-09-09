@@ -62,11 +62,29 @@ ALTER TABLE contest_fee_ledger
     ADD COLUMN lifecycle_event_id UUID REFERENCES contest_participant_lifecycle_events(id) ON DELETE RESTRICT,
     ADD COLUMN reversal_actor_id UUID REFERENCES users(id) ON DELETE RESTRICT;
 
+-- 0118 (and this migration's down) creates anonymous checks. Discover the
+-- exact legacy predicates, not generated names or all checks on these columns.
+-- Missing checks are harmless; renamed/duplicate checks are all replaced.
+DO $$
+DECLARE legacy_check RECORD;
+BEGIN
+    LOCK TABLE contest_prize_pool_ledger IN ACCESS EXCLUSIVE MODE;
+    FOR legacy_check IN
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'contest_prize_pool_ledger'::regclass AND contype = 'c'
+          AND pg_get_expr(conbin, conrelid) IN (
+              '(amount_cents > 0)',
+              '((direction)::text = ''credit''::text)',
+              '((reason)::text = ''contest_admission''::text)',
+              '((reference_type)::text = ''contest_admission''::text)'
+          )
+        ORDER BY conname
+    LOOP
+        EXECUTE format('ALTER TABLE contest_prize_pool_ledger DROP CONSTRAINT %I', legacy_check.conname);
+    END LOOP;
+END $$;
+
 ALTER TABLE contest_prize_pool_ledger
-    DROP CONSTRAINT chk_contest_prize_pool_ledger_amount_cents_check,
-    DROP CONSTRAINT contest_prize_pool_ledger_direction_check,
-    DROP CONSTRAINT contest_prize_pool_ledger_reason_check,
-    DROP CONSTRAINT contest_prize_pool_ledger_reference_type_check,
     ADD COLUMN original_ledger_id UUID REFERENCES contest_prize_pool_ledger(id) ON DELETE RESTRICT,
     ADD COLUMN lifecycle_event_id UUID REFERENCES contest_participant_lifecycle_events(id) ON DELETE RESTRICT,
     ADD COLUMN reversal_actor_id UUID REFERENCES users(id) ON DELETE RESTRICT,

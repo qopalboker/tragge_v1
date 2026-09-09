@@ -1,0 +1,2160 @@
+DB-MIGRATION-0119-FIX — 2026-09-09 UTC
+Repository: qopalboker/tragge_v1
+Base: 672d996fe5faf6fb76e41cfd4a96b8f5216617fe
+Branch: codex/db-migration-0119-fix
+Status: PARTIAL; migration repair/fresh/recovery PASS; full application suites have failures.
+
+Environment: ENVIRONMENT=test. TRAGGE_E2E_DATABASE_URL unset.
+Only the migration regression uses TRAGGE_MIGRATION_TEST_DATABASE_URL pointing to
+tragge_test_migration_0119_baseline, a clean 0118 database with the administrative role.
+Credentials are loaded from ignored local files; actual DSN passwords are redacted.
+The executable harness at the end preserves precise argument/environment construction.
+The root is a Go workspace; full checks expand all 35 go.work module paths.
+
+Setup:
+$ git fetch origin main
+Exit: 0; origin/main = 672d996fe5faf6fb76e41cfd4a96b8f5216617fe
+$ git switch -c codex/db-migration-0119-fix origin/main
+Exit: 0
+$ curl -fL https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz -o /tmp/db-migration-0119-fix/migrate.tar.gz
+Exit: 0
+$ tar -xzf /tmp/db-migration-0119-fix/migrate.tar.gz -C /tmp/db-migration-0119-fix/bin
+Exit: 0
+
+Schema dumps used pg_dump --schema-only --no-owner --no-privileges.
+Full dumps are retained locally in /tmp/db-migration-0119-fix/*-schema.sql.
+Comparison removes only random pg_dump restrict/unrestrict lines, never SQL.
+The complete data backup stays local; row-count/hash evidence contains no raw rows.
+Trailing whitespace is removed from the following command output for repository hygiene.
+
+=== host-psql ===
+$ bash -c 'psql --version'
+EXIT: 127
+bash: line 1: psql: command not found
+
+=== host-ready ===
+$ bash -c pg_isready
+EXIT: 127
+bash: line 1: pg_isready: command not found
+
+=== container-psql ===
+$ docker exec tragge_postgres psql --version
+EXIT: 0
+psql (PostgreSQL) 16.15
+
+=== container-ready ===
+$ docker exec tragge_postgres pg_isready
+EXIT: 0
+/var/run/postgresql:5432 - accepting connections
+
+=== tool-version ===
+$ migrate -version
+EXIT: 0
+4.17.0
+
+=== constraint-audit ===
+Audit of top-level SQL migrations at base 672d996fe5faf6fb76e41cfd4a96b8f5216617fe
+Excludes independent migrations/target chain.
+packages/db/migrations/0002_shard_config.down.sql:10: -- Remove shard_id from contests (drop constraint and index first)
+packages/db/migrations/0002_shard_config.down.sql:11: ALTER TABLE contests DROP CONSTRAINT IF EXISTS fk_contests_shard;
+packages/db/migrations/0008_free_tournaments.down.sql:29: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_auto_repeat_requires_interval;
+packages/db/migrations/0008_free_tournaments.down.sql:30: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_max_participants_positive;
+packages/db/migrations/0015_flexible_contest_config.down.sql:30: ALTER TABLE tournament_templates DROP CONSTRAINT IF EXISTS uq_tournament_templates_key;
+packages/db/migrations/0015_flexible_contest_config.down.sql:31: ALTER TABLE tournament_templates DROP CONSTRAINT IF EXISTS chk_template_commission_rate_valid;
+packages/db/migrations/0015_flexible_contest_config.down.sql:32: ALTER TABLE tournament_templates DROP CONSTRAINT IF EXISTS chk_template_min_participants_positive;
+packages/db/migrations/0015_flexible_contest_config.down.sql:44: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_registration_deadline_valid;
+packages/db/migrations/0015_flexible_contest_config.down.sql:45: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_commission_rate_valid;
+packages/db/migrations/0015_flexible_contest_config.down.sql:46: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_duration_minutes_positive;
+packages/db/migrations/0015_flexible_contest_config.down.sql:47: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_min_participants_positive;
+packages/db/migrations/0016_contest_state_machine.down.sql:26: -- DROP CONSTRAINTS
+packages/db/migrations/0016_contest_state_machine.down.sql:29: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_current_participants_non_negative;
+packages/db/migrations/0016_contest_state_machine.down.sql:30: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_current_participants_lte_max;
+packages/db/migrations/0054_free_contest_unique_constraint.down.sql:4: ALTER TABLE orders DROP CONSTRAINT IF EXISTS chk_limit_price_for_limit;
+packages/db/migrations/0054_free_contest_unique_constraint.down.sql:5: ALTER TABLE orders DROP CONSTRAINT IF EXISTS chk_stop_price_for_stop;
+packages/db/migrations/0054_free_contest_unique_constraint.up.sql:5: ALTER TABLE orders DROP CONSTRAINT IF EXISTS chk_limit_price_for_limit;
+packages/db/migrations/0054_free_contest_unique_constraint.up.sql:6: ALTER TABLE orders DROP CONSTRAINT IF EXISTS chk_stop_price_for_stop;
+packages/db/migrations/0061_tournament_templates_schema.down.sql:19: -- DROP CONSTRAINTS
+packages/db/migrations/0061_tournament_templates_schema.down.sql:22: ALTER TABLE tournament_templates DROP CONSTRAINT IF EXISTS chk_template_entry_fee_non_negative;
+packages/db/migrations/0063_contests_template_fields.down.sql:22: ALTER TABLE contests DROP CONSTRAINT IF EXISTS fk_contests_template_id;
+packages/db/migrations/0063_contests_template_fields.up.sql:34: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_current_participants_lte_max;
+packages/db/migrations/0068_tournament_state_enhancements.down.sql:5: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_registration_opens_at_valid;
+packages/db/migrations/0098_fix_migration_audit_issues.down.sql:8: ALTER TABLE chart_drawings DROP CONSTRAINT IF EXISTS fk_chart_drawings_contest;
+packages/db/migrations/0098_fix_migration_audit_issues.down.sql:19: AND constraint_name = 'users_phone_key'
+packages/db/migrations/0098_fix_migration_audit_issues.up.sql:69: AND constraint_name = 'users_phone_key'
+packages/db/migrations/0098_fix_migration_audit_issues.up.sql:71: ALTER TABLE users DROP CONSTRAINT users_phone_key;
+packages/db/migrations/0098_fix_migration_audit_issues.up.sql:85: WHERE constraint_name = 'fk_chart_drawings_contest'
+packages/db/migrations/0106_mvp_tournament_scheduling.down.sql:12: DROP CONSTRAINT IF EXISTS chk_template_auto_create_requires_cron;
+packages/db/migrations/0106_mvp_tournament_scheduling.up.sql:11: DROP CONSTRAINT IF EXISTS chk_template_auto_create_requires_cron;
+packages/db/migrations/0110_lifecycle002_drop_participant_capacity.down.sql:2: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_current_participants_lte_max;
+packages/db/migrations/0110_lifecycle002_drop_participant_capacity.up.sql:5: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_current_participants_lte_max;
+packages/db/migrations/0116_contest_fee_wallet.down.sql:15: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_entry_shape;
+packages/db/migrations/0116_contest_fee_wallet.up.sql:12: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_external_deposit_kind;
+packages/db/migrations/0116_contest_fee_wallet.up.sql:13: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_ledger_amount_positive;
+packages/db/migrations/0117_contest_lifecycle_snapshots.down.sql:12: DROP CONSTRAINT IF EXISTS uq_contest_settlements_id_contest;
+packages/db/migrations/0117_contest_lifecycle_snapshots.down.sql:15: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_contest_lifecycle_policy;
+packages/db/migrations/0118_contest_prize_pool.down.sql:9: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_entry_shape;
+packages/db/migrations/0118_contest_prize_pool.down.sql:32: ALTER TABLE contests DROP CONSTRAINT IF EXISTS chk_contest_funds_policy;
+packages/db/migrations/0118_contest_prize_pool.up.sql:110: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_entry_shape;
+packages/db/migrations/0119_lifecycle004_financial_reversal.down.sql:21: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_entry_shape;
+packages/db/migrations/0119_lifecycle004_financial_reversal.down.sql:32: ALTER TABLE contest_prize_pool_ledger DROP CONSTRAINT chk_pool_entry_shape, DROP CONSTRAINT uq_pool_reversal_original,
+packages/db/migrations/0119_lifecycle004_financial_reversal.down.sql:41: ALTER TABLE contest_participants DROP CONSTRAINT chk_participant_lifecycle_status,
+packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql:66: DROP CONSTRAINT chk_contest_prize_pool_ledger_amount_cents_check,
+packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql:67: DROP CONSTRAINT contest_prize_pool_ledger_direction_check,
+packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql:68: DROP CONSTRAINT contest_prize_pool_ledger_reason_check,
+packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql:69: DROP CONSTRAINT contest_prize_pool_ledger_reference_type_check,
+packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql:106: ALTER TABLE treasury_ledger DROP CONSTRAINT chk_treasury_entry_shape;
+packages/db/migrations/0121_rank001_ranking_eligibility.down.sql:5: DROP CONSTRAINT IF EXISTS chk_participant_ranking_state,
+packages/db/migrations/0122_econ_adj_001_economic_snapshot.down.sql:11: ALTER TABLE contest_snapshots DROP CONSTRAINT IF EXISTS chk_economic_cutoff_population,
+
+=== migration-checksums ===
+78a9e39f7ebd5201c6acfbd38be9892d951d663afccaa3e7c7ea6c43c4d07338  packages/db/migrations/0001_init.up.sql  UNCHANGED
+75c122f45639349342b235e31c90fe6374382c6553acd8b738594fef362892a8  packages/db/migrations/0002_shard_config.up.sql  UNCHANGED
+75fb1cd4357693e9ff629821d3ded9f0e93f271d8539059004c550eaad3a2e14  packages/db/migrations/0003_partition_tables.up.sql  UNCHANGED
+94cd5a4673d00b2b0be50a2de40d50c9ef894b32aa548a8b0cbf714e4e0efa89  packages/db/migrations/0004_wallet.up.sql  UNCHANGED
+f601b028d71ec275a2d848d312eae6db0caa6d61891083b7596961879fe7aed1  packages/db/migrations/0005_candles.up.sql  UNCHANGED
+d923c1087a53ac8c2d762cee5a54e42b0d4aac7cfb5f774b6ffc057abcbd3bb0  packages/db/migrations/0006_user_stats.up.sql  UNCHANGED
+0b5932b66766d3530ce516ac9c2604d6746b8da6678ca38d13aa823ad8c04a4f  packages/db/migrations/0007_leaderboard_indexes.up.sql  UNCHANGED
+3e51a34486a65b1eebb8927817aa42cea10e81e74fa3cdd4bf57020453e0b5b5  packages/db/migrations/0008_free_tournaments.up.sql  UNCHANGED
+8381d42c7c615913d47aabc2001a7620a7016d3359a07a3f6c2629ea6921cd85  packages/db/migrations/0009_contest_duration_types.up.sql  UNCHANGED
+ed4abfedf162ce74b7a5123ccee38d14b0a97cf1ea2d96de8fbbcb1b09dc46c6  packages/db/migrations/0010_kyc_system.up.sql  UNCHANGED
+4c3d02618bfbff9fe67c9881aabe3b24b0a21af264cd40dd9784442d4297c79e  packages/db/migrations/0011_affiliate_program.up.sql  UNCHANGED
+9d15a22a282c6e17324e0d699c425c45a9376d5f5582d22c42209a9a2199f49a  packages/db/migrations/0012_user_status.up.sql  UNCHANGED
+5c993724632abd12d0811694e9123151d519dc23c3c32b552d6c744fe58a508e  packages/db/migrations/0013_order_history_index.up.sql  UNCHANGED
+0e49ff2a9cb0a09130d25b461480d5f536f45042cb2e74cf9a95bd82475267fc  packages/db/migrations/0014_tralent_score.up.sql  UNCHANGED
+0d7a65d847d1e06e3664876961a0f0d4c8ff87d0dd1dae1cf3ff0b31784f5730  packages/db/migrations/0015_flexible_contest_config.up.sql  UNCHANGED
+41da50cf6d5bdd4ee606fbbedc7c26bbaa0a5b24c1750a53c009ebb281084a7f  packages/db/migrations/0016_contest_state_machine.up.sql  UNCHANGED
+51124d9506c84fadb783a16e0648c69c8fe1e663abe1666a2aac891cce071ae0  packages/db/migrations/0017_auto_generated_contests.up.sql  UNCHANGED
+ce7140c01ad40dc27b7f1191e25dd999acd9837d5b5a590071c320eeb38d9123  packages/db/migrations/0018_tournament_calendar.up.sql  UNCHANGED
+fd817d8e970a810612b4bdac9eb50b3285f5617ca734534bcfaa7584cd646ebb  packages/db/migrations/0019_settlement_tables.up.sql  UNCHANGED
+d19c4427a01708afd7ace8ce5df2c12820d0aac642d998188a1c409336d62051  packages/db/migrations/0020_affiliate_activation.up.sql  UNCHANGED
+807faf6b54cca376845718784b129aae822c5bae5464a45699b8b0a40c78c272  packages/db/migrations/0021_password_reset_tokens.up.sql  UNCHANGED
+28463b32681aaf42ac7adcc6b2241fe359fd7645d53a9632840b9ca9c7ec3bd7  packages/db/migrations/0022_email_verification.up.sql  UNCHANGED
+47ac656d50c3461c0bb179acc266fd11d91f24e5673db388ada257f7db293271  packages/db/migrations/0023_user_profile.up.sql  UNCHANGED
+cd3a0b7afde96adda6067b76f39bc478be55334a042359efbe8f399f9f20e8b5  packages/db/migrations/0024_admin_roles.up.sql  UNCHANGED
+f4964776a280c2e1c5c21ef73b160f93c16ed65ec67c90956fbf289281c3ecf0  packages/db/migrations/0025_withdrawal_management.up.sql  UNCHANGED
+f3546f721b9fc23f9d0a9d5eb012223d5ce8db9168fa1be7b1b4f301c749b66c  packages/db/migrations/0026_symbols_master.up.sql  UNCHANGED
+d9b7a266dd7d3dd51b0089deb9cacad1e886228e6fe9075b9f20502798cca2b0  packages/db/migrations/0027_contest_reminder_tracking.up.sql  UNCHANGED
+dbbb7a7dcfce8298d8b12d3375febed8285c22672eefef85fa82abf72fcbe8d7  packages/db/migrations/0028_email_templates.up.sql  UNCHANGED
+429c7b45dd423d2bad8bf171879ed960ae6fce52118da2efd3e2a50f55288e4d  packages/db/migrations/0029_wallet_idempotency.up.sql  UNCHANGED
+29af7c9c684635154adbb2902bd67bf881e8e7fe1601dbcb29ee4e58111c5e02  packages/db/migrations/0030_finalization_tracking.up.sql  UNCHANGED
+3f71771dd95185bf437a247f3078608f4c080bb55af241f015b24f778146b5df  packages/db/migrations/0031_contest_pause_timing.up.sql  UNCHANGED
+7f9f0eecd91368323e371e8bd85fb09ce4f6c7d958cf20223bac7de689828bb3  packages/db/migrations/0032_decimal_scores.up.sql  UNCHANGED
+a2558240712c17a53aca6a107a889cd79589cb3dc2f1cce3e47e2e78440fcf88  packages/db/migrations/0033_calendar_entries.up.sql  UNCHANGED
+0b089d261081bd470a5b18c9d8640d7339ad0fb1679209d68b7bff5ef244731d  packages/db/migrations/0034_oauth_accounts.up.sql  UNCHANGED
+0053234aaa4e85c3447f6fe7a8043dcce099c2cf0b4db8b3126abd6f0c7eb468  packages/db/migrations/0035_recreate_positions_compat.up.sql  UNCHANGED
+2ea5642cea8b0b4f3cb4f7a1caba8903ed6b8108acc8318fd549d6ce71cc90b2  packages/db/migrations/0036_email_template_versions.up.sql  UNCHANGED
+b4d503b98a4d376d32b14ed6a554608b057f93f84f6cd5266c86abffd43a5ef2  packages/db/migrations/0037_multi_interval_reminders.up.sql  UNCHANGED
+ef3f10c22b737398b9a292f21be7755d6296f8f33f37b5fdef8aa6b238a5785c  packages/db/migrations/0038_contest_unjoin_config.up.sql  UNCHANGED
+f30c115ee74f1ab4a1121f51b2b1e38d0b8a527abf4c8e47dcaa189cda6aac4d  packages/db/migrations/0039_contest_started_email_template.up.sql  UNCHANGED
+b978361f6a4fc4ce19c603c801394ac8f0a039960a59198bf45fc70f19710cdc  packages/db/migrations/0040_contest_ending_reminders.up.sql  UNCHANGED
+b72c75ba1bce7bc8d3422b4870491940dc06ee3ecaae2c99bb5a4d7edc4f3f8f  packages/db/migrations/0041_jibit_kyc_fields.up.sql  UNCHANGED
+9e2da579cc662dddb63cfe859f728e67b74438b9aaefc315bf11c23fc63f17ac  packages/db/migrations/0042_system_accounts.up.sql  UNCHANGED
+af149d2f76229591c14bf175ef4a17e188ce5468c05420d14a3f86c5af8d28eb  packages/db/migrations/0043_rename_finnhub_to_massive.up.sql  UNCHANGED
+491b02b558d8529eeed4819b995984bbc0e5c25c26edd718c503e7ef8f6c515f  packages/db/migrations/0044_update_massive_provider_symbols.up.sql  UNCHANGED
+436eb4797449ae85da6e3c3c05fe42046b54ab6d9101eeff39aa6b6affeed30e  packages/db/migrations/0045_massive_provider_symbols.up.sql  UNCHANGED
+0359d7bfcf4cbacef8b5c1e2029d4cc7a972740284ee29e4ea5f62441c4890f1  packages/db/migrations/0046_contest_commission_rate_default.up.sql  UNCHANGED
+4386c1b443d422c1a7055a9b85d26a82c67e23370c96b5d7ec2cae4b3f059af4  packages/db/migrations/0047_prize_lock.up.sql  UNCHANGED
+5700a83506a9aa560856df5ef6ab841b87c3595b1e2a6bcb31a2c720a5b9e360  packages/db/migrations/0048_wallet_reason_code.up.sql  UNCHANGED
+b2f9eb349a8e452efbc9f74e6a426710ea97926a706d0cb88137e315736fda92  packages/db/migrations/0049_password_changed_at.up.sql  UNCHANGED
+50dea26e88bbe8ec15be3d5902324de8cae73b31b110488bc65a3fc50edbf4b4  packages/db/migrations/0050_two_factor_auth.up.sql  UNCHANGED
+b8d0e412a1db4841dca11b675d3893716787bac0cac7becbc18de92552b97bf6  packages/db/migrations/0051_nobitex_provider.up.sql  UNCHANGED
+fc5d0538dd8dc258dce6a7380e816c39c705f0ecae1b186fcf4889954ae0c722  packages/db/migrations/0052_withdrawal_limits.up.sql  UNCHANGED
+b8a456dc02db2298e0faa7ff77cfdd621253a6a5b43c97ae604ec3da3c392168  packages/db/migrations/0053_order_type_directional.up.sql  UNCHANGED
+6fe99322a39202878fd4e8db6107fd4584b17b2b81d178ce99ad0d1436ea2869  packages/db/migrations/0054_free_contest_unique_constraint.up.sql  UNCHANGED
+be8f5135ce98777050710155312a60b443ab9899305dd0805338f44bf9f15ca9  packages/db/migrations/0055_settlement_batch_indexes.up.sql  UNCHANGED
+307a62ac6730b3fcf0573d0efe1a6612086a80c72d7659e8707840ebebb304ef  packages/db/migrations/0056_tournament_template_updated_at.up.sql  UNCHANGED
+54f0199cf3ba8102db9637767db4ff2f17bdfa59b13c404b98e2a42ac7b78153  packages/db/migrations/0057_withdraw_fee_and_expired_status.up.sql  UNCHANGED
+6f17eb5916dbe37aa81cb1d715c0a5919a7163598c4ca2fa955af167cd1b725e  packages/db/migrations/0058_withdrawal_refund_ledger_types.up.sql  UNCHANGED
+1c841cba9cebba98851ad827e9aa426fc10cc93336e8debebf68f5f2c273645f  packages/db/migrations/0059_drop_contest_unjoin_columns.up.sql  UNCHANGED
+ec7c988e3e3dd1118d5d9ce4810722eb6b517c0bf055a5f5b9a5760844a8f3ea  packages/db/migrations/0060_terms_accepted_at.up.sql  UNCHANGED
+c861d60cd3fa59296aad760ab3269484095edb0290d25e1faa859eaa1b508b02  packages/db/migrations/0061_tournament_templates_schema.up.sql  UNCHANGED
+d849e63eac23163692eaf4701e432f599b21e04bd651361cefce93cf89c0cc99  packages/db/migrations/0062_tournament_schedules.up.sql  UNCHANGED
+d620f507e4f96fbb925e2fbb68bcf22487d6e1a2770f0791458a6cff94509f2c  packages/db/migrations/0063_contests_template_fields.up.sql  UNCHANGED
+cd9afbc18f1675eb31db5fd6586fc17eec951bf697ae0c003916c77244d25c41  packages/db/migrations/0064_template_prize_distributions.up.sql  UNCHANGED
+2701890559ff74a5933dc08d34caaa153baceb376e31c633782da56586eb16f7  packages/db/migrations/0065_seed_tournament_templates.up.sql  UNCHANGED
+dc701c4cbf9fc5df0d207a3d5c79b8454036edd619b8f2c3d9cb4f96d0fae867  packages/db/migrations/0066_seed_tournament_schedules.up.sql  UNCHANGED
+e254f270178601d9801ab9993aa515b6542b7e53e9c712e3186a73bac7d28285  packages/db/migrations/0067_contest_schedule_dedup.up.sql  UNCHANGED
+0f9c88be73a27150418eaf3bacbc1eea0582cf032e60d47129ddc6488100bf09  packages/db/migrations/0068_tournament_state_enhancements.up.sql  UNCHANGED
+6463c86fdf7c76037412cd071c22b596c8aee7656676abd9ef08f382165256fe  packages/db/migrations/0069_ban_expires_at.up.sql  UNCHANGED
+46692f4054bb6676b9d4cf3c40730939199fcf26a45446d7507dcfbcaf3d519b  packages/db/migrations/0070_final_rankings_win_rate.up.sql  UNCHANGED
+663b1037b5ea376f5f69a8a3ebd29a366c837c90fe2b94ef4dbc85a364752fb2  packages/db/migrations/0071_contest_template_dedup.up.sql  UNCHANGED
+2726cea72e80f270b4af02489cbc1850443ee8ad14154eed19e7d4c660ab8495  packages/db/migrations/0072_positions_tp_sl.up.sql  UNCHANGED
+c2892962000f59b7a07dd3b82022ac9bb287ea359e3ec4e3f172281ae99fb7c4  packages/db/migrations/0073_fills_realized_pnl.up.sql  UNCHANGED
+5ee66461166d91df762392ce591072631b8865869ce8b843e5978e5d4ea5b946  packages/db/migrations/0074_rename_tralent_to_tragge.up.sql  UNCHANGED
+f8db56d3c79399675c13735a71a4f27f7f9596369609795e16b0eb501eab3b90  packages/db/migrations/0075_rename_tragge_score_to_tragge_point.up.sql  UNCHANGED
+488680962eb3b3645141ec29cc2d15365b7e7c29220ddad3f6029b57088eac69  packages/db/migrations/0076_update_crypto_symbols.up.sql  UNCHANGED
+e70d543e39dac1b6f16ec65f1fe36d6c1e5806282f7d8a436e637954f9e1aca7  packages/db/migrations/0077_binance_provider.up.sql  UNCHANGED
+dbf3054bcedd6112aafbcc7e9d206f9081bc0948659424a30e69a90c76f0063c  packages/db/migrations/0078_symbol_sort_order.up.sql  UNCHANGED
+dfb43c29f7790c228ea6c2a6362c11458d8e09cf4387f0214fb045687ff3b158  packages/db/migrations/0079_template_entry_tiers.up.sql  UNCHANGED
+57034224618ff7a9dac0d93b8b5f958262254d7ed420f6d2071f6f49d59c43f9  packages/db/migrations/0080_predefined_avatars.up.sql  UNCHANGED
+8bd3d76bc1164ff234026bf180786c094ebecd7b77d895dea638895a44d776aa  packages/db/migrations/0081_manual_kyc_iranian.up.sql  UNCHANGED
+ecc1acb0b53d8cd435ba2de2bbd1f283acfd6634a27c47189119e980745d4ed8  packages/db/migrations/0082_chart_drawings.up.sql  UNCHANGED
+2f8b70fb1b2f14477aac270d83b08a3dcb954cdf6582c090ac72cdd73bf0fe6a  packages/db/migrations/0083_security_audit_log.up.sql  UNCHANGED
+4d101add53a3f61a86ffce133f0ca7137e5792876c6f24855c45ce82832db5a4  packages/db/migrations/0084_notification_preferences.up.sql  UNCHANGED
+6abc0fb8c98f36fe9f32354de8b2a1b62232d107c72bb685a6a6821d03475bca  packages/db/migrations/0085_rename_system_bot.up.sql  UNCHANGED
+67aeba44c89e62202a611c151474920a66e0665c110a2de932d45c34e6e0ae54  packages/db/migrations/0086_phone_unique_index.up.sql  UNCHANGED
+f5f6d66ef2854ce221e63039f7703f89c86abce4b355cfcd7853b522e7276f08  packages/db/migrations/0087_support_tickets.up.sql  UNCHANGED
+15583ca2a4fffe623c2d45232c1a367194a8b9972c2c8c2f6525114d21579e45  packages/db/migrations/0088_finnhub_provider.up.sql  UNCHANGED
+704ab08ae2ba16a15f4349bb4099932b2ba1837ccf1fca5166f9fd796ef41a11  packages/db/migrations/0089_ticket_updated_index.up.sql  UNCHANGED
+996eeb87665ca3011dcb1da40fd390c9db36f9c60503743ab152c8c42da70e5d  packages/db/migrations/0090_provider_payment_id_unique.up.sql  UNCHANGED
+efcceadbb6ef4773ea981d720ddee3297559597ed93e92a8c98ca56046edf730  packages/db/migrations/0091_email_verification_otp.up.sql  UNCHANGED
+0fdbdfc03085ef2ad63605a0fbbc9b62cfa4e583b0d441432811c866f37382e2  packages/db/migrations/0092_add_phone_auth.up.sql  UNCHANGED
+16cd004d7957d45f83993817754fa569fa41e4d07579182348e9f94d61bc4854  packages/db/migrations/0093_verification_codes.up.sql  UNCHANGED
+9f6f0b3ebda09d6fea57cff0d0c2d96f3d11df5589381985bb9def092b339253  packages/db/migrations/0094_password_reset_codes.up.sql  UNCHANGED
+c9fde6e496ae1cb41166980ea12784b0e6071aea7faa3fb133c5058b09f0a47c  packages/db/migrations/0095_verification_codes_cleanup_index.up.sql  UNCHANGED
+e2d6d0f0aa4f73de00f43f82372a8f49be122b100ca1d9eaf7c5dcf20f277548  packages/db/migrations/0096_full_forex_symbols.up.sql  UNCHANGED
+03c26b0642251c5b3d2ec802a1f20b120d8553efb5e1a3dd43393e0db9b21773  packages/db/migrations/0097_users_preferred_lang.up.sql  UNCHANGED
+9e80a15ce67b97250809f517be342132c1afc3e3454d9e8b745d8d55d231db5f  packages/db/migrations/0098_fix_migration_audit_issues.up.sql  UNCHANGED
+2d5658749ccd7758437a5e5b7491213ed2909f484fa0b4b32778358a1225b3cc  packages/db/migrations/0099_admin_canonical_roles.up.sql  UNCHANGED
+2b1deffc91d8ecff53af9fc4942908f49fb53d74c77c38169588faf7b90d7e19  packages/db/migrations/0100_admin_super_mfa.up.sql  UNCHANGED
+a9050a6c4233fd3c64b8a53402105a8b02eb28b7b05321baaf2c40413839057f  packages/db/migrations/0101_telegram_auth.up.sql  UNCHANGED
+5e52a508b5c1e591bdd726055ed69986f807113119a904f4d34a2bc40ae3005f  packages/db/migrations/0102_payout_manual_fields.up.sql  UNCHANGED
+8ad858547ab62cef810614c64732396cf259cbabefed377744a9f4043e77335c  packages/db/migrations/0103_contest_economics_lock.up.sql  UNCHANGED
+116b1f2eaccd682cd92cb8646fd0f9c91814ab18e3eed750c187dccf7e203374  packages/db/migrations/0104_admin_mfa_policy.up.sql  UNCHANGED
+cf5d86c8cbdf966f7af248dca7ce98d61af72945bc936b2fe709b0920f29ad2d  packages/db/migrations/0105_order_client_idempotency.up.sql  UNCHANGED
+8cd3c93b9a3f6a48ae794652bc62fed3292d8182d73554bbcb9be1d36d19ed27  packages/db/migrations/0106_mvp_tournament_scheduling.up.sql  UNCHANGED
+808f5714533b06b890f01fc8c44333cf5b03b53fba1679e8f8651d9fca98322f  packages/db/migrations/0107_telegram_profile_metadata.up.sql  UNCHANGED
+1f96e03398c78c738e76537710e2f268ff60134c1db99dd8c5bb104117d47062  packages/db/migrations/0108_deriv_provider.up.sql  UNCHANGED
+060ef4cdb5f2e569c809e086d92e2e349660d961d299e308d2ca3c95ff9d6a35  packages/db/migrations/0109_fin001_platform_fee_bps_canonical.up.sql  UNCHANGED
+645a713dec393863195848b9b2da8ba19042441d2f19f0ec3a71d04c6a54fea7  packages/db/migrations/0110_lifecycle002_drop_participant_capacity.up.sql  UNCHANGED
+e5d50cd45f467d1414e80ee9db061e1e5fc48dd08af8c8df83b2cc034a5877db  packages/db/migrations/0111_lifecycle003_audit_safe_archival.up.sql  UNCHANGED
+1eadf3ad96aa5638777219e831985fc9de251cfa92e67f2c1f39c4c7956ed858  packages/db/migrations/0112_fin006_admin_funded_deposit.up.sql  UNCHANGED
+a9929031d51f4a18709207194598495080c50ff73f454321ec464bd8a568b41d  packages/db/migrations/0113_fin006_backfill_admin_funded_deposit.up.sql  UNCHANGED
+c5b066e72f6866a96f72238d368b4e8c8cebc964ab781b3df0637747d4376228  packages/db/migrations/0114_md005a_forex_provider_default_deriv.up.sql  UNCHANGED
+630cc7d70f3d31f329a505582ebbc3f6ba53fcf95a110448e29e45434e0c1dd2  packages/db/migrations/0115_treasury_custody_account.up.sql  UNCHANGED
+265c020ecabc0c95256bd99ccf2a177ec297b15c78022389ffa30c84cd67d994  packages/db/migrations/0116_contest_fee_wallet.up.sql  UNCHANGED
+5976dfe7f85511cd3a64edfa95ca3427e2c4f06caf3974d7093dc55caf26a864  packages/db/migrations/0117_contest_lifecycle_snapshots.up.sql  UNCHANGED
+582f82dc0fb3d5c32d73c381d24eb0106ce7ca81d7d961b362400d213e818b53  packages/db/migrations/0118_contest_prize_pool.up.sql  UNCHANGED
+9df0cdc25206f90781b03cc4ea57bb1b213ea6676aafe24b0eba66d6f4f7d1a3  packages/db/migrations/0119_lifecycle004_financial_reversal.up.sql  CHANGED
+2bf1703250c4b2b2adb0816ef0b8e70cde730888ef67b3086db4db7b963f1ea1  packages/db/migrations/0120_lifecycle004_immutable_audit.up.sql  UNCHANGED
+cd7931dd15b5967ed3afeae10356c483a2a32fbe8068d3dd72f712e3579a8a6e  packages/db/migrations/0121_rank001_ranking_eligibility.up.sql  UNCHANGED
+b22c5570e8b90932a315eee3efa40b50ceb39573386818cf37994f006dfb7e7c  packages/db/migrations/0122_econ_adj_001_economic_snapshot.up.sql  UNCHANGED
+
+=== create-tragge_test_migration_0119_baseline ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d postgres'
+STDIN:
+CREATE DATABASE tragge_test_migration_0119_baseline;
+EXIT: 0
+CREATE DATABASE
+
+=== init-tragge_test_migration_0119_baseline ===
+$ docker exec tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_migration_0119_baseline -f /docker-entrypoint-initdb.d/01-create-users.sql; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_migration_0119_baseline -f /docker-entrypoint-initdb.d/02-grant-privileges.sql'
+EXIT: 0
+CREATE EXTENSION
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+GRANT ROLE
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:151: NOTICE:  role "tragge_admin" has already been granted membership in role "tragge_admin_role" by role "tragge_admin"
+GRANT ROLE
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:152: NOTICE:  role "tragge_app" has already been granted membership in role "tragge_app_role" by role "tragge_admin"
+GRANT ROLE
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:153: NOTICE:  role "tragge_readonly" has already been granted membership in role "tragge_readonly_role" by role "tragge_admin"
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+GRANT
+GRANT
+GRANT
+REVOKE
+REVOKE
+GRANT
+DO
+GRANT
+GRANT
+DO
+DO
+DO
+       grantee        | table_schema |     table_name      | privilege_type
+----------------------+--------------+---------------------+----------------
+ tragge_admin_role    | public       | privilege_audit_log | DELETE
+ tragge_admin_role    | public       | privilege_audit_log | INSERT
+ tragge_admin_role    | public       | privilege_audit_log | REFERENCES
+ tragge_admin_role    | public       | privilege_audit_log | SELECT
+ tragge_admin_role    | public       | privilege_audit_log | TRIGGER
+ tragge_admin_role    | public       | privilege_audit_log | TRUNCATE
+ tragge_admin_role    | public       | privilege_audit_log | UPDATE
+ tragge_app_role      | public       | privilege_audit_log | DELETE
+ tragge_app_role      | public       | privilege_audit_log | INSERT
+ tragge_app_role      | public       | privilege_audit_log | SELECT
+ tragge_app_role      | public       | privilege_audit_log | UPDATE
+ tragge_readonly_role | public       | privilege_audit_log | SELECT
+(12 rows)
+
+
+=== create-tragge_test_migration_0119_fresh ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d postgres'
+STDIN:
+CREATE DATABASE tragge_test_migration_0119_fresh;
+EXIT: 0
+CREATE DATABASE
+
+=== init-tragge_test_migration_0119_fresh ===
+$ docker exec tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_migration_0119_fresh -f /docker-entrypoint-initdb.d/01-create-users.sql; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_migration_0119_fresh -f /docker-entrypoint-initdb.d/02-grant-privileges.sql'
+EXIT: 0
+CREATE EXTENSION
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:151: NOTICE:  role "tragge_admin" has already been granted membership in role "tragge_admin_role" by role "tragge_admin"
+GRANT ROLE
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:152: NOTICE:  role "tragge_app" has already been granted membership in role "tragge_app_role" by role "tragge_admin"
+GRANT ROLE
+GRANT ROLE
+psql:/docker-entrypoint-initdb.d/01-create-users.sql:153: NOTICE:  role "tragge_readonly" has already been granted membership in role "tragge_readonly_role" by role "tragge_admin"
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+GRANT
+GRANT
+GRANT
+REVOKE
+REVOKE
+GRANT
+DO
+GRANT
+GRANT
+DO
+DO
+DO
+       grantee        | table_schema |     table_name      | privilege_type
+----------------------+--------------+---------------------+----------------
+ tragge_admin_role    | public       | privilege_audit_log | DELETE
+ tragge_admin_role    | public       | privilege_audit_log | INSERT
+ tragge_admin_role    | public       | privilege_audit_log | REFERENCES
+ tragge_admin_role    | public       | privilege_audit_log | SELECT
+ tragge_admin_role    | public       | privilege_audit_log | TRIGGER
+ tragge_admin_role    | public       | privilege_audit_log | TRUNCATE
+ tragge_admin_role    | public       | privilege_audit_log | UPDATE
+ tragge_app_role      | public       | privilege_audit_log | DELETE
+ tragge_app_role      | public       | privilege_audit_log | INSERT
+ tragge_app_role      | public       | privilege_audit_log | SELECT
+ tragge_app_role      | public       | privilege_audit_log | UPDATE
+ tragge_readonly_role | public       | privilege_audit_log | SELECT
+(12 rows)
+
+
+=== baseline-118 ===
+$ migrate -path packages/db/migrations -database 'postgres://tragge_admin:<redacted>@127.0.0.1:5432/tragge_test_migration_0119_baseline?sslmode=disable' goto 118
+EXIT: 0
+0/u <empty> (9.813017ms)
+1/u init (331.806137ms)
+2/u shard_config (390.416363ms)
+3/u partition_tables (823.480553ms)
+4/u wallet (926.020419ms)
+5/u candles (950.973955ms)
+6/u user_stats (1.002896659s)
+7/u leaderboard_indexes (1.054215931s)
+8/u free_tournaments (1.098912181s)
+9/u contest_duration_types (1.131897758s)
+10/u kyc_system (1.219733249s)
+11/u affiliate_program (1.308536122s)
+12/u user_status (1.007468225s)
+13/u order_history_index (976.046412ms)
+14/u tralent_score (565.654181ms)
+15/u flexible_contest_config (508.082323ms)
+16/u contest_state_machine (535.68807ms)
+17/u auto_generated_contests (502.052979ms)
+18/u tournament_calendar (507.03401ms)
+19/u settlement_tables (577.825809ms)
+20/u affiliate_activation (575.955479ms)
+21/u password_reset_tokens (515.135124ms)
+22/u email_verification (442.74052ms)
+23/u user_profile (443.881198ms)
+24/u admin_roles (463.500138ms)
+25/u withdrawal_management (466.216436ms)
+26/u symbols_master (452.357812ms)
+27/u contest_reminder_tracking (436.00854ms)
+28/u email_templates (443.879753ms)
+29/u wallet_idempotency (404.267539ms)
+30/u finalization_tracking (323.65131ms)
+31/u contest_pause_timing (313.125501ms)
+32/u decimal_scores (590.2754ms)
+33/u calendar_entries (606.956302ms)
+34/u oauth_accounts (621.11372ms)
+35/u recreate_positions_compat (589.212986ms)
+36/u email_template_versions (592.644692ms)
+37/u multi_interval_reminders (581.422327ms)
+38/u contest_unjoin_config (560.31094ms)
+39/u contest_started_email_template (544.999564ms)
+40/u contest_ending_reminders (538.485452ms)
+41/u jibit_kyc_fields (522.582229ms)
+42/u system_accounts (526.612904ms)
+43/u rename_finnhub_to_massive (235.704232ms)
+44/u update_massive_provider_symbols (206.32784ms)
+45/u massive_provider_symbols (182.811785ms)
+46/u contest_commission_rate_default (183.748679ms)
+47/u prize_lock (179.449258ms)
+48/u wallet_reason_code (177.344709ms)
+49/u password_changed_at (174.404466ms)
+50/u two_factor_auth (177.022987ms)
+51/u nobitex_provider (183.526662ms)
+52/u withdrawal_limits (191.001016ms)
+53/u order_type_directional (177.269702ms)
+54/u free_contest_unique_constraint (182.680659ms)
+55/u settlement_batch_indexes (194.434517ms)
+56/u tournament_template_updated_at (194.176591ms)
+57/u withdraw_fee_and_expired_status (189.656831ms)
+58/u withdrawal_refund_ledger_types (176.570069ms)
+59/u drop_contest_unjoin_columns (170.330142ms)
+60/u terms_accepted_at (168.798258ms)
+61/u tournament_templates_schema (185.73673ms)
+62/u tournament_schedules (196.855762ms)
+63/u contests_template_fields (192.201653ms)
+64/u template_prize_distributions (205.060206ms)
+65/u seed_tournament_templates (209.640455ms)
+66/u seed_tournament_schedules (203.928663ms)
+67/u contest_schedule_dedup (205.769629ms)
+68/u tournament_state_enhancements (223.69691ms)
+69/u ban_expires_at (228.922972ms)
+70/u final_rankings_win_rate (228.376179ms)
+71/u contest_template_dedup (231.677002ms)
+72/u positions_tp_sl (216.873023ms)
+73/u fills_realized_pnl (204.688663ms)
+74/u rename_tralent_to_tragge (198.979732ms)
+75/u rename_tragge_score_to_tragge_point (192.698265ms)
+76/u update_crypto_symbols (184.194153ms)
+77/u binance_provider (186.992277ms)
+78/u symbol_sort_order (195.317699ms)
+79/u template_entry_tiers (217.21881ms)
+80/u predefined_avatars (229.221469ms)
+81/u manual_kyc_iranian (238.419842ms)
+82/u chart_drawings (248.071482ms)
+83/u security_audit_log (262.115349ms)
+84/u notification_preferences (266.368473ms)
+85/u rename_system_bot (263.512863ms)
+86/u phone_unique_index (262.647503ms)
+87/u support_tickets (311.757275ms)
+88/u finnhub_provider (304.626371ms)
+89/u ticket_updated_index (301.554635ms)
+90/u provider_payment_id_unique (269.450661ms)
+91/u email_verification_otp (253.84656ms)
+92/u add_phone_auth (259.798259ms)
+93/u verification_codes (262.830587ms)
+94/u password_reset_codes (257.876218ms)
+95/u verification_codes_cleanup_index (256.265421ms)
+96/u full_forex_symbols (257.554173ms)
+97/u users_preferred_lang (254.132523ms)
+98/u fix_migration_audit_issues (237.135775ms)
+99/u admin_canonical_roles (235.478283ms)
+100/u admin_super_mfa (249.94872ms)
+101/u telegram_auth (245.75858ms)
+102/u payout_manual_fields (251.358516ms)
+103/u contest_economics_lock (241.792754ms)
+104/u admin_mfa_policy (235.815436ms)
+105/u order_client_idempotency (230.46901ms)
+106/u mvp_tournament_scheduling (228.272315ms)
+107/u telegram_profile_metadata (227.84398ms)
+108/u deriv_provider (234.293937ms)
+109/u fin001_platform_fee_bps_canonical (201.38215ms)
+110/u lifecycle002_drop_participant_capacity (201.813224ms)
+111/u lifecycle003_audit_safe_archival (208.957152ms)
+112/u fin006_admin_funded_deposit (207.825043ms)
+113/u fin006_backfill_admin_funded_deposit (203.389749ms)
+114/u md005a_forex_provider_default_deriv (197.61634ms)
+115/u treasury_custody_account (209.341808ms)
+116/u contest_fee_wallet (245.174276ms)
+117/u contest_lifecycle_snapshots (273.152421ms)
+118/u contest_prize_pool (319.982487ms)
+
+=== red ===
+$ go test -count=1 -run '^TestMigration0119PostgreSQL$' -v ./packages/db/...
+EXIT: 1
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+    migration_0119_postgres_test.go:113: ERROR: constraint "chk_contest_prize_pool_ledger_amount_cents_check" of relation "contest_prize_pool_ledger" does not exist (SQLSTATE 42704)
+=== RUN   TestMigration0119PostgreSQL/already_removed
+    migration_0119_postgres_test.go:113: ERROR: constraint "chk_contest_prize_pool_ledger_amount_cents_check" of relation "contest_prize_pool_ledger" does not exist (SQLSTATE 42704)
+=== RUN   TestMigration0119PostgreSQL/renamed
+    migration_0119_postgres_test.go:113: ERROR: constraint "chk_contest_prize_pool_ledger_amount_cents_check" of relation "contest_prize_pool_ledger" does not exist (SQLSTATE 42704)
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+    migration_0119_postgres_test.go:113: ERROR: constraint "chk_contest_prize_pool_ledger_amount_cents_check" of relation "contest_prize_pool_ledger" does not exist (SQLSTATE 42704)
+--- FAIL: TestMigration0119PostgreSQL (0.24s)
+    --- FAIL: TestMigration0119PostgreSQL/implicit_names (0.08s)
+    --- FAIL: TestMigration0119PostgreSQL/already_removed (0.05s)
+    --- FAIL: TestMigration0119PostgreSQL/renamed (0.05s)
+    --- FAIL: TestMigration0119PostgreSQL/generated_name_collision (0.05s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.249s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.004s [no tests to run]
+FAIL
+
+=== green ===
+$ go test -count=1 -run '^TestMigration0119PostgreSQL$' -v ./packages/db/...
+EXIT: 0
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+=== RUN   TestMigration0119PostgreSQL/already_removed
+=== RUN   TestMigration0119PostgreSQL/renamed
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+--- PASS: TestMigration0119PostgreSQL (0.73s)
+    --- PASS: TestMigration0119PostgreSQL/implicit_names (0.23s)
+    --- PASS: TestMigration0119PostgreSQL/already_removed (0.18s)
+    --- PASS: TestMigration0119PostgreSQL/renamed (0.16s)
+    --- PASS: TestMigration0119PostgreSQL/generated_name_collision (0.16s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	0.734s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.002s [no tests to run]
+
+=== regression-race ===
+$ go test -count=1 -run '^TestMigration0119PostgreSQL$' -v -race ./packages/db/...
+EXIT: 0
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+=== RUN   TestMigration0119PostgreSQL/already_removed
+=== RUN   TestMigration0119PostgreSQL/renamed
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+--- PASS: TestMigration0119PostgreSQL (1.84s)
+    --- PASS: TestMigration0119PostgreSQL/implicit_names (0.26s)
+    --- PASS: TestMigration0119PostgreSQL/already_removed (0.19s)
+    --- PASS: TestMigration0119PostgreSQL/renamed (1.19s)
+    --- PASS: TestMigration0119PostgreSQL/generated_name_collision (0.18s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	2.867s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	1.016s [no tests to run]
+
+=== fresh-up ===
+$ make -s migrate-up
+EXIT: 0
+0/u <empty> (41.832886ms)
+1/u init (349.304115ms)
+2/u shard_config (423.199002ms)
+3/u partition_tables (876.074955ms)
+4/u wallet (977.716541ms)
+5/u candles (1.003144522s)
+6/u user_stats (1.087504666s)
+7/u leaderboard_indexes (1.163605292s)
+8/u free_tournaments (1.213992391s)
+9/u contest_duration_types (1.248045739s)
+10/u kyc_system (1.364506514s)
+11/u affiliate_program (1.607941198s)
+12/u user_status (1.320137931s)
+13/u order_history_index (1.274369513s)
+14/u tralent_score (844.85435ms)
+15/u flexible_contest_config (800.375114ms)
+16/u contest_state_machine (821.088482ms)
+17/u auto_generated_contests (759.569053ms)
+18/u tournament_calendar (756.37529ms)
+19/u settlement_tables (820.859881ms)
+20/u affiliate_activation (821.039413ms)
+21/u password_reset_tokens (729.814762ms)
+22/u email_verification (473.791385ms)
+23/u user_profile (477.040201ms)
+24/u admin_roles (493.570595ms)
+25/u withdrawal_management (500.55637ms)
+26/u symbols_master (480.789188ms)
+27/u contest_reminder_tracking (469.87416ms)
+28/u email_templates (474.063659ms)
+29/u wallet_idempotency (421.382839ms)
+30/u finalization_tracking (343.888324ms)
+31/u contest_pause_timing (328.263071ms)
+32/u decimal_scores (615.423269ms)
+33/u calendar_entries (630.935916ms)
+34/u oauth_accounts (646.433577ms)
+35/u recreate_positions_compat (614.253834ms)
+36/u email_template_versions (613.748212ms)
+37/u multi_interval_reminders (597.176526ms)
+38/u contest_unjoin_config (577.724435ms)
+39/u contest_started_email_template (561.070365ms)
+40/u contest_ending_reminders (550.544271ms)
+41/u jibit_kyc_fields (530.331324ms)
+42/u system_accounts (537.940338ms)
+43/u rename_finnhub_to_massive (236.673198ms)
+44/u update_massive_provider_symbols (205.873712ms)
+45/u massive_provider_symbols (181.259015ms)
+46/u contest_commission_rate_default (182.289124ms)
+47/u prize_lock (178.515753ms)
+48/u wallet_reason_code (173.686959ms)
+49/u password_changed_at (171.235674ms)
+50/u two_factor_auth (173.416437ms)
+51/u nobitex_provider (180.18704ms)
+52/u withdrawal_limits (187.134961ms)
+53/u order_type_directional (179.704524ms)
+54/u free_contest_unique_constraint (197.318792ms)
+55/u settlement_batch_indexes (223.380898ms)
+56/u tournament_template_updated_at (225.966261ms)
+57/u withdraw_fee_and_expired_status (224.955112ms)
+58/u withdrawal_refund_ledger_types (209.802855ms)
+59/u drop_contest_unjoin_columns (220.248635ms)
+60/u terms_accepted_at (217.792046ms)
+61/u tournament_templates_schema (236.77631ms)
+62/u tournament_schedules (250.43144ms)
+63/u contests_template_fields (255.346811ms)
+64/u template_prize_distributions (267.659897ms)
+65/u seed_tournament_templates (272.876559ms)
+66/u seed_tournament_schedules (261.093881ms)
+67/u contest_schedule_dedup (263.365934ms)
+68/u tournament_state_enhancements (292.410928ms)
+69/u ban_expires_at (304.128127ms)
+70/u final_rankings_win_rate (293.23547ms)
+71/u contest_template_dedup (306.990165ms)
+72/u positions_tp_sl (290.376941ms)
+73/u fills_realized_pnl (280.94145ms)
+74/u rename_tralent_to_tragge (275.480869ms)
+75/u rename_tragge_score_to_tragge_point (264.669979ms)
+76/u update_crypto_symbols (263.125689ms)
+77/u binance_provider (271.024905ms)
+78/u symbol_sort_order (270.054346ms)
+79/u template_entry_tiers (296.411642ms)
+80/u predefined_avatars (315.886828ms)
+81/u manual_kyc_iranian (325.53057ms)
+82/u chart_drawings (333.777458ms)
+83/u security_audit_log (385.242292ms)
+84/u notification_preferences (392.80906ms)
+85/u rename_system_bot (389.043021ms)
+86/u phone_unique_index (388.392942ms)
+87/u support_tickets (451.505258ms)
+88/u finnhub_provider (431.192584ms)
+89/u ticket_updated_index (433.055445ms)
+90/u provider_payment_id_unique (379.490716ms)
+91/u email_verification_otp (348.774929ms)
+92/u add_phone_auth (354.600102ms)
+93/u verification_codes (355.210264ms)
+94/u password_reset_codes (322.074909ms)
+95/u verification_codes_cleanup_index (310.504523ms)
+96/u full_forex_symbols (311.184437ms)
+97/u users_preferred_lang (311.975468ms)
+98/u fix_migration_audit_issues (280.502652ms)
+99/u admin_canonical_roles (282.420988ms)
+100/u admin_super_mfa (295.738946ms)
+101/u telegram_auth (295.431635ms)
+102/u payout_manual_fields (301.559053ms)
+103/u contest_economics_lock (287.974743ms)
+104/u admin_mfa_policy (273.304729ms)
+105/u order_client_idempotency (261.662831ms)
+106/u mvp_tournament_scheduling (262.554054ms)
+107/u telegram_profile_metadata (256.880984ms)
+108/u deriv_provider (258.084601ms)
+109/u fin001_platform_fee_bps_canonical (218.170117ms)
+110/u lifecycle002_drop_participant_capacity (223.611504ms)
+111/u lifecycle003_audit_safe_archival (266.685203ms)
+112/u fin006_admin_funded_deposit (269.030949ms)
+113/u fin006_backfill_admin_funded_deposit (264.091609ms)
+114/u md005a_forex_provider_default_deriv (257.914409ms)
+115/u treasury_custody_account (268.821924ms)
+116/u contest_fee_wallet (299.092415ms)
+117/u contest_lifecycle_snapshots (322.874973ms)
+118/u contest_prize_pool (366.953841ms)
+119/u lifecycle004_financial_reversal (960.569991ms)
+120/u lifecycle004_immutable_audit (960.191434ms)
+121/u rank001_ranking_eligibility (953.076211ms)
+122/u econ_adj_001_economic_snapshot (910.093213ms)
+
+=== fresh-up-repeat ===
+$ make -s migrate-up
+EXIT: 0
+no change
+
+=== fresh-catalog ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_migration_0119_fresh'
+STDIN:
+SELECT version, dirty FROM schema_migrations; SELECT to_regclass('contest_snapshots'), to_regclass('contest_prize_pool_ledger'), to_regclass('economic_adjustment_events'); SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='contest_prize_pool_ledger'::regclass ORDER BY conname;
+EXIT: 0
+ version | dirty
+---------+-------
+     122 | f
+(1 row)
+
+    to_regclass    |        to_regclass        |        to_regclass
+-------------------+---------------------------+----------------------------
+ contest_snapshots | contest_prize_pool_ledger | economic_adjustment_events
+(1 row)
+
+                       conname                       |                                                                                                                                                                                                                                           pg_get_constraintdef
+-----------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ chk_pool_entry_shape                                | CHECK (((((direction)::text = 'credit'::text) AND (amount_cents > 0) AND ((reason)::text = 'contest_admission'::text) AND ((reference_type)::text = 'contest_admission'::text) AND (original_ledger_id IS NULL)) OR (((direction)::text = 'debit'::text) AND (amount_cents < 0) AND ((reason)::text = 'participant_refund'::text) AND ((reference_type)::text = 'lifecycle_event'::text) AND (original_ledger_id IS NOT NULL) AND (lifecycle_event_id IS NOT NULL) AND (reversal_actor_id IS NOT NULL))))
+ contest_prize_pool_ledger_balance_after_cents_check | CHECK ((balance_after_cents >= 0))
+ contest_prize_pool_ledger_contest_id_fkey           | FOREIGN KEY (contest_id) REFERENCES contests(id) ON DELETE RESTRICT
+ contest_prize_pool_ledger_idempotency_key_key       | UNIQUE (idempotency_key)
+ contest_prize_pool_ledger_lifecycle_event_id_fkey   | FOREIGN KEY (lifecycle_event_id) REFERENCES contest_participant_lifecycle_events(id) ON DELETE RESTRICT
+ contest_prize_pool_ledger_original_ledger_id_fkey   | FOREIGN KEY (original_ledger_id) REFERENCES contest_prize_pool_ledger(id) ON DELETE RESTRICT
+ contest_prize_pool_ledger_participant_user_id_fkey  | FOREIGN KEY (participant_user_id) REFERENCES users(id) ON DELETE RESTRICT
+ contest_prize_pool_ledger_pkey                      | PRIMARY KEY (id)
+ contest_prize_pool_ledger_policy_version_check      | CHECK (((policy_version)::text = 'contest_funds_v1'::text))
+ contest_prize_pool_ledger_pool_account_id_fkey      | FOREIGN KEY (pool_account_id) REFERENCES contest_prize_pool_accounts(id) ON DELETE RESTRICT
+ contest_prize_pool_ledger_reversal_actor_id_fkey    | FOREIGN KEY (reversal_actor_id) REFERENCES users(id) ON DELETE RESTRICT
+ uq_contest_pool_admission                           | UNIQUE (contest_id, reference_id)
+ uq_contest_pool_ledger_owner                        | UNIQUE (id, contest_id, pool_account_id)
+ uq_pool_reversal_original                           | UNIQUE (original_ledger_id)
+(14 rows)
+
+
+=== dirty-preflight ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_econ_adj_001'
+STDIN:
+SELECT version, dirty FROM schema_migrations; SELECT count(*) AS other_connections FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid(); SELECT to_regclass('contest_participant_lifecycle_events'), to_regclass('economic_adjustment_events');
+EXIT: 0
+ version | dirty
+---------+-------
+     119 | t
+(1 row)
+
+ other_connections
+-------------------
+                 0
+(1 row)
+
+ to_regclass | to_regclass
+-------------+-------------
+             |
+(1 row)
+
+
+=== schema-comparison ===
+PASS: dirty database schema equals fresh 0118 schema after removing only pg_dump random restrict/unrestrict tokens.
+SHA256: 5b14e65e772966936a680ab975ec87230170ee628e9eeaa4654f186cfe15247e
+
+=== backup ===
+$ docker exec tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec pg_dump -U tragge_admin -Fc -d tragge_test_econ_adj_001' > /tmp/db-migration-0119-fix/backups/dirty-119.dump
+EXIT: 0
+Bytes: 534262
+SHA256: d59160728c10c0a2c3bcbe404350ecb34737d29180760d7fb75355ed54558e14
+
+=== history-before ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_econ_adj_001'
+STDIN:
+SELECT 'admin_mfa_credentials' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,secret_ciphertext,last_totp_counter,enabled_at,recovery_generation,created_at,updated_at FROM public."admin_mfa_credentials") r
+UNION ALL
+SELECT 'admin_mfa_recovery_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,generation,code_digest,used_at,created_at FROM public."admin_mfa_recovery_codes") r
+UNION ALL
+SELECT 'admin_security_settings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT key,value_bool,updated_at,updated_by FROM public."admin_security_settings") r
+UNION ALL
+SELECT 'affiliate_commissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,referrer_id,referred_id,source_type,source_id,gross_amount_cents,commission_rate_bps,commission_cents,status,created_at,credited_at FROM public."affiliate_commissions") r
+UNION ALL
+SELECT 'audit_logs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,actor_user_id,action,target_type,target_id,payload_json,created_at FROM public."audit_logs") r
+UNION ALL
+SELECT 'calendar_contest_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,calendar_entry_id,contest_id,scheduled_for,created_at FROM public."calendar_contest_history") r
+UNION ALL
+SELECT 'calendar_entries' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,recurrence_pattern,cron_expression,start_date,end_date,timezone,registration_lead_time_minutes,enabled,status,last_run_at,next_run_at,created_by,created_at,updated_at FROM public."calendar_entries") r
+UNION ALL
+SELECT 'candles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT symbol,resolution,"time",open,high,low,close,volume,created_at FROM public."candles") r
+UNION ALL
+SELECT 'chart_drawings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,contest_id,symbol,drawings,updated_at FROM public."chart_drawings") r
+UNION ALL
+SELECT 'contest_duration_configs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT duration_type,duration_minutes,default_qty_total,min_entry_fee_cents,max_entry_fee_cents,display_name_en,display_name_fa,created_at,updated_at FROM public."contest_duration_configs") r
+UNION ALL
+SELECT 'contest_fee_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT purpose,account_kind,balance_cents,currency,created_at,updated_at FROM public."contest_fee_accounts") r
+UNION ALL
+SELECT 'contest_fee_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,fee_wallet_purpose,entry_kind,amount_cents,balance_after_cents,contest_id,participant_user_id,admission_id,policy_version,platform_fee_bps,original_entry_id,created_at FROM public."contest_fee_ledger") r
+UNION ALL
+SELECT 'contest_finalization_state' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,finalization_started_at,payouts_calculated,payouts_calculated_at,ranks_written,ranks_written_at,wallets_credited,wallets_credited_at,status_updated,status_updated_at,finalization_completed_at,error_message,last_error_at,retry_count,metadata,created_at,updated_at FROM public."contest_finalization_state") r
+UNION ALL
+SELECT 'contest_participants' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,user_id,joined_at,qty_total,qty_available,total_score,final_rank,final_prize_cents,is_system FROM public."contest_participants") r
+UNION ALL
+SELECT 'contest_participants_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,user_id,joined_at,qty_total,qty_available,total_score,final_rank,final_prize_cents,archived_at FROM public."contest_participants_archive") r
+UNION ALL
+SELECT 'contest_prize_locks' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,total_participants,prize_pool_gross_cents,prize_pool_net_cents,platform_fee_cents,commission_rate,winners_count,distribution_json,locked_at FROM public."contest_prize_locks") r
+UNION ALL
+SELECT 'contest_prize_pool_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,balance_cents,currency,status,created_at,updated_at FROM public."contest_prize_pool_accounts") r
+UNION ALL
+SELECT 'contest_prize_pool_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,pool_account_id,amount_cents,direction,reason,reference_type,reference_id,participant_user_id,policy_version,balance_after_cents,idempotency_key,created_at FROM public."contest_prize_pool_ledger") r
+UNION ALL
+SELECT 'contest_reminders_sent' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,reminder_type,sent_at,recipient_count FROM public."contest_reminders_sent") r
+UNION ALL
+SELECT 'contest_settlements' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,status,started_at,positions_closed_at,rankings_calculated_at,prizes_distributed_at,completed_at,total_participants,total_positions_closed,total_orders_cancelled,total_winners,prize_pool_gross_cents,prize_pool_net_cents,total_distributed_cents,platform_fee_cents,attempt_count,last_error,failed_at,snapshot_prices,snapshot_taken_at,created_at,updated_at FROM public."contest_settlements") r
+UNION ALL
+SELECT 'contest_snapshots' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,snapshot_type,snapshot_version,event_at,created_at,policy_version,minimum_participants,participant_count,starts_at,ends_at,entry_fee_cents,platform_fee_bps,late_join_enabled,gross_base_entry_cents,platform_fee_cents,late_surcharge_cents,prize_pool_cents,planned_winner_count,settlement_id,details FROM public."contest_snapshots") r
+UNION ALL
+SELECT 'contest_status_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,from_status,to_status,changed_by,reason,metadata,created_at FROM public."contest_status_history") r
+UNION ALL
+SELECT 'contest_status_history_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,from_status,to_status,changed_by,reason,metadata,created_at,archived_at FROM public."contest_status_history_archive") r
+UNION ALL
+SELECT 'contest_symbols' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,symbol,provider_symbol_twelvedata,provider_symbol_massive,enabled,created_at FROM public."contest_symbols") r
+UNION ALL
+SELECT 'contest_symbols_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,symbol,provider_symbol_twelvedata,provider_symbol_finnhub,enabled,created_at,archived_at FROM public."contest_symbols_archive") r
+UNION ALL
+SELECT 'contests' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,starts_at,ends_at,status,entry_fee_cents,platform_fee_bps,qty_total,rules_json,created_at,shard_id,is_free,max_participants,auto_repeat,repeat_interval,duration_type,asset_class,duration_minutes,min_participants,registration_deadline,auto_start,template_id,commission_rate,published_at,started_at,ended_at,settled_at,cancelled_at,cancellation_reason,current_participants,auto_generated,type,starting_reminder_sent_at,paused_at,total_paused_duration,prizes_locked_at,prize_pool_net_cents,schedule_id,commission_amount,market_close_time,registration_opens_at,tier_id,economics_locked_at,locked_entry_fee_cents,locked_platform_fee_bps,late_join_enabled,schedule_idempotency_key,archived_at,lifecycle_policy_version,confirmed_at,funds_policy_version FROM public."contests") r
+UNION ALL
+SELECT 'email_template_versions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,slug,version_name,html_body,css_content,font_config,is_active,created_by,updated_by,created_at,updated_at FROM public."email_template_versions") r
+UNION ALL
+SELECT 'email_templates' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT slug,subject,html_content,description,variables,updated_by,updated_at,created_at FROM public."email_templates") r
+UNION ALL
+SELECT 'email_verification_tokens' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,token_hash,expires_at,used_at,created_at,failed_attempts FROM public."email_verification_tokens") r
+UNION ALL
+SELECT 'fills' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills") r
+UNION ALL
+SELECT 'fills_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at FROM public."fills_old") r
+UNION ALL
+SELECT 'fills_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_0") r
+UNION ALL
+SELECT 'fills_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_1") r
+UNION ALL
+SELECT 'fills_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_2") r
+UNION ALL
+SELECT 'fills_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_3") r
+UNION ALL
+SELECT 'final_rankings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,user_id,rank,tied_with_count,final_score,realized_score,unrealized_score,total_trades,winning_trades,total_positions,tragge_point_contribution,created_at,win_rate FROM public."final_rankings") r
+UNION ALL
+SELECT 'kyc_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,action,actor_id,details,created_at FROM public."kyc_audit_log") r
+UNION ALL
+SELECT 'kyc_documents' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,document_type,document_number,issuing_country,issue_date,expiry_date,front_image_url,back_image_url,selfie_url,status,reviewed_at,reviewed_by,review_notes,created_at,selfie_with_doc_url FROM public."kyc_documents") r
+UNION ALL
+SELECT 'leaderboard_snapshots' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,taken_at,payload_json FROM public."leaderboard_snapshots") r
+UNION ALL
+SELECT 'notifications' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,type,title,message,metadata,read_at,created_at FROM public."notifications") r
+UNION ALL
+SELECT 'oauth_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,provider,provider_user_id,email,access_token,refresh_token,token_expires_at,created_at,updated_at FROM public."oauth_accounts") r
+UNION ALL
+SELECT 'order_client_submissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT client_order_id,user_id,contest_id,order_id,created_at FROM public."order_client_submissions") r
+UNION ALL
+SELECT 'orders' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders") r
+UNION ALL
+SELECT 'orders_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_old") r
+UNION ALL
+SELECT 'orders_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_0") r
+UNION ALL
+SELECT 'orders_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_1") r
+UNION ALL
+SELECT 'orders_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_2") r
+UNION ALL
+SELECT 'orders_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_3") r
+UNION ALL
+SELECT 'otp_logs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,phone,sent_at,verified_at,ip_address,user_agent FROM public."otp_logs") r
+UNION ALL
+SELECT 'password_reset_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,code_hash,channel,destination,expires_at,used_at,attempts,created_at FROM public."password_reset_codes") r
+UNION ALL
+SELECT 'password_reset_tokens' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,token_hash,expires_at,used_at,created_at FROM public."password_reset_tokens") r
+UNION ALL
+SELECT 'payment_intents' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,provider,provider_payment_id,amount_cents,currency,status,metadata_json,created_at,updated_at,completed_at FROM public."payment_intents") r
+UNION ALL
+SELECT 'payouts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,amount_cents,currency,status,provider,provider_payout_id,destination_type,destination_info_json,metadata_json,created_at,updated_at,completed_at,admin_comment,reviewed_by,reviewed_at,idempotency_key,transaction_id FROM public."payouts") r
+UNION ALL
+SELECT 'permissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,created_at FROM public."permissions") r
+UNION ALL
+SELECT 'positions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions") r
+UNION ALL
+SELECT 'positions_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at FROM public."positions_old") r
+UNION ALL
+SELECT 'positions_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_0") r
+UNION ALL
+SELECT 'positions_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_1") r
+UNION ALL
+SELECT 'positions_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_2") r
+UNION ALL
+SELECT 'positions_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_3") r
+UNION ALL
+SELECT 'predefined_avatars' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,slug,display_name,category,bg_color,image_path,sort_order,is_active,created_at,updated_at FROM public."predefined_avatars") r
+UNION ALL
+SELECT 'privilege_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,event_time,username,action,details FROM public."privilege_audit_log") r
+UNION ALL
+SELECT 'prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,user_id,rank,final_score,prize_amount_cents,prize_percentage,status,credited_at,error_message,ledger_entry_id,created_at FROM public."prize_distributions") r
+UNION ALL
+SELECT 'provider_config' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT asset_class,active_provider,fallback_provider,updated_at,updated_by FROM public."provider_config") r
+UNION ALL
+SELECT 'referral_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT code,user_id,commission_rate_bps,is_active,created_at,activation_status,activation_requested_at,activation_approved_at,activation_rejected_at,rejection_reason FROM public."referral_codes") r
+UNION ALL
+SELECT 'referrals' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,referrer_id,referred_id,code,status,created_at,qualified_at FROM public."referrals") r
+UNION ALL
+SELECT 'role_permissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT role_id,permission_id,granted_at FROM public."role_permissions") r
+UNION ALL
+SELECT 'roles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name FROM public."roles") r
+UNION ALL
+SELECT 'security_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,event_type,ip_address,user_agent,metadata,created_at FROM public."security_audit_log") r
+UNION ALL
+SELECT 'settlement_events' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,event_type,event_data,error_message,created_at FROM public."settlement_events") r
+UNION ALL
+SELECT 'shard_assignment_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,old_shard_id,new_shard_id,reason,assigned_by,created_at FROM public."shard_assignment_log") r
+UNION ALL
+SELECT 'shard_config' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT shard_id,name,status,weight,kafka_partition,address,metadata,created_at,updated_at FROM public."shard_config") r
+UNION ALL
+SELECT 'support_tickets' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,subject,category,status,priority,assigned_admin_id,closed_at,created_at,updated_at FROM public."support_tickets") r
+UNION ALL
+SELECT 'symbols' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT symbol,name,asset_type,provider_symbol_twelvedata,provider_symbol_massive,is_active,created_at,updated_at,provider_symbol_nobitex,provider_symbol_binance,sort_order,provider_symbol_finnhub,provider_symbol_deriv FROM public."symbols") r
+UNION ALL
+SELECT 'template_entry_tiers' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,entry_fee,label,sort_order,is_active,is_free,qty_total_override,max_participants_override,commission_rate_override,has_prize_override,created_at,updated_at FROM public."template_entry_tiers") r
+UNION ALL
+SELECT 'template_prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,rank,percentage,min_participants,created_at FROM public."template_prize_distributions") r
+UNION ALL
+SELECT 'ticket_attachments' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,message_id,file_name,file_size,content_type,storage_key,created_at FROM public."ticket_attachments") r
+UNION ALL
+SELECT 'ticket_messages' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,ticket_id,sender_id,is_admin,body,created_at FROM public."ticket_messages") r
+UNION ALL
+SELECT 'tier_prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,tier_id,rank,percentage,min_participants,created_at FROM public."tier_prize_distributions") r
+UNION ALL
+SELECT 'tournament_schedules' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,cron_expression,start_time_utc,active_days,weekend_behavior,is_active,created_at,updated_at FROM public."tournament_schedules") r
+UNION ALL
+SELECT 'tournament_templates' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,duration_minutes,is_free,entry_fee_cents,qty_total,symbols_json,prize_distribution_json,max_participants,auto_create,create_cron,created_at,asset_class,commission_rate,min_participants,auto_start,template_key,recurrence_rule,next_occurrence_at,last_generated_at,type,updated_at,market_type,template_duration_type,entry_fee,has_prize,is_active FROM public."tournament_templates") r
+UNION ALL
+SELECT 'tournaments_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,starts_at,ends_at,status,entry_fee_cents,platform_fee_bps,qty_total,rules_json,created_at,published_at,started_at,ended_at,settled_at,cancelled_at,cancellation_reason,current_participants,min_participants,max_participants,registration_deadline,registration_opens_at,auto_start,commission_rate,paused_at,total_paused_duration,archived_at,retain_until,prize_pool_net_cents,is_free,economics_locked_at,locked_entry_fee_cents,locked_platform_fee_bps FROM public."tournaments_archive") r
+UNION ALL
+SELECT 'treasury_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT purpose,account_kind,balance_cents,currency,reconciliation_status,created_at,updated_at FROM public."treasury_accounts") r
+UNION ALL
+SELECT 'treasury_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,treasury_purpose,entry_kind,amount_cents,balance_after_cents,payment_intent_id,beneficiary_user_id,created_at,contest_id,participant_user_id,admission_id,fee_kind FROM public."treasury_ledger") r
+UNION ALL
+SELECT 'user_notification_preferences' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,category,channel,enabled,updated_at FROM public."user_notification_preferences") r
+UNION ALL
+SELECT 'user_roles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,role_id,assigned_at FROM public."user_roles") r
+UNION ALL
+SELECT 'user_score_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,contest_id,rank,score,participants,pnl,trades_count,avg_trade_duration_seconds,top_symbol,top_symbol_pnl,created_at,score_contribution FROM public."user_score_history") r
+UNION ALL
+SELECT 'user_stats' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,total_contests,total_wins,total_top3,total_score,total_participants,tragge_point,win_rate,avg_trade_duration_seconds,best_market,best_market_pnl,total_trades,total_pnl,created_at,updated_at FROM public."user_stats") r
+UNION ALL
+SELECT 'user_verification' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,status,first_name,last_name,date_of_birth,nationality,address_line1,address_line2,city,state,postal_code,country,verified_at,verified_by,rejection_reason,expires_at,provider,provider_verification_id,created_at,updated_at,national_code,phone,shahkar_verified,face_verified,face_match_score,liveness_score,liveness_result,card_ocr_verified,card_serial_number,jibit_transaction_ids,national_code_manual,father_name,birth_certificate_number,birth_certificate_serial,rejection_fields,rejection_field_messages,admin_notes FROM public."user_verification") r
+UNION ALL
+SELECT 'users' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,email,password_hash,created_at,status,email_verified,email_verified_at,username,display_name,avatar_url,bio,country,phone,updated_at,is_system_account,password_changed_at,totp_secret,totp_enabled,totp_verified_at,backup_codes,terms_accepted_at,ban_expires_at,phone_verified,preferred_lang,telegram_id,telegram_username,telegram_first_name,telegram_last_name FROM public."users") r
+UNION ALL
+SELECT 'verification_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,code_hash,method,destination,expires_at,verified_at,attempts,max_attempts,created_at FROM public."verification_codes") r
+UNION ALL
+SELECT 'wallet_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,type,amount_cents,balance_after_cents,ref_type,ref_id,description,created_at,idempotency_key,reason_code FROM public."wallet_ledger") r
+UNION ALL
+SELECT 'wallets' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,balance_cents,currency,status,created_at,updated_at FROM public."wallets") r
+UNION ALL
+SELECT 'withdrawal_limits' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,daily_amount_cents,monthly_amount_cents,daily_count,monthly_count,notes,updated_by,created_at,updated_at FROM public."withdrawal_limits") r
+ORDER BY table_name;
+EXIT: 0
+           table_name           | rows |             row_hash
+--------------------------------+------+----------------------------------
+ admin_mfa_credentials          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ admin_mfa_recovery_codes       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ admin_security_settings        |    1 | 893fd17893e058b8174e49bea875be40
+ affiliate_commissions          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ audit_logs                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ calendar_contest_history       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ calendar_entries               |    0 | d41d8cd98f00b204e9800998ecf8427e
+ candles                        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ chart_drawings                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_duration_configs       |    5 | e7339de24dc94d7b0811252b446087b2
+ contest_fee_accounts           |    1 | 0c87c04b8d77297206913e4cbb60bb1f
+ contest_fee_ledger             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_finalization_state     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_participants           |   12 | 81c9eaf5e98f874567c2a99a958fd4b6
+ contest_participants_archive   |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_prize_locks            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_prize_pool_accounts    |    4 | 48644eff39532a524397f26ea11dfa0a
+ contest_prize_pool_ledger      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_reminders_sent         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_settlements            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_snapshots              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_status_history         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_status_history_archive |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_symbols                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_symbols_archive        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contests                       |    4 | 55662596fb95c49c6a764ec5e8bd8fe4
+ email_template_versions        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ email_templates                |   19 | 1a597372bf0e71c1965ca903052e0c5f
+ email_verification_tokens      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills                          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_old                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_0                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_1                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_2                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_3                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ final_rankings                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ kyc_audit_log                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ kyc_documents                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ leaderboard_snapshots          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ notifications                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ oauth_accounts                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ order_client_submissions       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders                         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_old                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_0                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_1                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_2                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_3                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ otp_logs                       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ password_reset_codes           |    0 | d41d8cd98f00b204e9800998ecf8427e
+ password_reset_tokens          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ payment_intents                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ payouts                        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ permissions                    |   17 | 75d7c5763ab4dc5eeb672a737e5549cb
+ positions                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_old                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_0              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_1              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_2              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_3              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ predefined_avatars             |   16 | fc0d341654c077f52551bafce1ed3b74
+ privilege_audit_log            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ prize_distributions            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ provider_config                |    2 | 68f6169b81f85924ce087b3f76e8f0bc
+ referral_codes                 |   13 | 33c7f498ba7acd17eec1c7178b344a3c
+ referrals                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ role_permissions               |   42 | 1a8acfa3c67733c4e1a581022c1cfbb9
+ roles                          |    6 | 2ec803d9ef122c73d29ced0be955f78a
+ security_audit_log             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ settlement_events              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ shard_assignment_log           |    0 | d41d8cd98f00b204e9800998ecf8427e
+ shard_config                   |    4 | 995247502896bb61dca9ccffb6349cbc
+ support_tickets                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ symbols                        |   93 | f407551353f71432e0ac2ecaa34fb95a
+ template_entry_tiers           |   37 | e28fc19ae0f84a9bc76f0f822a2183fa
+ template_prize_distributions   |   59 | 2702d37aafda3748a97f3d5688f28705
+ ticket_attachments             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ ticket_messages                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ tier_prize_distributions       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ tournament_schedules           |   23 | a145b6ba109e24de456b2b39ded35d8f
+ tournament_templates           |   37 | 02a51b676390c4c71be700bb8f880d0e
+ tournaments_archive            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ treasury_accounts              |    1 | 987b39e77736e68d7b0835cdc9faf2fb
+ treasury_ledger                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_notification_preferences  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_roles                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_score_history             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_stats                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_verification              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ users                          |   13 | 99e5bc2be5c5ce64ee6dd56afcd6001e
+ verification_codes             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ wallet_ledger                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ wallets                        |   13 | 28ebcf170ecc28bd8a200a7eb8b6c59c
+ withdrawal_limits              |    0 | d41d8cd98f00b204e9800998ecf8427e
+(94 rows)
+
+
+=== recovery-guard ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_econ_adj_001'
+STDIN:
+DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version=119 AND dirty) THEN
+            RAISE EXCEPTION 'expected dirty version 119';
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()) THEN
+            RAISE EXCEPTION 'other database connections exist';
+        END IF;
+        IF to_regclass('contest_participant_lifecycle_events') IS NOT NULL THEN
+            RAISE EXCEPTION 'partial migration objects exist';
+        END IF;
+    END $$;
+EXIT: 0
+DO
+
+=== recover-force-118 ===
+$ migrate -path packages/db/migrations -database 'postgres://tragge_admin:<redacted>@127.0.0.1:5432/tragge_test_econ_adj_001?sslmode=disable' force 118
+EXIT: 0
+
+=== recover-up ===
+$ migrate -path packages/db/migrations -database 'postgres://tragge_admin:<redacted>@127.0.0.1:5432/tragge_test_econ_adj_001?sslmode=disable' up
+EXIT: 0
+119/u lifecycle004_financial_reversal (492.374093ms)
+120/u lifecycle004_immutable_audit (509.282199ms)
+121/u rank001_ranking_eligibility (546.155095ms)
+122/u econ_adj_001_economic_snapshot (599.026192ms)
+
+=== recovered-version ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_econ_adj_001'
+STDIN:
+SELECT version, dirty FROM schema_migrations;
+EXIT: 0
+ version | dirty
+---------+-------
+     122 | f
+(1 row)
+
+
+=== history-after ===
+$ docker exec -i tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d tragge_test_econ_adj_001'
+STDIN:
+SELECT 'admin_mfa_credentials' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,secret_ciphertext,last_totp_counter,enabled_at,recovery_generation,created_at,updated_at FROM public."admin_mfa_credentials") r
+UNION ALL
+SELECT 'admin_mfa_recovery_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,generation,code_digest,used_at,created_at FROM public."admin_mfa_recovery_codes") r
+UNION ALL
+SELECT 'admin_security_settings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT key,value_bool,updated_at,updated_by FROM public."admin_security_settings") r
+UNION ALL
+SELECT 'affiliate_commissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,referrer_id,referred_id,source_type,source_id,gross_amount_cents,commission_rate_bps,commission_cents,status,created_at,credited_at FROM public."affiliate_commissions") r
+UNION ALL
+SELECT 'audit_logs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,actor_user_id,action,target_type,target_id,payload_json,created_at FROM public."audit_logs") r
+UNION ALL
+SELECT 'calendar_contest_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,calendar_entry_id,contest_id,scheduled_for,created_at FROM public."calendar_contest_history") r
+UNION ALL
+SELECT 'calendar_entries' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,recurrence_pattern,cron_expression,start_date,end_date,timezone,registration_lead_time_minutes,enabled,status,last_run_at,next_run_at,created_by,created_at,updated_at FROM public."calendar_entries") r
+UNION ALL
+SELECT 'candles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT symbol,resolution,"time",open,high,low,close,volume,created_at FROM public."candles") r
+UNION ALL
+SELECT 'chart_drawings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,contest_id,symbol,drawings,updated_at FROM public."chart_drawings") r
+UNION ALL
+SELECT 'contest_duration_configs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT duration_type,duration_minutes,default_qty_total,min_entry_fee_cents,max_entry_fee_cents,display_name_en,display_name_fa,created_at,updated_at FROM public."contest_duration_configs") r
+UNION ALL
+SELECT 'contest_fee_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT purpose,account_kind,balance_cents,currency,created_at,updated_at FROM public."contest_fee_accounts") r
+UNION ALL
+SELECT 'contest_fee_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,fee_wallet_purpose,entry_kind,amount_cents,balance_after_cents,contest_id,participant_user_id,admission_id,policy_version,platform_fee_bps,original_entry_id,created_at FROM public."contest_fee_ledger") r
+UNION ALL
+SELECT 'contest_finalization_state' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,finalization_started_at,payouts_calculated,payouts_calculated_at,ranks_written,ranks_written_at,wallets_credited,wallets_credited_at,status_updated,status_updated_at,finalization_completed_at,error_message,last_error_at,retry_count,metadata,created_at,updated_at FROM public."contest_finalization_state") r
+UNION ALL
+SELECT 'contest_participants' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,user_id,joined_at,qty_total,qty_available,total_score,final_rank,final_prize_cents,is_system FROM public."contest_participants") r
+UNION ALL
+SELECT 'contest_participants_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,user_id,joined_at,qty_total,qty_available,total_score,final_rank,final_prize_cents,archived_at FROM public."contest_participants_archive") r
+UNION ALL
+SELECT 'contest_prize_locks' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,total_participants,prize_pool_gross_cents,prize_pool_net_cents,platform_fee_cents,commission_rate,winners_count,distribution_json,locked_at FROM public."contest_prize_locks") r
+UNION ALL
+SELECT 'contest_prize_pool_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,balance_cents,currency,status,created_at,updated_at FROM public."contest_prize_pool_accounts") r
+UNION ALL
+SELECT 'contest_prize_pool_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,pool_account_id,amount_cents,direction,reason,reference_type,reference_id,participant_user_id,policy_version,balance_after_cents,idempotency_key,created_at FROM public."contest_prize_pool_ledger") r
+UNION ALL
+SELECT 'contest_reminders_sent' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,reminder_type,sent_at,recipient_count FROM public."contest_reminders_sent") r
+UNION ALL
+SELECT 'contest_settlements' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,status,started_at,positions_closed_at,rankings_calculated_at,prizes_distributed_at,completed_at,total_participants,total_positions_closed,total_orders_cancelled,total_winners,prize_pool_gross_cents,prize_pool_net_cents,total_distributed_cents,platform_fee_cents,attempt_count,last_error,failed_at,snapshot_prices,snapshot_taken_at,created_at,updated_at FROM public."contest_settlements") r
+UNION ALL
+SELECT 'contest_snapshots' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,snapshot_type,snapshot_version,event_at,created_at,policy_version,minimum_participants,participant_count,starts_at,ends_at,entry_fee_cents,platform_fee_bps,late_join_enabled,gross_base_entry_cents,platform_fee_cents,late_surcharge_cents,prize_pool_cents,planned_winner_count,settlement_id,details FROM public."contest_snapshots") r
+UNION ALL
+SELECT 'contest_status_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,from_status,to_status,changed_by,reason,metadata,created_at FROM public."contest_status_history") r
+UNION ALL
+SELECT 'contest_status_history_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,from_status,to_status,changed_by,reason,metadata,created_at,archived_at FROM public."contest_status_history_archive") r
+UNION ALL
+SELECT 'contest_symbols' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,symbol,provider_symbol_twelvedata,provider_symbol_massive,enabled,created_at FROM public."contest_symbols") r
+UNION ALL
+SELECT 'contest_symbols_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,symbol,provider_symbol_twelvedata,provider_symbol_finnhub,enabled,created_at,archived_at FROM public."contest_symbols_archive") r
+UNION ALL
+SELECT 'contests' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,starts_at,ends_at,status,entry_fee_cents,platform_fee_bps,qty_total,rules_json,created_at,shard_id,is_free,max_participants,auto_repeat,repeat_interval,duration_type,asset_class,duration_minutes,min_participants,registration_deadline,auto_start,template_id,commission_rate,published_at,started_at,ended_at,settled_at,cancelled_at,cancellation_reason,current_participants,auto_generated,type,starting_reminder_sent_at,paused_at,total_paused_duration,prizes_locked_at,prize_pool_net_cents,schedule_id,commission_amount,market_close_time,registration_opens_at,tier_id,economics_locked_at,locked_entry_fee_cents,locked_platform_fee_bps,late_join_enabled,schedule_idempotency_key,archived_at,lifecycle_policy_version,confirmed_at,funds_policy_version FROM public."contests") r
+UNION ALL
+SELECT 'email_template_versions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,slug,version_name,html_body,css_content,font_config,is_active,created_by,updated_by,created_at,updated_at FROM public."email_template_versions") r
+UNION ALL
+SELECT 'email_templates' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT slug,subject,html_content,description,variables,updated_by,updated_at,created_at FROM public."email_templates") r
+UNION ALL
+SELECT 'email_verification_tokens' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,token_hash,expires_at,used_at,created_at,failed_attempts FROM public."email_verification_tokens") r
+UNION ALL
+SELECT 'fills' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills") r
+UNION ALL
+SELECT 'fills_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at FROM public."fills_old") r
+UNION ALL
+SELECT 'fills_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_0") r
+UNION ALL
+SELECT 'fills_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_1") r
+UNION ALL
+SELECT 'fills_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_2") r
+UNION ALL
+SELECT 'fills_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT fill_id,shard_id,order_id,contest_id,user_id,symbol,side,qty,fill_price,created_at,realized_pnl FROM public."fills_shard_3") r
+UNION ALL
+SELECT 'final_rankings' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,user_id,rank,tied_with_count,final_score,realized_score,unrealized_score,total_trades,winning_trades,total_positions,tragge_point_contribution,created_at,win_rate FROM public."final_rankings") r
+UNION ALL
+SELECT 'kyc_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,action,actor_id,details,created_at FROM public."kyc_audit_log") r
+UNION ALL
+SELECT 'kyc_documents' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,document_type,document_number,issuing_country,issue_date,expiry_date,front_image_url,back_image_url,selfie_url,status,reviewed_at,reviewed_by,review_notes,created_at,selfie_with_doc_url FROM public."kyc_documents") r
+UNION ALL
+SELECT 'leaderboard_snapshots' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT contest_id,taken_at,payload_json FROM public."leaderboard_snapshots") r
+UNION ALL
+SELECT 'notifications' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,type,title,message,metadata,read_at,created_at FROM public."notifications") r
+UNION ALL
+SELECT 'oauth_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,provider,provider_user_id,email,access_token,refresh_token,token_expires_at,created_at,updated_at FROM public."oauth_accounts") r
+UNION ALL
+SELECT 'order_client_submissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT client_order_id,user_id,contest_id,order_id,created_at FROM public."order_client_submissions") r
+UNION ALL
+SELECT 'orders' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders") r
+UNION ALL
+SELECT 'orders_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_old") r
+UNION ALL
+SELECT 'orders_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_0") r
+UNION ALL
+SELECT 'orders_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_1") r
+UNION ALL
+SELECT 'orders_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_2") r
+UNION ALL
+SELECT 'orders_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT order_id,shard_id,contest_id,user_id,symbol,side,type,qty,qty_filled,limit_price,stop_price,take_profit,stop_loss,status,created_at,updated_at FROM public."orders_shard_3") r
+UNION ALL
+SELECT 'otp_logs' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,phone,sent_at,verified_at,ip_address,user_agent FROM public."otp_logs") r
+UNION ALL
+SELECT 'password_reset_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,code_hash,channel,destination,expires_at,used_at,attempts,created_at FROM public."password_reset_codes") r
+UNION ALL
+SELECT 'password_reset_tokens' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,token_hash,expires_at,used_at,created_at FROM public."password_reset_tokens") r
+UNION ALL
+SELECT 'payment_intents' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,provider,provider_payment_id,amount_cents,currency,status,metadata_json,created_at,updated_at,completed_at FROM public."payment_intents") r
+UNION ALL
+SELECT 'payouts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,amount_cents,currency,status,provider,provider_payout_id,destination_type,destination_info_json,metadata_json,created_at,updated_at,completed_at,admin_comment,reviewed_by,reviewed_at,idempotency_key,transaction_id FROM public."payouts") r
+UNION ALL
+SELECT 'permissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,created_at FROM public."permissions") r
+UNION ALL
+SELECT 'positions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions") r
+UNION ALL
+SELECT 'positions_old' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at FROM public."positions_old") r
+UNION ALL
+SELECT 'positions_shard_0' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_0") r
+UNION ALL
+SELECT 'positions_shard_1' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_1") r
+UNION ALL
+SELECT 'positions_shard_2' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_2") r
+UNION ALL
+SELECT 'positions_shard_3' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT position_id,shard_id,contest_id,user_id,symbol,side,qty_open,entry_price,qty_used,realized_score,opened_at,closed_at,take_profit,stop_loss FROM public."positions_shard_3") r
+UNION ALL
+SELECT 'predefined_avatars' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,slug,display_name,category,bg_color,image_path,sort_order,is_active,created_at,updated_at FROM public."predefined_avatars") r
+UNION ALL
+SELECT 'privilege_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,event_time,username,action,details FROM public."privilege_audit_log") r
+UNION ALL
+SELECT 'prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,user_id,rank,final_score,prize_amount_cents,prize_percentage,status,credited_at,error_message,ledger_entry_id,created_at FROM public."prize_distributions") r
+UNION ALL
+SELECT 'provider_config' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT asset_class,active_provider,fallback_provider,updated_at,updated_by FROM public."provider_config") r
+UNION ALL
+SELECT 'referral_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT code,user_id,commission_rate_bps,is_active,created_at,activation_status,activation_requested_at,activation_approved_at,activation_rejected_at,rejection_reason FROM public."referral_codes") r
+UNION ALL
+SELECT 'referrals' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,referrer_id,referred_id,code,status,created_at,qualified_at FROM public."referrals") r
+UNION ALL
+SELECT 'role_permissions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT role_id,permission_id,granted_at FROM public."role_permissions") r
+UNION ALL
+SELECT 'roles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name FROM public."roles") r
+UNION ALL
+SELECT 'security_audit_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,event_type,ip_address,user_agent,metadata,created_at FROM public."security_audit_log") r
+UNION ALL
+SELECT 'settlement_events' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,settlement_id,contest_id,event_type,event_data,error_message,created_at FROM public."settlement_events") r
+UNION ALL
+SELECT 'shard_assignment_log' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,contest_id,old_shard_id,new_shard_id,reason,assigned_by,created_at FROM public."shard_assignment_log") r
+UNION ALL
+SELECT 'shard_config' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT shard_id,name,status,weight,kafka_partition,address,metadata,created_at,updated_at FROM public."shard_config") r
+UNION ALL
+SELECT 'support_tickets' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,subject,category,status,priority,assigned_admin_id,closed_at,created_at,updated_at FROM public."support_tickets") r
+UNION ALL
+SELECT 'symbols' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT symbol,name,asset_type,provider_symbol_twelvedata,provider_symbol_massive,is_active,created_at,updated_at,provider_symbol_nobitex,provider_symbol_binance,sort_order,provider_symbol_finnhub,provider_symbol_deriv FROM public."symbols") r
+UNION ALL
+SELECT 'template_entry_tiers' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,entry_fee,label,sort_order,is_active,is_free,qty_total_override,max_participants_override,commission_rate_override,has_prize_override,created_at,updated_at FROM public."template_entry_tiers") r
+UNION ALL
+SELECT 'template_prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,rank,percentage,min_participants,created_at FROM public."template_prize_distributions") r
+UNION ALL
+SELECT 'ticket_attachments' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,message_id,file_name,file_size,content_type,storage_key,created_at FROM public."ticket_attachments") r
+UNION ALL
+SELECT 'ticket_messages' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,ticket_id,sender_id,is_admin,body,created_at FROM public."ticket_messages") r
+UNION ALL
+SELECT 'tier_prize_distributions' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,tier_id,rank,percentage,min_participants,created_at FROM public."tier_prize_distributions") r
+UNION ALL
+SELECT 'tournament_schedules' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,template_id,cron_expression,start_time_utc,active_days,weekend_behavior,is_active,created_at,updated_at FROM public."tournament_schedules") r
+UNION ALL
+SELECT 'tournament_templates' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,duration_minutes,is_free,entry_fee_cents,qty_total,symbols_json,prize_distribution_json,max_participants,auto_create,create_cron,created_at,asset_class,commission_rate,min_participants,auto_start,template_key,recurrence_rule,next_occurrence_at,last_generated_at,type,updated_at,market_type,template_duration_type,entry_fee,has_prize,is_active FROM public."tournament_templates") r
+UNION ALL
+SELECT 'tournaments_archive' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,name,description,starts_at,ends_at,status,entry_fee_cents,platform_fee_bps,qty_total,rules_json,created_at,published_at,started_at,ended_at,settled_at,cancelled_at,cancellation_reason,current_participants,min_participants,max_participants,registration_deadline,registration_opens_at,auto_start,commission_rate,paused_at,total_paused_duration,archived_at,retain_until,prize_pool_net_cents,is_free,economics_locked_at,locked_entry_fee_cents,locked_platform_fee_bps FROM public."tournaments_archive") r
+UNION ALL
+SELECT 'treasury_accounts' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT purpose,account_kind,balance_cents,currency,reconciliation_status,created_at,updated_at FROM public."treasury_accounts") r
+UNION ALL
+SELECT 'treasury_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,treasury_purpose,entry_kind,amount_cents,balance_after_cents,payment_intent_id,beneficiary_user_id,created_at,contest_id,participant_user_id,admission_id,fee_kind FROM public."treasury_ledger") r
+UNION ALL
+SELECT 'user_notification_preferences' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,category,channel,enabled,updated_at FROM public."user_notification_preferences") r
+UNION ALL
+SELECT 'user_roles' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,role_id,assigned_at FROM public."user_roles") r
+UNION ALL
+SELECT 'user_score_history' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,contest_id,rank,score,participants,pnl,trades_count,avg_trade_duration_seconds,top_symbol,top_symbol_pnl,created_at,score_contribution FROM public."user_score_history") r
+UNION ALL
+SELECT 'user_stats' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,total_contests,total_wins,total_top3,total_score,total_participants,tragge_point,win_rate,avg_trade_duration_seconds,best_market,best_market_pnl,total_trades,total_pnl,created_at,updated_at FROM public."user_stats") r
+UNION ALL
+SELECT 'user_verification' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,status,first_name,last_name,date_of_birth,nationality,address_line1,address_line2,city,state,postal_code,country,verified_at,verified_by,rejection_reason,expires_at,provider,provider_verification_id,created_at,updated_at,national_code,phone,shahkar_verified,face_verified,face_match_score,liveness_score,liveness_result,card_ocr_verified,card_serial_number,jibit_transaction_ids,national_code_manual,father_name,birth_certificate_number,birth_certificate_serial,rejection_fields,rejection_field_messages,admin_notes FROM public."user_verification") r
+UNION ALL
+SELECT 'users' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,email,password_hash,created_at,status,email_verified,email_verified_at,username,display_name,avatar_url,bio,country,phone,updated_at,is_system_account,password_changed_at,totp_secret,totp_enabled,totp_verified_at,backup_codes,terms_accepted_at,ban_expires_at,phone_verified,preferred_lang,telegram_id,telegram_username,telegram_first_name,telegram_last_name FROM public."users") r
+UNION ALL
+SELECT 'verification_codes' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,code_hash,method,destination,expires_at,verified_at,attempts,max_attempts,created_at FROM public."verification_codes") r
+UNION ALL
+SELECT 'wallet_ledger' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT id,user_id,type,amount_cents,balance_after_cents,ref_type,ref_id,description,created_at,idempotency_key,reason_code FROM public."wallet_ledger") r
+UNION ALL
+SELECT 'wallets' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,balance_cents,currency,status,created_at,updated_at FROM public."wallets") r
+UNION ALL
+SELECT 'withdrawal_limits' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT user_id,daily_amount_cents,monthly_amount_cents,daily_count,monthly_count,notes,updated_by,created_at,updated_at FROM public."withdrawal_limits") r
+ORDER BY table_name;
+EXIT: 0
+           table_name           | rows |             row_hash
+--------------------------------+------+----------------------------------
+ admin_mfa_credentials          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ admin_mfa_recovery_codes       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ admin_security_settings        |    1 | 893fd17893e058b8174e49bea875be40
+ affiliate_commissions          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ audit_logs                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ calendar_contest_history       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ calendar_entries               |    0 | d41d8cd98f00b204e9800998ecf8427e
+ candles                        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ chart_drawings                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_duration_configs       |    5 | e7339de24dc94d7b0811252b446087b2
+ contest_fee_accounts           |    1 | 0c87c04b8d77297206913e4cbb60bb1f
+ contest_fee_ledger             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_finalization_state     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_participants           |   12 | 81c9eaf5e98f874567c2a99a958fd4b6
+ contest_participants_archive   |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_prize_locks            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_prize_pool_accounts    |    4 | 48644eff39532a524397f26ea11dfa0a
+ contest_prize_pool_ledger      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_reminders_sent         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_settlements            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_snapshots              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_status_history         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_status_history_archive |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_symbols                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contest_symbols_archive        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ contests                       |    4 | 55662596fb95c49c6a764ec5e8bd8fe4
+ email_template_versions        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ email_templates                |   19 | 1a597372bf0e71c1965ca903052e0c5f
+ email_verification_tokens      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills                          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_old                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_0                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_1                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_2                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ fills_shard_3                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ final_rankings                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ kyc_audit_log                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ kyc_documents                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ leaderboard_snapshots          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ notifications                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ oauth_accounts                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ order_client_submissions       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders                         |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_old                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_0                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_1                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_2                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ orders_shard_3                 |    0 | d41d8cd98f00b204e9800998ecf8427e
+ otp_logs                       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ password_reset_codes           |    0 | d41d8cd98f00b204e9800998ecf8427e
+ password_reset_tokens          |    0 | d41d8cd98f00b204e9800998ecf8427e
+ payment_intents                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ payouts                        |    0 | d41d8cd98f00b204e9800998ecf8427e
+ permissions                    |   17 | 75d7c5763ab4dc5eeb672a737e5549cb
+ positions                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_old                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_0              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_1              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_2              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ positions_shard_3              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ predefined_avatars             |   16 | fc0d341654c077f52551bafce1ed3b74
+ privilege_audit_log            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ prize_distributions            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ provider_config                |    2 | 68f6169b81f85924ce087b3f76e8f0bc
+ referral_codes                 |   13 | 33c7f498ba7acd17eec1c7178b344a3c
+ referrals                      |    0 | d41d8cd98f00b204e9800998ecf8427e
+ role_permissions               |   42 | 1a8acfa3c67733c4e1a581022c1cfbb9
+ roles                          |    6 | 2ec803d9ef122c73d29ced0be955f78a
+ security_audit_log             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ settlement_events              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ shard_assignment_log           |    0 | d41d8cd98f00b204e9800998ecf8427e
+ shard_config                   |    4 | 995247502896bb61dca9ccffb6349cbc
+ support_tickets                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ symbols                        |   93 | f407551353f71432e0ac2ecaa34fb95a
+ template_entry_tiers           |   37 | e28fc19ae0f84a9bc76f0f822a2183fa
+ template_prize_distributions   |   59 | 2702d37aafda3748a97f3d5688f28705
+ ticket_attachments             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ ticket_messages                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ tier_prize_distributions       |    0 | d41d8cd98f00b204e9800998ecf8427e
+ tournament_schedules           |   23 | a145b6ba109e24de456b2b39ded35d8f
+ tournament_templates           |   37 | 02a51b676390c4c71be700bb8f880d0e
+ tournaments_archive            |    0 | d41d8cd98f00b204e9800998ecf8427e
+ treasury_accounts              |    1 | 987b39e77736e68d7b0835cdc9faf2fb
+ treasury_ledger                |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_notification_preferences  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_roles                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_score_history             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_stats                     |    0 | d41d8cd98f00b204e9800998ecf8427e
+ user_verification              |    0 | d41d8cd98f00b204e9800998ecf8427e
+ users                          |   13 | 99e5bc2be5c5ce64ee6dd56afcd6001e
+ verification_codes             |    0 | d41d8cd98f00b204e9800998ecf8427e
+ wallet_ledger                  |    0 | d41d8cd98f00b204e9800998ecf8427e
+ wallets                        |   13 | 28ebcf170ecc28bd8a200a7eb8b6c59c
+ withdrawal_limits              |    0 | d41d8cd98f00b204e9800998ecf8427e
+(94 rows)
+
+
+=== history-comparison ===
+PASS: every pre-existing public-table row count and original-column row hash unchanged through recovery to 0122.
+
+=== recovered-schema-comparison ===
+PASS: recovered database schema equals fresh 0122 after removing only pg_dump random restrict/unrestrict tokens.
+SHA256: 714624cae9f3157d7d97c62fe5f0739292179879f4fdabfbab89e5e5f881e8b5
+
+=== root-test ===
+$ go test ./...
+EXIT: 1
+# ./...
+pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies
+FAIL	./... [setup failed]
+FAIL
+
+=== workspace-test ===
+$ go test ./apps/admin-bff/... ./apps/api-server/... ./apps/contest-scheduler/... ./apps/free-contest-generator/... ./apps/leaderboard-worker/... ./apps/market-ingestor/... ./apps/payment-service/... ./apps/platform/... ./apps/settlement-service/... ./apps/shard-router/... ./apps/trade-bff/... ./apps/trading-core/... ./apps/trading-engine/... ./apps/user-bff/... ./apps/worker/... ./packages/audit/... ./packages/auth/... ./packages/config/... ./packages/contracts/... ./packages/db/... ./packages/domain/... ./packages/infra/... ./packages/kyc/... ./packages/money/... ./packages/notification/... ./packages/observability/... ./packages/redis/... ./packages/resilience/... ./packages/scoring/... ./packages/secrets/... ./packages/sms/... ./packages/storage/... ./packages/ticket/... ./packages/validation/... ./packages/wallet/...
+EXIT: 1
+go: downloading github.com/gorilla/websocket v1.5.1
+go: downloading github.com/vmihailenco/msgpack/v5 v5.4.1
+go: downloading github.com/twmb/franz-go/pkg/kadm v1.11.0
+go: downloading golang.org/x/oauth2 v0.22.0
+go: downloading github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
+go: downloading github.com/stretchr/testify v1.11.1
+go: downloading github.com/kavenegar/kavenegar-go v0.0.0-20240205151018-77039f51467d
+go: downloading github.com/testcontainers/testcontainers-go v0.40.0
+go: downloading github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
+go: downloading github.com/vmihailenco/tagparser/v2 v2.0.0
+go: downloading cloud.google.com/go/compute/metadata v0.5.0
+go: downloading github.com/pmezard/go-difflib v1.0.0
+go: downloading dario.cat/mergo v1.0.2
+go: downloading github.com/containerd/errdefs v1.0.0
+go: downloading github.com/containerd/platforms v0.2.1
+go: downloading github.com/cpuguy83/dockercfg v0.3.2
+go: downloading github.com/docker/docker v28.5.1+incompatible
+go: downloading github.com/docker/go-connections v0.6.0
+go: downloading github.com/moby/go-archive v0.1.0
+go: downloading github.com/moby/patternmatcher v0.6.0
+go: downloading github.com/moby/term v0.5.0
+go: downloading github.com/opencontainers/image-spec v1.1.1
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading github.com/containerd/log v0.1.0
+go: downloading github.com/moby/docker-image-spec v1.3.1
+go: downloading github.com/opencontainers/go-digest v1.0.0
+go: downloading github.com/docker/go-units v0.5.0
+go: downloading github.com/morikuni/aec v1.0.0
+go: downloading github.com/containerd/errdefs/pkg v0.3.0
+go: downloading github.com/distribution/reference v0.6.0
+go: downloading github.com/pkg/errors v0.9.1
+go: downloading go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0
+go: downloading github.com/magiconair/properties v1.8.10
+go: downloading github.com/shirou/gopsutil/v4 v4.25.6
+go: downloading github.com/moby/sys/sequential v0.6.0
+go: downloading github.com/moby/sys/user v0.4.0
+go: downloading github.com/moby/sys/userns v0.1.0
+go: downloading github.com/sirupsen/logrus v1.9.3
+go: downloading github.com/felixge/httpsnoop v1.0.4
+go: downloading github.com/tklauser/go-sysconf v0.3.12
+go: downloading github.com/tklauser/numcpus v0.6.1
+ok  	github.com/Parsaeffatravesh/tragge/apps/admin-bff/server	0.330s
+ok  	github.com/Parsaeffatravesh/tragge/apps/api-server	0.351s
+?   	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/internal/health	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/internal/scheduler	0.296s
+?   	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/server	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/free-contest-generator/server	0.281s
+--- FAIL: TestCalculateWinnersCountRounding (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/1_participant,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(1, 30) = 0, want 1
+    --- FAIL: TestCalculateWinnersCountRounding/11_participants,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(11, 30) = 3, want 4
+    --- FAIL: TestCalculateWinnersCountRounding/34_participants,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(34, 30) = 10, want 11
+    --- FAIL: TestCalculateWinnersCountRounding/100%_winners (0.00s)
+        payout_test.go:43: CalculateWinnersCount(10, 100) = 3, want 10
+    --- FAIL: TestCalculateWinnersCountRounding/over_100%_winners (0.00s)
+        payout_test.go:43: CalculateWinnersCount(10, 150) = 3, want 10
+2026/09/09 07:10:12 leaderboard: pipeline exec error fetching existing scores for contest contest-batch: redis: nil
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/leaderboard-worker/server	0.318s
+?   	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/cmd/market-ingestor	[no test files]
+2026/09/09 07:10:13 Built symbol registry from env var (4 symbols: 2 forex, 1 crypto)
+--- FAIL: TestRegistryDerivMappingAndSubscriptions (0.00s)
+    deriv_provider_test.go:250: subs=[frxEURUSD frxXAUUSD]
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/server	0.287s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/handlers	0.693s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/providers	0.031s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/server	0.251s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/cmd/platform	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters	0.267s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/api	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/realtime	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose	0.287s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules	0.009s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/admin	0.245s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/contest	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events	0.003s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/identity	0.283s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/kyc	0.007s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/leaderboard	0.008s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/notification	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/payment	0.007s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/scheduler	0.004s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/settlement	0.010s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/ticket	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/wallet	0.010s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/kyc	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/payment	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/wallet	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/settlement-service/server	0.432s
+?   	github.com/Parsaeffatravesh/tragge/apps/shard-router	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/trade-bff/server	2.081s
+ok  	github.com/Parsaeffatravesh/tragge/apps/trading-core	0.199s
+?   	github.com/Parsaeffatravesh/tragge/apps/trading-engine/cmd/trading-engine	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/trading-engine/server	1.108s
+?   	github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/models	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/service	0.011s
+ok  	github.com/Parsaeffatravesh/tragge/apps/user-bff/server	0.261s
+ok  	github.com/Parsaeffatravesh/tragge/apps/worker	0.206s
+ok  	github.com/Parsaeffatravesh/tragge/packages/audit	0.229s
+ok  	github.com/Parsaeffatravesh/tragge/packages/auth	2.227s
+ok  	github.com/Parsaeffatravesh/tragge/packages/config	0.009s
+?   	github.com/Parsaeffatravesh/tragge/packages/config/health	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/engine/v1	0.010s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/envelope/v1	0.005s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/marketdata/v2	0.003s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/v1	0.004s
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	0.013s
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	(cached)
+?   	github.com/Parsaeffatravesh/tragge/packages/domain	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/domain/statemachine	0.032s
+ok  	github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint	0.180s
+?   	github.com/Parsaeffatravesh/tragge/packages/infra	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/infra/shard	0.159s
+ok  	github.com/Parsaeffatravesh/tragge/packages/infra/wsregistry	2.065s
+ok  	github.com/Parsaeffatravesh/tragge/packages/kyc	0.031s
+ok  	github.com/Parsaeffatravesh/tragge/packages/money	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification	15.399s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification/inapp	0.024s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification/prefs	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/packages/observability	0.013s
+ok  	github.com/Parsaeffatravesh/tragge/packages/redis	0.005s
+?   	github.com/Parsaeffatravesh/tragge/packages/resilience	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/resilience/circuitbreaker	1.174s
+ok  	github.com/Parsaeffatravesh/tragge/packages/resilience/ratelimit	0.755s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring	0.027s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/distribution	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/economics	0.004s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/prize	0.004s
+ok  	github.com/Parsaeffatravesh/tragge/packages/secrets	0.006s
+ok  	github.com/Parsaeffatravesh/tragge/packages/sms	0.110s
+ok  	github.com/Parsaeffatravesh/tragge/packages/storage	0.012s
+?   	github.com/Parsaeffatravesh/tragge/packages/ticket	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/validation	0.237s
+--- FAIL: TestContestFeeWalletIdentityAndPurposeRestrictions (10.75s)
+    contest_fee_test.go:44: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeePostingBaseLateIdempotentAndAttributable (3.04s)
+    contest_fee_test.go:68: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeePostingRollbackAndUnsupportedKinds (3.08s)
+    contest_fee_test.go:126: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConfirmedDepositAndContestJoinUseCompatibleLockOrder (3.31s)
+    contest_fee_test.go:173: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeeReplayRequiresExactTreasuryPair (19.86s)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/fee_side_only (3.70s)
+        contest_fee_test.go:323: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/treasury_side_only (3.23s)
+        contest_fee_test.go:337: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_amount (3.20s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_contest (3.18s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_participant (3.30s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_fee_kind (3.25s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestLateAdmissionAllowsTwoExactIndependentReversals (3.22s)
+    contest_fee_test.go:386: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeeLedgerAppendOnlyAndConcurrentDuplicate (3.25s)
+    contest_fee_test.go:453: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolCreationContributionRetryAndRollback (3.81s)
+    contest_prize_pool_test.go:34: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolConcurrentAdmissions (5.77s)
+    contest_prize_pool_test.go:96: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolRejectsWrongAccountAndMutation (5.14s)
+    contest_prize_pool_test.go:146: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestAdmissionReversalPostgresReconcilesAndRollsBack (3.38s)
+    contest_reversal_test.go:14: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestTreasuryIdentityIsSingletonAndNotAUserWallet (3.26s)
+    treasury_test.go:33: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositAtomicIdempotentAndSeparatedByUser (3.32s)
+    treasury_test.go:81: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositRollbackHasNoFinancialEffect (3.38s)
+    treasury_test.go:108: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositUserFailureRollsBackCustody (3.39s)
+    treasury_test.go:131: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositConcurrentDuplicateAndIndependent (3.61s)
+    treasury_test.go:155: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConcurrentCredits_Idempotency (3.32s)
+    wallet_concurrency_test.go:25: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConcurrentDebitAndCredit (3.50s)
+    wallet_concurrency_test.go:115: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditFrozenWallet_PrizeOnly (3.55s)
+    wallet_concurrency_test.go:237: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent (3.41s)
+    wallet_test.go:357: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_ZeroPrize (3.57s)
+    wallet_test.go:510: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_NegativePrize (3.50s)
+    wallet_test.go:539: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_WalletNotFound (3.43s)
+    wallet_test.go:568: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_WithinLimits (3.54s)
+    wallet_test.go:612: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_DailyAmountExceeded (3.32s)
+    wallet_test.go:647: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_MonthlyAmountExceeded (3.33s)
+    wallet_test.go:688: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_DailyCountExceeded (3.27s)
+    wallet_test.go:730: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_MonthlyCountExceeded (3.38s)
+    wallet_test.go:774: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_CancelledExcluded (3.33s)
+    wallet_test.go:817: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_PerUserOverride (3.25s)
+    wallet_test.go:850: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_NoOverrideRow (3.34s)
+    wallet_test.go:894: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_ConcurrentCalls (3.28s)
+    wallet_test.go:931: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/wallet	135.925s
+?   	github.com/Parsaeffatravesh/tragge/packages/wallet/exchangerate	[no test files]
+FAIL
+
+=== root-race ===
+$ go test -race ./...
+EXIT: 1
+# ./...
+pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies
+FAIL	./... [setup failed]
+FAIL
+
+=== workspace-race ===
+$ go test -race ./apps/admin-bff/... ./apps/api-server/... ./apps/contest-scheduler/... ./apps/free-contest-generator/... ./apps/leaderboard-worker/... ./apps/market-ingestor/... ./apps/payment-service/... ./apps/platform/... ./apps/settlement-service/... ./apps/shard-router/... ./apps/trade-bff/... ./apps/trading-core/... ./apps/trading-engine/... ./apps/user-bff/... ./apps/worker/... ./packages/audit/... ./packages/auth/... ./packages/config/... ./packages/contracts/... ./packages/db/... ./packages/domain/... ./packages/infra/... ./packages/kyc/... ./packages/money/... ./packages/notification/... ./packages/observability/... ./packages/redis/... ./packages/resilience/... ./packages/scoring/... ./packages/secrets/... ./packages/sms/... ./packages/storage/... ./packages/ticket/... ./packages/validation/... ./packages/wallet/...
+EXIT: 1
+ok  	github.com/Parsaeffatravesh/tragge/apps/admin-bff/server	2.196s
+ok  	github.com/Parsaeffatravesh/tragge/apps/api-server	1.939s
+?   	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/internal/health	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/internal/scheduler	2.140s
+?   	github.com/Parsaeffatravesh/tragge/apps/contest-scheduler/server	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/free-contest-generator/server	1.959s
+--- FAIL: TestCalculateWinnersCountRounding (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/1_participant,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(1, 30) = 0, want 1
+    --- FAIL: TestCalculateWinnersCountRounding/11_participants,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(11, 30) = 3, want 4
+    --- FAIL: TestCalculateWinnersCountRounding/34_participants,_30% (0.00s)
+        payout_test.go:43: CalculateWinnersCount(34, 30) = 10, want 11
+    --- FAIL: TestCalculateWinnersCountRounding/100%_winners (0.00s)
+        payout_test.go:43: CalculateWinnersCount(10, 100) = 3, want 10
+    --- FAIL: TestCalculateWinnersCountRounding/over_100%_winners (0.00s)
+        payout_test.go:43: CalculateWinnersCount(10, 150) = 3, want 10
+2026/09/09 07:15:32 leaderboard: pipeline exec error fetching existing scores for contest contest-batch: redis: nil
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/leaderboard-worker/server	0.821s
+?   	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/cmd/market-ingestor	[no test files]
+2026/09/09 07:15:31 Built symbol registry from env var (4 symbols: 2 forex, 1 crypto)
+--- FAIL: TestRegistryDerivMappingAndSubscriptions (0.00s)
+    deriv_provider_test.go:250: subs=[frxEURUSD frxXAUUSD]
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/server	0.561s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/handlers	2.073s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/providers	1.096s
+ok  	github.com/Parsaeffatravesh/tragge/apps/payment-service/server	1.372s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/cmd/platform	[no test files]
+==================
+WARNING: DATA RACE
+Write at 0x00c000136b38 by goroutine 80:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Stop()
+      /workspaces/tragge_v1/apps/platform/internal/modules/events/module.go:106 +0x2c
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs.func1()
+      /workspaces/tragge_v1/apps/platform/internal/adapters/worker/server.go:81 +0x295
+
+Previous write at 0x00c000136b38 by goroutine 90:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Start.func1()
+      /workspaces/tragge_v1/apps/platform/internal/modules/events/module.go:100 +0x59
+
+Goroutine 80 (running) created at:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs()
+      /workspaces/tragge_v1/apps/platform/internal/adapters/worker/server.go:74 +0x52
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).Serve()
+      /workspaces/tragge_v1/apps/platform/internal/adapters/worker/server.go:65 +0xa4
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters_test.TestModeStartupSmokeHealthAndReady.func3.1()
+      /workspaces/tragge_v1/apps/platform/internal/adapters/mode_smoke_test.go:51 +0x46
+
+Goroutine 90 (finished) created at:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Start()
+      /workspaces/tragge_v1/apps/platform/internal/modules/events/module.go:98 +0xe9
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs.func1()
+      /workspaces/tragge_v1/apps/platform/internal/adapters/worker/server.go:76 +0xd4
+==================
+--- FAIL: TestModeStartupSmokeHealthAndReady (0.01s)
+    --- FAIL: TestModeStartupSmokeHealthAndReady/worker (0.00s)
+        testing.go:1865: race detected during execution of test
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters	0.347s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/api	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/realtime	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/compose	1.288s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/mode	1.013s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules	1.010s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/admin	1.294s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/contest	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events	1.013s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/identity	1.295s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/kyc	1.010s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/leaderboard	1.012s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/notification	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/payment	1.015s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/scheduler	1.017s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/settlement	1.017s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/ticket	1.018s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/wallet	1.034s
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/admin	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/identity	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/kyc	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/payment	[no test files]
+?   	github.com/Parsaeffatravesh/tragge/apps/platform/pkg/wallet	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/settlement-service/server	1.682s
+?   	github.com/Parsaeffatravesh/tragge/apps/shard-router	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/trade-bff/server	3.435s
+ok  	github.com/Parsaeffatravesh/tragge/apps/trading-core	1.522s
+?   	github.com/Parsaeffatravesh/tragge/apps/trading-engine/cmd/trading-engine	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/trading-engine/server	2.635s
+?   	github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/models	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/apps/user-bff/internal/service	1.098s
+ok  	github.com/Parsaeffatravesh/tragge/apps/user-bff/server	1.687s
+ok  	github.com/Parsaeffatravesh/tragge/apps/worker	1.399s
+ok  	github.com/Parsaeffatravesh/tragge/packages/audit	1.295s
+ok  	github.com/Parsaeffatravesh/tragge/packages/auth	4.455s
+ok  	github.com/Parsaeffatravesh/tragge/packages/config	1.018s
+?   	github.com/Parsaeffatravesh/tragge/packages/config/health	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/engine/v1	1.018s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/envelope/v1	1.017s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/marketdata/v2	1.022s
+ok  	github.com/Parsaeffatravesh/tragge/packages/contracts/v1	1.016s
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	1.040s
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	(cached)
+?   	github.com/Parsaeffatravesh/tragge/packages/domain	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/domain/statemachine	1.035s
+ok  	github.com/Parsaeffatravesh/tragge/packages/domain/traggepoint	1.377s
+?   	github.com/Parsaeffatravesh/tragge/packages/infra	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/infra/shard	1.165s
+ok  	github.com/Parsaeffatravesh/tragge/packages/infra/wsregistry	3.018s
+ok  	github.com/Parsaeffatravesh/tragge/packages/kyc	1.073s
+ok  	github.com/Parsaeffatravesh/tragge/packages/money	1.011s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification	17.008s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification/inapp	1.059s
+ok  	github.com/Parsaeffatravesh/tragge/packages/notification/prefs	1.017s
+ok  	github.com/Parsaeffatravesh/tragge/packages/observability	1.047s
+ok  	github.com/Parsaeffatravesh/tragge/packages/redis	1.011s
+?   	github.com/Parsaeffatravesh/tragge/packages/resilience	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/resilience/circuitbreaker	2.238s
+ok  	github.com/Parsaeffatravesh/tragge/packages/resilience/ratelimit	1.904s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring	1.230s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/distribution	1.021s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/economics	1.014s
+ok  	github.com/Parsaeffatravesh/tragge/packages/scoring/prize	1.023s
+ok  	github.com/Parsaeffatravesh/tragge/packages/secrets	1.014s
+ok  	github.com/Parsaeffatravesh/tragge/packages/sms	1.138s
+ok  	github.com/Parsaeffatravesh/tragge/packages/storage	1.021s
+?   	github.com/Parsaeffatravesh/tragge/packages/ticket	[no test files]
+ok  	github.com/Parsaeffatravesh/tragge/packages/validation	1.316s
+--- FAIL: TestContestFeeWalletIdentityAndPurposeRestrictions (3.75s)
+    contest_fee_test.go:44: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeePostingBaseLateIdempotentAndAttributable (3.33s)
+    contest_fee_test.go:68: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeePostingRollbackAndUnsupportedKinds (3.45s)
+    contest_fee_test.go:126: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConfirmedDepositAndContestJoinUseCompatibleLockOrder (3.35s)
+    contest_fee_test.go:173: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeeReplayRequiresExactTreasuryPair (20.15s)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/fee_side_only (3.34s)
+        contest_fee_test.go:323: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/treasury_side_only (3.35s)
+        contest_fee_test.go:337: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_amount (3.36s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_contest (3.43s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_participant (3.34s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+    --- FAIL: TestContestFeeReplayRequiresExactTreasuryPair/mismatch_fee_kind (3.33s)
+        contest_fee_test.go:352: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestLateAdmissionAllowsTwoExactIndependentReversals (3.51s)
+    contest_fee_test.go:386: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestFeeLedgerAppendOnlyAndConcurrentDuplicate (3.41s)
+    contest_fee_test.go:453: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolCreationContributionRetryAndRollback (3.35s)
+    contest_prize_pool_test.go:34: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolConcurrentAdmissions (3.37s)
+    contest_prize_pool_test.go:96: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestPrizePoolRejectsWrongAccountAndMutation (3.50s)
+    contest_prize_pool_test.go:146: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestContestAdmissionReversalPostgresReconcilesAndRollsBack (3.39s)
+    contest_reversal_test.go:14: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestTreasuryIdentityIsSingletonAndNotAUserWallet (3.38s)
+    treasury_test.go:33: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositAtomicIdempotentAndSeparatedByUser (3.50s)
+    treasury_test.go:81: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositRollbackHasNoFinancialEffect (3.51s)
+    treasury_test.go:108: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositUserFailureRollsBackCustody (3.56s)
+    treasury_test.go:131: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestPostConfirmedDepositConcurrentDuplicateAndIndependent (3.49s)
+    treasury_test.go:155: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConcurrentCredits_Idempotency (3.49s)
+    wallet_concurrency_test.go:25: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestConcurrentDebitAndCredit (3.50s)
+    wallet_concurrency_test.go:115: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditFrozenWallet_PrizeOnly (3.64s)
+    wallet_concurrency_test.go:237: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent (3.48s)
+    wallet_test.go:357: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_ZeroPrize (3.52s)
+    wallet_test.go:510: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_NegativePrize (3.78s)
+    wallet_test.go:539: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_WalletNotFound (3.75s)
+    wallet_test.go:568: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_WithinLimits (3.60s)
+    wallet_test.go:612: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_DailyAmountExceeded (3.58s)
+    wallet_test.go:647: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_MonthlyAmountExceeded (3.61s)
+    wallet_test.go:688: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_DailyCountExceeded (3.55s)
+    wallet_test.go:730: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_MonthlyCountExceeded (3.76s)
+    wallet_test.go:774: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_CancelledExcluded (3.67s)
+    wallet_test.go:817: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_PerUserOverride (3.72s)
+    wallet_test.go:850: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCheckWithdrawalLimits_NoOverrideRow (3.59s)
+    wallet_test.go:894: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+--- FAIL: TestCreditPrizeIdempotent_ConcurrentCalls (3.73s)
+    wallet_test.go:931: Failed to run migrations: ERROR: trigger "trg_update_participant_count" for table "contest_participants" does not exist (SQLSTATE 42704)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/wallet	130.008s
+?   	github.com/Parsaeffatravesh/tragge/packages/wallet/exchangerate	[no test files]
+FAIL
+
+=== root-vet ===
+$ go vet ./...
+EXIT: 1
+pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies
+
+=== workspace-vet ===
+$ go vet ./apps/admin-bff/... ./apps/api-server/... ./apps/contest-scheduler/... ./apps/free-contest-generator/... ./apps/leaderboard-worker/... ./apps/market-ingestor/... ./apps/payment-service/... ./apps/platform/... ./apps/settlement-service/... ./apps/shard-router/... ./apps/trade-bff/... ./apps/trading-core/... ./apps/trading-engine/... ./apps/user-bff/... ./apps/worker/... ./packages/audit/... ./packages/auth/... ./packages/config/... ./packages/contracts/... ./packages/db/... ./packages/domain/... ./packages/infra/... ./packages/kyc/... ./packages/money/... ./packages/notification/... ./packages/observability/... ./packages/redis/... ./packages/resilience/... ./packages/scoring/... ./packages/secrets/... ./packages/sms/... ./packages/storage/... ./packages/ticket/... ./packages/validation/... ./packages/wallet/...
+EXIT: 0
+
+=== base-unrelated-failures ===
+CWD: /tmp/db-migration-0119-fix/base
+$ go test -count=1 -run 'Test(CalculateWinnersCountRounding|RegistryDerivMappingAndSubscriptions|TreasuryIdentityIsSingletonAndNotAUserWallet)$' -v ./apps/leaderboard-worker/server ./apps/market-ingestor/server ./packages/wallet
+EXIT: 1
+=== RUN   TestCalculateWinnersCountRounding
+=== RUN   TestCalculateWinnersCountRounding/10_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/100_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/1000_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/1_participant,_30%
+    payout_test.go:43: CalculateWinnersCount(1, 30) = 0, want 1
+=== RUN   TestCalculateWinnersCountRounding/2_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/3_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/4_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/7_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/11_participants,_30%
+    payout_test.go:43: CalculateWinnersCount(11, 30) = 3, want 4
+=== RUN   TestCalculateWinnersCountRounding/33_participants,_30%
+=== RUN   TestCalculateWinnersCountRounding/34_participants,_30%
+    payout_test.go:43: CalculateWinnersCount(34, 30) = 10, want 11
+=== RUN   TestCalculateWinnersCountRounding/0_participants
+=== RUN   TestCalculateWinnersCountRounding/negative_participants
+=== RUN   TestCalculateWinnersCountRounding/0%_winners
+=== RUN   TestCalculateWinnersCountRounding/negative_percentage
+=== RUN   TestCalculateWinnersCountRounding/100%_winners
+    payout_test.go:43: CalculateWinnersCount(10, 100) = 3, want 10
+=== RUN   TestCalculateWinnersCountRounding/over_100%_winners
+    payout_test.go:43: CalculateWinnersCount(10, 150) = 3, want 10
+--- FAIL: TestCalculateWinnersCountRounding (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/10_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/100_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/1000_participants,_30% (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/1_participant,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/2_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/3_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/4_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/7_participants,_30% (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/11_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/33_participants,_30% (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/34_participants,_30% (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/0_participants (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/negative_participants (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/0%_winners (0.00s)
+    --- PASS: TestCalculateWinnersCountRounding/negative_percentage (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/100%_winners (0.00s)
+    --- FAIL: TestCalculateWinnersCountRounding/over_100%_winners (0.00s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/leaderboard-worker/server	0.470s
+=== RUN   TestRegistryDerivMappingAndSubscriptions
+2026/09/09 07:15:46 Built symbol registry from env var (4 symbols: 2 forex, 1 crypto)
+    deriv_provider_test.go:250: subs=[frxEURUSD frxXAUUSD]
+--- FAIL: TestRegistryDerivMappingAndSubscriptions (0.00s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/server	0.480s
+=== RUN   TestTreasuryIdentityIsSingletonAndNotAUserWallet
+2026/09/09 07:15:46 github.com/testcontainers/testcontainers-go - Connected to docker:
+  Server Version: 29.7.2-2
+  API Version: 1.51
+  Operating System: Ubuntu 24.04.4 LTS (containerized)
+  Total Memory: 15995 MB
+  Testcontainers for Go Version: v0.40.0
+  Resolved Docker Host: unix:///var/run/docker.sock
+  Resolved Docker Socket Path: /var/run/docker.sock
+  Test SessionID: 3b36c7e812f9695dd6ea70d1c593e0c27cc92e573ff6d2916ae9962132dd974b
+  Test ProcessID: b1817b81-a95b-4670-b028-c37b9f0f3ea9
+2026/09/09 07:15:46 🐳 Creating container for image postgres:16-alpine
+2026/09/09 07:15:48 🐳 Creating container for image testcontainers/ryuk:0.13.0
+2026/09/09 07:15:48 ✅ Container created: 4740b733f2f4
+2026/09/09 07:15:48 🐳 Starting container: 4740b733f2f4
+2026/09/09 07:15:48 ✅ Container started: 4740b733f2f4
+2026/09/09 07:15:48 ⏳ Waiting for container id 4740b733f2f4 image: testcontainers/ryuk:0.13.0. Waiting for: port 8080/tcp to be listening
+2026/09/09 07:15:48 Shell not found in container
+2026/09/09 07:15:48 🔔 Container is ready: 4740b733f2f4
+2026/09/09 07:15:48 ✅ Container created: 17011bd8030c
+2026/09/09 07:15:48 🐳 Starting container: 17011bd8030c
+2026/09/09 07:15:49 ✅ Container started: 17011bd8030c
+2026/09/09 07:15:49 ⏳ Waiting for container id 17011bd8030c image: postgres:16-alpine. Waiting for: all of: [log message "database system is ready to accept connections" (occurrence: 2)]
+2026/09/09 07:15:52 🔔 Container is ready: 17011bd8030c
+    treasury_test.go:33: Failed to run migrations: ERROR: constraint "chk_contest_prize_pool_ledger_amount_cents_check" of relation "contest_prize_pool_ledger" does not exist (SQLSTATE 42704)
+--- FAIL: TestTreasuryIdentityIsSingletonAndNotAUserWallet (6.46s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/wallet	6.498s
+FAIL
+
+=== base-platform-race ===
+CWD: /tmp/db-migration-0119-fix/base
+$ go test -race -count=1 -run '^TestModeStartupSmokeHealthAndReady$' -v ./apps/platform/internal/adapters
+EXIT: 1
+=== RUN   TestModeStartupSmokeHealthAndReady
+=== RUN   TestModeStartupSmokeHealthAndReady/api
+=== RUN   TestModeStartupSmokeHealthAndReady/realtime
+=== RUN   TestModeStartupSmokeHealthAndReady/worker
+==================
+WARNING: DATA RACE
+Write at 0x00c0000168c8 by goroutine 79:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Stop()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/modules/events/module.go:106 +0x2c
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs.func1()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/adapters/worker/server.go:81 +0x295
+
+Previous write at 0x00c0000168c8 by goroutine 81:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Start.func1()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/modules/events/module.go:100 +0x59
+
+Goroutine 79 (running) created at:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/adapters/worker/server.go:74 +0x52
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).Serve()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/adapters/worker/server.go:65 +0xa4
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters_test.TestModeStartupSmokeHealthAndReady.func3.1()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/adapters/mode_smoke_test.go:51 +0x46
+
+Goroutine 81 (finished) created at:
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events.(*outboxRelayJob).Start()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/modules/events/module.go:98 +0xe9
+  github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters/worker.(*Server).startJobs.func1()
+      /tmp/db-migration-0119-fix/base/apps/platform/internal/adapters/worker/server.go:76 +0xd4
+==================
+    testing.go:1865: race detected during execution of test
+--- FAIL: TestModeStartupSmokeHealthAndReady (0.01s)
+    --- PASS: TestModeStartupSmokeHealthAndReady/api (0.01s)
+    --- PASS: TestModeStartupSmokeHealthAndReady/realtime (0.00s)
+    --- FAIL: TestModeStartupSmokeHealthAndReady/worker (0.00s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters	0.307s
+FAIL
+
+=== Exact execution harness (temporary local file, not application code) ===
+$ python3 /tmp/db-migration-0119-fix/run.py <action>
+import json
+import hashlib
+import os
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+import tarfile
+import urllib.parse
+
+ROOT = Path('/workspaces/tragge_v1')
+OUT = Path('/tmp/db-migration-0119-fix')
+PASSWORD = (ROOT / 'infra/docker/secrets/postgres_admin_password.txt').read_text().strip()
+ENV = os.environ.copy()
+ENV['PATH'] = str(OUT / 'bin') + ':' + ENV['PATH']
+ENV['ENVIRONMENT'] = 'test'
+# ECON-ADJ runtime certification is explicitly deferred by this task.
+for key in ('TRAGGE_E2E_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_DSN'):
+    ENV.pop(key, None)
+
+def dsn(database):
+    return 'postgres://tragge_admin:' + urllib.parse.quote(PASSWORD, safe='') + '@127.0.0.1:5432/' + database + '?sslmode=disable'
+
+def run(label, args, data=None, env=None, check=True, cwd=ROOT):
+    result = subprocess.run(args, input=data, text=True, cwd=cwd, env=env or ENV,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = result.stdout.replace(PASSWORD, '<redacted>').replace(urllib.parse.quote(PASSWORD, safe=''), '<redacted>')
+    command = shlex.join(args).replace(PASSWORD, '<redacted>').replace(urllib.parse.quote(PASSWORD, safe=''), '<redacted>')
+    (OUT / 'logs' / (label + '.log')).write_text('CWD: ' + str(cwd) + '\n$ ' + command + '\n' + ('STDIN:\n' + data + '\n' if data else '') + 'EXIT: ' + str(result.returncode) + '\n' + output)
+    print(label + ': exit ' + str(result.returncode), flush=True)
+    print(output[-4000:], flush=True)
+    if check and result.returncode:
+        raise SystemExit(result.returncode)
+    return result
+
+def sql(label, database, query):
+    return run(label, ['docker', 'exec', '-i', 'tragge_postgres', 'sh', '-ec',
+        'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d ' + shlex.quote(database)], data=query)
+
+def migrate(label, database, *args):
+    return run(label, ['migrate', '-path', 'packages/db/migrations', '-database', dsn(database), *args])
+
+def dump_schema(label, database):
+    args = ['docker', 'exec', 'tragge_postgres', 'sh', '-ec',
+        'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec pg_dump -U tragge_admin --schema-only --no-owner --no-privileges -d ' + database]
+    result = run(label, args)
+    normalized = '\n'.join(line for line in result.stdout.splitlines() if not line.startswith(('\\restrict ', '\\unrestrict ')))
+    (OUT / (label + '.sql')).write_text(normalized + '\n')
+    return normalized
+
+action = sys.argv[1]
+if action == 'setup':
+    run('host-psql', ['bash', '-c', 'psql --version'], check=False)
+    run('host-ready', ['bash', '-c', 'pg_isready'], check=False)
+    run('container-psql', ['docker', 'exec', 'tragge_postgres', 'psql', '--version'])
+    run('container-ready', ['docker', 'exec', 'tragge_postgres', 'pg_isready'])
+    run('tool-version', ['migrate', '-version'])
+    for database in ('tragge_test_migration_0119_baseline', 'tragge_test_migration_0119_fresh'):
+        sql('create-' + database, 'postgres', 'CREATE DATABASE ' + database + ';')
+        run('init-' + database, ['docker', 'exec', 'tragge_postgres', 'sh', '-ec',
+            'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d ' + database + ' -f /docker-entrypoint-initdb.d/01-create-users.sql; psql -X -w -v ON_ERROR_STOP=1 -U tragge_admin -d ' + database + ' -f /docker-entrypoint-initdb.d/02-grant-privileges.sql'])
+    migrate('baseline-118', 'tragge_test_migration_0119_baseline', 'goto', '118')
+elif action in ('red', 'green', 'regression-race'):
+    env = ENV.copy()
+    env['TRAGGE_MIGRATION_TEST_DATABASE_URL'] = dsn('tragge_test_migration_0119_baseline')
+    args = ['go', 'test', '-count=1', '-run', '^TestMigration0119PostgreSQL$', '-v']
+    if action == 'regression-race':
+        args += ['-race']
+    run(action, args + ['./packages/db/...'], env=env, check=action != 'red')
+elif action == 'fresh':
+    env = ENV.copy()
+    env['DATABASE_URL'] = dsn('tragge_test_migration_0119_fresh')
+    run('fresh-up', ['make', '-s', 'migrate-up'], env=env)
+    run('fresh-up-repeat', ['make', '-s', 'migrate-up'], env=env)
+    sql('fresh-catalog', 'tragge_test_migration_0119_fresh', "SELECT version, dirty FROM schema_migrations; SELECT to_regclass('contest_snapshots'), to_regclass('contest_prize_pool_ledger'), to_regclass('economic_adjustment_events'); SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='contest_prize_pool_ledger'::regclass ORDER BY conname;")
+elif action == 'recovery-inspect':
+    database = 'tragge_test_econ_adj_001'
+    sql('dirty-preflight', database, "SELECT version, dirty FROM schema_migrations; SELECT count(*) AS other_connections FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid(); SELECT to_regclass('contest_participant_lifecycle_events'), to_regclass('economic_adjustment_events');")
+    baseline = dump_schema('baseline-schema', 'tragge_test_migration_0119_baseline')
+    dirty = dump_schema('dirty-schema', database)
+    if baseline != dirty:
+        raise SystemExit('STOP: dirty schema differs from clean 118; inspect before any recovery')
+    (OUT / 'logs/schema-comparison.log').write_text('PASS: dirty database schema equals fresh 0118 schema after removing only pg_dump random restrict/unrestrict tokens.\nSHA256: ' + hashlib.sha256(dirty.encode()).hexdigest() + '\n')
+    print('PASS: dirty schema equals independently migrated clean 118', flush=True)
+    backup = OUT / 'backups/dirty-119.dump'
+    args = ['docker', 'exec', 'tragge_postgres', 'sh', '-ec',
+        'export PGPASSWORD="$(cat /run/secrets/postgres_admin_password)"; exec pg_dump -U tragge_admin -Fc -d ' + database]
+    with backup.open('wb') as stream:
+        os.chmod(backup, 0o600)
+        result = subprocess.run(args, stdout=stream, stderr=subprocess.PIPE)
+    if result.returncode:
+        raise SystemExit('Backup failed; no recovery performed')
+    (OUT / 'logs/backup.log').write_text('$ ' + shlex.join(args) + ' > /tmp/db-migration-0119-fix/backups/dirty-119.dump\nEXIT: 0\nBytes: ' + str(backup.stat().st_size) + '\nSHA256: ' + hashlib.sha256(backup.read_bytes()).hexdigest() + '\n')
+    print('PASS: preserved complete dirty database backup', flush=True)
+    query = """COPY (SELECT table_name, string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position)
+        FROM information_schema.columns WHERE table_schema='public' AND table_name<>'schema_migrations'
+        AND table_name IN (SELECT tablename FROM pg_tables WHERE schemaname='public')
+        GROUP BY table_name ORDER BY table_name) TO STDOUT;"""
+    result = sql('recovery-columns', database, query)
+    projections = []
+    for line in result.stdout.splitlines():
+        if '\t' not in line:
+            continue
+        table, columns = line.split('\t')
+        projections.append("SELECT '" + table + "' AS table_name, count(*) AS rows, md5(COALESCE(string_agg(row_to_json(r)::text, E'\\n' ORDER BY row_to_json(r)::text),'')) AS row_hash FROM (SELECT " + columns + ' FROM public."' + table + '") r')
+    query = '\nUNION ALL\n'.join(projections) + '\nORDER BY table_name;'
+    (OUT / 'history-fingerprint.sql').write_text(query)
+    before = sql('history-before', database, query)
+    (OUT / 'history-before.txt').write_text(before.stdout)
+elif action == 'recover':
+    database = 'tragge_test_econ_adj_001'
+    if not (OUT / 'logs/schema-comparison.log').exists() or not (OUT / 'backups/dirty-119.dump').exists():
+        raise SystemExit('Recovery preflight and backup required')
+    sql('recovery-guard', database, """DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version=119 AND dirty) THEN
+            RAISE EXCEPTION 'expected dirty version 119';
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()) THEN
+            RAISE EXCEPTION 'other database connections exist';
+        END IF;
+        IF to_regclass('contest_participant_lifecycle_events') IS NOT NULL THEN
+            RAISE EXCEPTION 'partial migration objects exist';
+        END IF;
+    END $$;""")
+    migrate('recover-force-118', database, 'force', '118')
+    migrate('recover-up', database, 'up')
+    sql('recovered-version', database, 'SELECT version, dirty FROM schema_migrations;')
+    after = sql('history-after', database, (OUT / 'history-fingerprint.sql').read_text())
+    if after.stdout != (OUT / 'history-before.txt').read_text():
+        raise SystemExit('FAIL: historical row count/hash mismatch')
+    (OUT / 'logs/history-comparison.log').write_text('PASS: every pre-existing public-table row count and original-column row hash unchanged through recovery to 0122.\n')
+    recovered = dump_schema('recovered-schema', database)
+    fresh = dump_schema('fresh-schema', 'tragge_test_migration_0119_fresh')
+    if recovered != fresh:
+        raise SystemExit('FAIL: recovered schema differs from fresh 0122')
+    (OUT / 'logs/recovered-schema-comparison.log').write_text('PASS: recovered database schema equals fresh 0122 after removing only pg_dump random restrict/unrestrict tokens.\nSHA256: ' + hashlib.sha256(recovered.encode()).hexdigest() + '\n')
+    print('PASS: historical rows preserved; recovered schema equals fresh 0122', flush=True)
+elif action in ('test', 'race', 'vet'):
+    prefix = ['go', 'vet'] if action == 'vet' else ['go', 'test'] + (['-race'] if action == 'race' else [])
+    run('root-' + action, prefix + ['./...'], check=False)
+    work = json.loads(subprocess.check_output(['go', 'work', 'edit', '-json'], text=True, cwd=ROOT))
+    patterns = [entry['DiskPath'] + '/...' for entry in work['Use']]
+    run('workspace-' + action, prefix + patterns, check=False)
+elif action == 'baseline-errors':
+    base = OUT / 'base'
+    base.mkdir()
+    archive = OUT / 'base.tar'
+    with archive.open('wb') as stream:
+        subprocess.run(['git', 'archive', 'origin/main'], cwd=ROOT, stdout=stream, check=True)
+    with tarfile.open(archive) as tar:
+        tar.extractall(base, filter='data')
+    run('base-unrelated-failures', ['go', 'test', '-count=1', '-run',
+        'Test(CalculateWinnersCountRounding|RegistryDerivMappingAndSubscriptions|TreasuryIdentityIsSingletonAndNotAUserWallet)$', '-v',
+        './apps/leaderboard-worker/server', './apps/market-ingestor/server', './packages/wallet'], cwd=base, check=False)
+elif action == 'baseline-race':
+    run('base-platform-race', ['go', 'test', '-race', '-count=1', '-run', '^TestModeStartupSmokeHealthAndReady$', '-v',
+        './apps/platform/internal/adapters'], cwd=OUT / 'base', check=False)
+else:
+    raise SystemExit('Unknown action: ' + action)
+
+=== Final change-scope verification ===
+$ git diff origin/main -- packages/db/migrations/0118_contest_prize_pool.up.sql packages/db/migrations/0119_lifecycle004_financial_reversal.down.sql apps/leaderboard-worker apps/market-ingestor apps/platform packages/wallet
+Exit: 0; no output.
+$ git diff --check
+Exit: 0; no output.
+$ docker ps --format '{{.Names}}\t{{.Status}}'
+Exit: 0; only tragge_postgres remains (healthy). Testcontainers cleaned up their temporary containers.
+Normal workspace suite: 58 passing packages, 3 failing, 23 with no tests.
+Race workspace suite: 57 passing packages, 4 failing, 23 with no tests; one outbox-job data-race report.
+No ECON-ADJ runtime certification or later task was started.
+
+=== Final document validation ===
+PASS: four-file staged scope, local report links, code fences, EOF/whitespace, actual conflict markers.
+PASS: staged files contain none of the six local password-file values.
+PASS: migration SQL outside the targeted constraint replacement is byte-identical to base.
+Markdownlint unavailable; focused structural checks used.
+Gitleaks unavailable; local credential comparison and diff review used.
+An initial overly broad conflict-marker scan matched the Go race report separator.
+The corrected scan recognizes actual Git conflict markers and passed without altering evidence.
+$ git diff --cached --check
+Exit: 0; no output.
