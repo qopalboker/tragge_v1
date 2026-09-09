@@ -30,18 +30,20 @@ var (
 )
 
 type Snapshot struct {
-	ID, ContestID, Type, Version, PolicyVersion string
-	EventAt, CreatedAt, StartsAt, EndsAt        time.Time
-	MinimumParticipants                         sql.NullInt64
-	ParticipantCount                            int
-	EntryFeeCents, GrossBaseEntryCents          int64
-	PlatformFeeBps                              int
-	LateJoinEnabled                             bool
-	PlatformFeeCents, LateSurchargeCents        int64
-	PrizePoolCents                              int64
-	PlannedWinnerCount                          int
-	SettlementID                                sql.NullString
-	Details                                     json.RawMessage
+	ID, ContestID, Type, Version, PolicyVersion                                string
+	EventAt, CreatedAt, StartsAt, EndsAt                                       time.Time
+	MinimumParticipants                                                        sql.NullInt64
+	ParticipantCount                                                           int
+	JoinedParticipantCount, EconomicParticipantCount, LeaderboardEligibleCount sql.NullInt64
+	WinnerCapacityShortfall                                                    sql.NullBool
+	EntryFeeCents, GrossBaseEntryCents                                         int64
+	PlatformFeeBps                                                             int
+	LateJoinEnabled                                                            bool
+	PlatformFeeCents, LateSurchargeCents                                       int64
+	PrizePoolCents                                                             int64
+	PlannedWinnerCount                                                         int
+	SettlementID                                                               sql.NullString
+	Details                                                                    json.RawMessage
 }
 
 type SnapshotDB interface {
@@ -55,7 +57,9 @@ const snapshotColumns = `id::text, contest_id::text, snapshot_type::text, snapsh
  starts_at, ends_at, entry_fee_cents, platform_fee_bps, late_join_enabled,
  COALESCE(gross_base_entry_cents,0), COALESCE(platform_fee_cents,0),
  COALESCE(late_surcharge_cents,0), COALESCE(prize_pool_cents,0),
- COALESCE(planned_winner_count,0), settlement_id::text, details`
+ COALESCE(planned_winner_count,0), settlement_id::text, details,
+ joined_participant_count, economic_participant_count, leaderboard_eligible_count,
+ winner_capacity_shortfall`
 
 func scanSnapshot(row interface{ Scan(...any) error }) (*Snapshot, error) {
 	var s Snapshot
@@ -63,7 +67,8 @@ func scanSnapshot(row interface{ Scan(...any) error }) (*Snapshot, error) {
 		&s.PolicyVersion, &s.MinimumParticipants, &s.ParticipantCount, &s.StartsAt, &s.EndsAt,
 		&s.EntryFeeCents, &s.PlatformFeeBps, &s.LateJoinEnabled, &s.GrossBaseEntryCents,
 		&s.PlatformFeeCents, &s.LateSurchargeCents, &s.PrizePoolCents,
-		&s.PlannedWinnerCount, &s.SettlementID, &s.Details)
+		&s.PlannedWinnerCount, &s.SettlementID, &s.Details, &s.JoinedParticipantCount,
+		&s.EconomicParticipantCount, &s.LeaderboardEligibleCount, &s.WinnerCapacityShortfall)
 	return &s, err
 }
 
@@ -123,8 +128,22 @@ type cutoffContest struct {
 }
 
 type cutoffParticipant struct {
-	userID   string
-	joinedAt time.Time
+	userID              string
+	joinedAt            time.Time
+	economic            bool
+	leaderboardEligible bool
+}
+
+func cutoffPopulation(participants []cutoffParticipant) (economic, leaderboard int) {
+	for _, participant := range participants {
+		if participant.economic {
+			economic++
+		}
+		if participant.leaderboardEligible {
+			leaderboard++
+		}
+	}
+	return economic, leaderboard
 }
 
 // EnsureEconomicsCutoff owns the entire serialized cutoff decision. The caller
@@ -149,6 +168,11 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 	if contest.policy != ContestSnapshotPolicyV1 {
 		return nil, ErrSnapshotNotReady
 	}
+	if existing, err := SnapshotByType(ctx, tx, contestID, SnapshotEconomicsCutoff); err == nil {
+		return existing, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 	if !contest.startedAt.Valid {
 		return nil, fmt.Errorf("%w: modern contest %s is missing contest_started", ErrSnapshotIntegrity, contestID)
 	}
@@ -161,15 +185,25 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 		return nil, ErrSnapshotNotReady
 	}
 
-	rows, err := tx.QueryContext(ctx, `SELECT user_id::text,joined_at FROM contest_participants
-		WHERE contest_id=$1 AND NOT COALESCE(is_system,FALSE) ORDER BY user_id`, contestID)
+	rows, err := tx.QueryContext(ctx, `SELECT p.user_id::text,p.joined_at,
+		CASE WHEN $2=0 THEN p.lifecycle_status NOT IN ('REFUNDED','CANCELLED')
+		ELSE EXISTS (
+			SELECT 1 FROM wallet_ledger admission
+			WHERE admission.idempotency_key='contest_entry:'||p.contest_id::text||':'||p.user_id::text
+			AND admission.type='contest_entry' AND admission.amount_cents < 0
+			AND NOT EXISTS (SELECT 1 FROM wallet_ledger reversal WHERE reversal.original_transaction_id=admission.id)
+		) END,
+		p.lifecycle_status='ACTIVE' AND p.has_started_trading=TRUE
+		FROM contest_participants p
+		WHERE contest_id=$1 AND NOT COALESCE(is_system,FALSE) ORDER BY user_id`, contestID, contest.entryFee)
 	if err != nil {
 		return nil, err
 	}
 	var participants []cutoffParticipant
 	for rows.Next() {
 		var participant cutoffParticipant
-		if err := rows.Scan(&participant.userID, &participant.joinedAt); err != nil {
+		if err := rows.Scan(&participant.userID, &participant.joinedAt, &participant.economic,
+			&participant.leaderboardEligible); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -184,7 +218,11 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 	}
 
 	baseFee, surcharge := int64(0), int64(0)
+	economicCount, leaderboardCount := cutoffPopulation(participants)
 	for _, participant := range participants {
+		if !participant.economic {
+			continue
+		}
 		participantBaseFee, participantSurcharge, err := validateAdmissionEvidence(ctx, tx, contestID, contest, participant)
 		if err != nil {
 			return nil, err
@@ -195,10 +233,10 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 		baseFee += participantBaseFee
 		surcharge += participantSurcharge
 	}
-	if contest.entryFee < 0 || (len(participants) > 0 && contest.entryFee > math.MaxInt64/int64(len(participants))) {
+	if contest.entryFee < 0 || (economicCount > 0 && contest.entryFee > math.MaxInt64/int64(economicCount)) {
 		return nil, fmt.Errorf("%w: gross entry overflow", ErrAdmissionEvidence)
 	}
-	gross := int64(len(participants)) * contest.entryFee
+	gross := int64(economicCount) * contest.entryFee
 	pool := gross - baseFee
 	if gross < 0 || baseFee < 0 || surcharge < 0 || pool < 0 || gross != baseFee+pool {
 		return nil, fmt.Errorf("%w: impossible cutoff reconciliation", ErrAdmissionEvidence)
@@ -206,32 +244,41 @@ func EnsureEconomicsCutoff(ctx context.Context, tx SnapshotDB, contestID string)
 	if contest.fundsPolicy == "contest_funds_v1" {
 		var custodyBalance, ledgerBalance int64
 		var entryCount int
-		if err := tx.QueryRowContext(ctx, `SELECT a.balance_cents,COALESCE(SUM(l.amount_cents),0),COUNT(l.id)
-			FROM contest_prize_pool_accounts a LEFT JOIN contest_prize_pool_ledger l ON l.pool_account_id=a.id
-			WHERE a.contest_id=$1 GROUP BY a.id,a.balance_cents`, contestID).Scan(&custodyBalance, &ledgerBalance, &entryCount); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT a.balance_cents,
+			(SELECT COALESCE(SUM(l.amount_cents),0) FROM contest_prize_pool_ledger l WHERE l.pool_account_id=a.id),
+			(SELECT COUNT(*) FROM contest_prize_pool_ledger admission
+			 WHERE admission.pool_account_id=a.id AND admission.direction='credit'
+			 AND NOT EXISTS (SELECT 1 FROM contest_prize_pool_ledger reversal
+			                 WHERE reversal.original_ledger_id=admission.id))
+			FROM contest_prize_pool_accounts a WHERE a.contest_id=$1`, contestID).Scan(&custodyBalance, &ledgerBalance, &entryCount); err != nil {
 			return nil, fmt.Errorf("%w: missing Prize Pool custody: %v", ErrSnapshotIntegrity, err)
 		}
-		if err := validatePrizePoolReconciliation(custodyBalance, ledgerBalance, entryCount, pool, len(participants)); err != nil {
+		if err := validatePrizePoolReconciliation(custodyBalance, ledgerBalance, entryCount, pool, economicCount); err != nil {
 			return nil, err
 		}
 	}
-	plannedWinners := prizedistribution.TralentV1PlannedWinners(len(participants))
+	plannedWinners := prizedistribution.TralentV1PlannedWinners(economicCount)
 
 	row := tx.QueryRowContext(ctx, `
 WITH inserted AS (
  INSERT INTO contest_snapshots
  (contest_id,snapshot_type,snapshot_version,event_at,participant_count,starts_at,ends_at,
   entry_fee_cents,platform_fee_bps,late_join_enabled,gross_base_entry_cents,platform_fee_cents,
-  late_surcharge_cents,prize_pool_cents,planned_winner_count,details)
+  late_surcharge_cents,prize_pool_cents,planned_winner_count,details,joined_participant_count,
+  economic_participant_count,leaderboard_eligible_count,winner_capacity_shortfall)
  SELECT id,'economics_cutoff','economics_cutoff_v1',$2,$3,starts_at,ends_at,$4,$5,late_join_enabled,
-  $6,$7,$8,$9,$10,jsonb_build_object('distribution_version','tralent_v1') FROM contests
- WHERE id=$1 AND lifecycle_policy_version=$11 AND CURRENT_TIMESTAMP >= $2
+  $6,$7,$8,$9,$10,jsonb_build_object('distribution_version','tralent_v1'),$3,$11,$12,$12<$10 FROM contests
+ WHERE id=$1 AND lifecycle_policy_version=$13 AND CURRENT_TIMESTAMP >= $2
  ON CONFLICT (contest_id,snapshot_type) DO NOTHING RETURNING `+snapshotColumns+`
+), event AS (
+ INSERT INTO economic_adjustment_events(contest_id,event_type,previous_state,new_state,reason)
+ SELECT contest_id,'ECONOMIC_SNAPSHOT_CREATED',NULL,'SNAPSHOT','ECONOMICS_CUTOFF' FROM inserted
+ ON CONFLICT (contest_id,event_type) WHERE event_type='ECONOMIC_SNAPSHOT_CREATED' DO NOTHING
 )
 SELECT `+snapshotColumns+` FROM inserted UNION ALL SELECT `+snapshotColumns+` FROM contest_snapshots
 	 WHERE contest_id=$1 AND snapshot_type='economics_cutoff' LIMIT 1`, contestID, cutoffAt,
 		len(participants), contest.entryFee, contest.feeBps, gross, baseFee, surcharge, pool,
-		plannedWinners, ContestSnapshotPolicyV1)
+		plannedWinners, economicCount, leaderboardCount, ContestSnapshotPolicyV1)
 	s, err := scanSnapshot(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrSnapshotNotReady

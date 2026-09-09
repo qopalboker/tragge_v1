@@ -16,6 +16,39 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+func TestECON_ADJPopulationSeparation(t *testing.T) {
+	participants := []cutoffParticipant{
+		{userID: "no-trade-paid", economic: true},
+		{userID: "active-trader", economic: true, leaderboardEligible: true},
+		{userID: "ranked-disqualified-not-refunded", economic: true},
+		{userID: "refunded", economic: false},
+	}
+	economic, leaderboard := cutoffPopulation(participants)
+	if economic != 3 {
+		t.Fatalf("economic count=%d want 3; paid no-trade and unreversed disqualified entries must count", economic)
+	}
+	if leaderboard != 1 {
+		t.Fatalf("leaderboard count=%d want 1; rank zero and terminal participants must not count", leaderboard)
+	}
+	plannedWinners := prizedistribution.TralentV1PlannedWinners(economic)
+	if plannedWinners != 1 || leaderboard < plannedWinners {
+		t.Fatalf("unexpected winner capacity: planned=%d eligible=%d", plannedWinners, leaderboard)
+	}
+}
+
+func TestECON_ADJWinnerCapacityDoesNotRewritePlan(t *testing.T) {
+	participants := make([]cutoffParticipant, 100)
+	for i := range participants {
+		participants[i].economic = true
+		participants[i].leaderboardEligible = i < 6
+	}
+	economic, leaderboard := cutoffPopulation(participants)
+	plannedWinners := prizedistribution.TralentV1PlannedWinners(economic)
+	if plannedWinners != 30 || leaderboard != 6 || !(leaderboard < plannedWinners) {
+		t.Fatalf("economic=%d leaderboard=%d planned=%d", economic, leaderboard, plannedWinners)
+	}
+}
+
 func TestContestSnapshotMigrationContract(t *testing.T) {
 	upRaw, err := os.ReadFile(filepath.Join(migrationDir(), "0117_contest_lifecycle_snapshots.up.sql"))
 	if err != nil {
@@ -123,8 +156,10 @@ func snapshotPostgres(t *testing.T) *sql.DB {
 		t.Skipf("PostgreSQL unavailable: %v", err)
 	}
 	var migrated bool
-	if err = database.QueryRowContext(ctx, `SELECT to_regclass('public.contest_snapshots') IS NOT NULL AND to_regclass('public.contest_prize_pool_accounts') IS NOT NULL`).Scan(&migrated); err != nil || !migrated {
-		t.Skip("migrations 0117 and 0118 not applied")
+	if err = database.QueryRowContext(ctx, `SELECT to_regclass('public.contest_snapshots') IS NOT NULL
+		AND to_regclass('public.contest_prize_pool_accounts') IS NOT NULL
+		AND to_regclass('public.economic_adjustment_events') IS NOT NULL`).Scan(&migrated); err != nil || !migrated {
+		t.Skip("migrations 0117, 0118, and 0122 not applied")
 	}
 	return database
 }

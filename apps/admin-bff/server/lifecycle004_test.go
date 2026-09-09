@@ -83,3 +83,26 @@ func TestLIFECYCLE004FinancialHandlersNeverMutateContestMoneySummaries(t *testin
 		}
 	}
 }
+
+func TestECON_ADJRemovalEventsShareLifecycleTransaction(t *testing.T) {
+	financial, err := os.ReadFile("lifecycle004_financial.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(financial)
+	cutoff := strings.Index(source, "if cutoff")
+	events := strings.Index(source, "INSERT INTO economic_adjustment_events")
+	status := strings.Index(source, "UPDATE contest_participants SET lifecycle_status")
+	commit := strings.Index(source, "tx.Commit()")
+	if cutoff < 0 || events < cutoff || status < events || commit < status {
+		t.Fatalf("economic adjustment is not cutoff-gated and atomic: cutoff=%d events=%d status=%d commit=%d", cutoff, events, status, commit)
+	}
+	for _, required := range []string{
+		"PARTICIPANT_REMOVED_BEFORE_CUTOFF", "PARTICIPANT_REFUNDED", "PARTICIPANT_DISQUALIFIED",
+		"previous_state", "new_state", "reason", "actor_id", "if cutoff && refund",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("economic adjustment recording missing %q", required)
+		}
+	}
+}
