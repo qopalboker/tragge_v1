@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var errEconomicsCutoff = errors.New("participant removal is blocked after economics cutoff")
+var errEconomicsCutoff = errors.New("participant refund is blocked after economics cutoff")
 var errParticipantInactive = errors.New("participant is no longer active")
 
 type removalResult struct {
@@ -38,7 +38,7 @@ func (a *App) removeParticipantAtomic(ctx context.Context, contestID, participan
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM contest_snapshots WHERE contest_id=$1 AND snapshot_type='economics_cutoff')`, contestID).Scan(&cutoff); err != nil {
 		return nil, err
 	}
-	if cutoff {
+	if cutoff && refund {
 		return nil, errEconomicsCutoff
 	}
 	var status string
@@ -68,8 +68,25 @@ func (a *App) removeParticipantAtomic(ctx context.Context, contestID, participan
 		}
 	}
 	newStatus := "DISQUALIFIED"
+	economicEventType := "PARTICIPANT_DISQUALIFIED"
 	if refund {
 		newStatus = "REFUNDED"
+		economicEventType = "PARTICIPANT_REFUNDED"
+	}
+	previousEconomicState := "COMMITTED"
+	if !cutoff {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO economic_adjustment_events
+			(contest_id,participant_id,event_type,previous_state,new_state,reason,actor_id)
+			VALUES($1,$2,'PARTICIPANT_REMOVED_BEFORE_CUTOFF','COMMITTED','REMOVAL_PENDING',$3,$4)`, contestID, participantID, req.Reason, actorID); err != nil {
+			return nil, err
+		}
+		previousEconomicState = "REMOVAL_PENDING"
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO economic_adjustment_events
+		(contest_id,participant_id,event_type,previous_state,new_state,reason,actor_id)
+		VALUES($1,$2,$3,$4,$5,$6,$7)`, contestID, participantID, economicEventType,
+		previousEconomicState, newStatus, req.Reason, actorID); err != nil {
+		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE contest_participants SET lifecycle_status=$1,lifecycle_changed_at=NOW() WHERE contest_id=$2 AND user_id=$3`, newStatus, contestID, participantID); err != nil {
 		return nil, err
@@ -108,6 +125,13 @@ func (a *App) cancelContestAtomic(ctx context.Context, contestID, actorID, reaso
 	if current == string(statemachine.StatusCancelled) {
 		return &cancellationResult{AlreadyCancelled: true}, nil
 	}
+	var cutoff bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM contest_snapshots WHERE contest_id=$1 AND snapshot_type='economics_cutoff')`, contestID).Scan(&cutoff); err != nil {
+		return nil, err
+	}
+	if cutoff {
+		return nil, errEconomicsCutoff
+	}
 	if !statemachine.CanTransition(statemachine.ContestStatus(current), statemachine.StatusCancelled) {
 		return nil, fmt.Errorf("contest status %s cannot be cancelled", current)
 	}
@@ -144,6 +168,11 @@ func (a *App) cancelContestAtomic(ctx context.Context, contestID, actorID, reaso
 			VALUES($1,$2,$3,'CONTEST_REFUND_COMPLETED',$4,true,$5)`, contestID, participantID, actorID, reason, mustJSON(reversal)); err != nil {
 				return nil, err
 			}
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO economic_adjustment_events
+			(contest_id,participant_id,event_type,previous_state,new_state,reason,actor_id)
+			VALUES($1,$2,'PARTICIPANT_REFUNDED','COMMITTED','REFUNDED',$3,$4)`, contestID, participantID, reason, actorID); err != nil {
+			return nil, err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE contest_participants SET lifecycle_status='CANCELLED',lifecycle_changed_at=NOW() WHERE contest_id=$1 AND user_id=$2`, contestID, participantID); err != nil {
 			return nil, err
