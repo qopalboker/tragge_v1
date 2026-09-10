@@ -1435,6 +1435,53 @@ Delivery:
 - Push and open a PR; merge only after all required checks pass.
 ```
 
+### FIN-006 — Classify admin wallet top-ups as admin-funded deposits
+
+```text
+You are implementing Tragge task `FIN-006`: **Classify admin wallet top-ups as admin-funded deposits**.
+
+Repository policy:
+- Read `docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md` §13.
+- Read `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` only for this task and its dependencies.
+- Work on branch `codex/fin-006-admin-funded-deposit-classification`.
+- Keep one goal, one scoped change set, and one Conventional Commit.
+- Do not implement later roadmap tasks.
+- Do not invent revenue recognition beyond the approved classification.
+
+Dependencies:
+- DATA-003 (ledger), SEC-004 (sensitive wallet charge)
+
+Primary scope:
+- packages/db/migrations/**
+- packages/wallet/**
+- apps/admin-bff/**
+- apps/admin-frontend/** (labels/filters only if needed)
+- reporting queries that treat `deposit` as user/gateway revenue
+
+Required implementation:
+- Introduce ledger type `admin_funded_deposit` for Admin Panel wallet top-ups (credits).
+- Stop writing admin top-ups as ordinary `deposit` (gateway) revenue.
+- Preserve complete audit trail: immutable ledger row + existing `audit_logs` (`user.wallet.charged`) with actor, amount, reason, before/after balance.
+- Keep gateway deposits as `deposit` (or existing payment credit path).
+- Update Admin dashboard / finance metrics so “user/trading deposit revenue” excludes `admin_funded_deposit`.
+- Backfill or dual-read strategy for historical admin charges that used `deposit` + `WALLET_TOPUP` / `admin_action` (document choice in decision log).
+
+Acceptance criteria:
+- New admin top-ups never appear in gateway deposit revenue totals.
+- Ledger + audit allow reconstructing who funded whom, when, why, and how much.
+- Idempotent charge behavior and sensitive-action reauth remain intact.
+
+Verification:
+- Wallet unit/integration: admin credit uses `admin_funded_deposit`.
+- Dashboard/metrics query test excludes admin-funded from deposit revenue.
+- Audit log still written on charge.
+
+Delivery:
+- Decision log under `docs/codex/decisions/FIN-006-decision-log.md`.
+- Commit as: `feat(wallet): classify admin top-ups as admin_funded_deposit`.
+- Push and open a PR; merge only after all required checks pass.
+```
+
 ### DATA-005 — Formalize system-account semantics
 
 ```text
@@ -3090,6 +3137,51 @@ Delivery:
 - Run lint/typecheck/build for touched modules.
 - Provide an implementation summary and unresolved risks.
 - Commit as: `feat(marketdata): add conformant forex adapters`.
+- Push and open a PR; merge only after all required checks pass.
+```
+
+### MD-005A — Admin-configurable Forex/Crypto provider selection with audit
+
+```text
+You are implementing Tragge task `MD-005A`: **Admin-configurable Forex/Crypto provider selection with audit**.
+
+Repository policy:
+- Read `docs/product/FIXED_PRODUCT_AND_TECHNICAL_POLICIES.md` §9.
+- Read `docs/codex/PRODUCTION_ROADMAP_AND_CODEX_TASKS.md` only for this task and its dependencies.
+- Work on branch `codex/md-005a-admin-provider-selection-audit`.
+- Keep one goal, one scoped change set, and one Conventional Commit.
+- Do not implement later roadmap tasks (full AUTO/FORCE/PAUSE lifecycle remains MD-005/MD-006).
+- Do not invent provider behavior beyond approved defaults and admin selection UX.
+
+Dependencies:
+- MD-003,MD-004 (adapters present); CI market-ingestor lint fix as needed
+
+Primary scope:
+- apps/market-ingestor/**
+- apps/admin-bff/**
+- apps/admin-frontend/**
+
+Required implementation:
+- Enforce product defaults: Forex active provider = Deriv; Crypto active provider = Nobitex.
+- Expose Admin Panel UI for viewing active Forex/Crypto providers and changing selection with safe validation.
+- Persist selection; surface clear active-provider state to Admin.
+- Write audit events for every provider selection change (actor, before/after, timestamp).
+- Do not expose provider identity/technical health to end users (policy §9.5–9.6).
+
+Acceptance criteria:
+- Fresh install / empty config resolves to Forex=Deriv, Crypto=Nobitex.
+- Invalid provider values are rejected; active state remains coherent.
+- Admin can see and change selection; each change is audit-logged.
+- Full AUTO / FORCE_PROVIDER / PAUSE_SYMBOL with 1h review is explicitly out of scope (tracked under MD-005).
+
+Verification:
+- Unit/API tests for defaults and validation.
+- Admin UI contract or e2e smoke for active-provider display + switch.
+- Audit log assertion on switch.
+
+Delivery:
+- Update relevant technical Markdown / decision log.
+- Commit as: `feat(admin,marketdata): auditable forex/crypto provider selection`.
 - Push and open a PR; merge only after all required checks pass.
 ```
 
