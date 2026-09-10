@@ -2158,3 +2158,600 @@ An initial overly broad conflict-marker scan matched the Go race report separato
 The corrected scan recognizes actual Git conflict markers and passed without altering evidence.
 $ git diff --cached --check
 Exit: 0; no output.
+
+=== Delivery continuation 2026-09-10 UTC ===
+Base: 672d996fe5faf6fb76e41cfd4a96b8f5216617fe
+Original head: 6cf3c05fad3611de137fa5a28ca1efd24360e218
+PR: https://github.com/qopalboker/tragge_v1/pull/44
+ENVIRONMENT=test. Dedicated migration DSN points to existing disposable tragge_test_migration_0119_baseline (clean 118). External ECON-ADJ DSN unset.
+Go 1.27.0; golangci-lint 2.13.1 (CI pins 2.12.2).
+
+=== migration-package ===
+CWD: /tmp/tragge-migration-0119-review
+$ go test -count=1 -v ./packages/db/...
+=== RUN   TestContestFeeMigrationPurposeKindsAndRollbackGuard
+--- PASS: TestContestFeeMigrationPurposeKindsAndRollbackGuard (0.00s)
+=== RUN   TestContestPrizePoolMigrationContract
+--- PASS: TestContestPrizePoolMigrationContract (0.00s)
+=== RUN   TestECON_ADJPopulationSeparation
+--- PASS: TestECON_ADJPopulationSeparation (0.00s)
+=== RUN   TestECON_ADJWinnerCapacityDoesNotRewritePlan
+--- PASS: TestECON_ADJWinnerCapacityDoesNotRewritePlan (0.00s)
+=== RUN   TestContestSnapshotMigrationContract
+--- PASS: TestContestSnapshotMigrationContract (0.00s)
+=== RUN   TestPrizePoolReconciliationFailsClosed
+=== RUN   TestPrizePoolReconciliationFailsClosed/missing_pool_credit
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_amount
+=== RUN   TestPrizePoolReconciliationFailsClosed/duplicate_ledger
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded
+--- PASS: TestPrizePoolReconciliationFailsClosed (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/missing_pool_credit (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_amount (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/duplicate_ledger (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded (0.00s)
+=== RUN   TestContestSnapshotAuthoritativeOwnerContract
+--- PASS: TestContestSnapshotAuthoritativeOwnerContract (0.00s)
+=== RUN   TestContestSnapshotsPostgresCertification
+    contest_snapshots_test.go:171: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotsPostgresCertification (0.00s)
+=== RUN   TestContestSnapshotAdmissionEvidencePostgres
+    contest_snapshots_test.go:491: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotAdmissionEvidencePostgres (0.00s)
+=== RUN   TestContestSnapshotJoinVsCutoffPostgres
+    contest_snapshots_test.go:568: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotJoinVsCutoffPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentCutoffCreatorsPostgres
+    contest_snapshots_test.go:713: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentCutoffCreatorsPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentInitialStartPostgres
+    contest_snapshots_test.go:788: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentInitialStartPostgres (0.00s)
+=== RUN   TestCredentialConfigFromEnv
+--- PASS: TestCredentialConfigFromEnv (0.00s)
+=== RUN   TestCredentialConfigDSN
+--- PASS: TestCredentialConfigDSN (0.00s)
+=== RUN   TestCredentialConfigDSNWithSpecialChars
+--- PASS: TestCredentialConfigDSNWithSpecialChars (0.00s)
+=== RUN   TestCredentialConfigValidate
+=== RUN   TestCredentialConfigValidate/valid_config
+=== RUN   TestCredentialConfigValidate/missing_host
+=== RUN   TestCredentialConfigValidate/missing_credentials
+=== RUN   TestCredentialConfigValidate/invalid_ssl_mode
+=== RUN   TestCredentialConfigValidate/verify-full_without_root_cert
+=== RUN   TestCredentialConfigValidate/verify-full_with_root_cert
+--- PASS: TestCredentialConfigValidate (0.00s)
+    --- PASS: TestCredentialConfigValidate/valid_config (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_host (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_credentials (0.00s)
+    --- PASS: TestCredentialConfigValidate/invalid_ssl_mode (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_without_root_cert (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_with_root_cert (0.00s)
+=== RUN   TestValidateSSLModeDisableInProduction
+--- PASS: TestValidateSSLModeDisableInProduction (0.00s)
+=== RUN   TestCredentialConfigHasRole
+--- PASS: TestCredentialConfigHasRole (0.00s)
+=== RUN   TestMaskPassword
+--- PASS: TestMaskPassword (0.00s)
+=== RUN   TestValidatePasswordStrength
+=== RUN   TestValidatePasswordStrength/strong_passwords_-_no_issues
+=== RUN   TestValidatePasswordStrength/short_password
+=== RUN   TestValidatePasswordStrength/missing_uppercase
+=== RUN   TestValidatePasswordStrength/missing_lowercase
+=== RUN   TestValidatePasswordStrength/missing_digits
+=== RUN   TestValidatePasswordStrength/contains_weak_pattern
+=== RUN   TestValidatePasswordStrength/multiple_issues_-_short_and_weak
+=== RUN   TestValidatePasswordStrength/empty_password_skipped
+=== RUN   TestValidatePasswordStrength/multiple_roles_checked
+--- PASS: TestValidatePasswordStrength (0.00s)
+    --- PASS: TestValidatePasswordStrength/strong_passwords_-_no_issues (0.00s)
+    --- PASS: TestValidatePasswordStrength/short_password (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_uppercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_lowercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_digits (0.00s)
+    --- PASS: TestValidatePasswordStrength/contains_weak_pattern (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_issues_-_short_and_weak (0.00s)
+    --- PASS: TestValidatePasswordStrength/empty_password_skipped (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_roles_checked (0.00s)
+=== RUN   TestWarnWeakPasswords
+--- PASS: TestWarnWeakPasswords (0.00s)
+=== RUN   TestBackwardsCompatibility
+--- PASS: TestBackwardsCompatibility (0.00s)
+=== RUN   TestECON_ADJMigrationContract
+--- PASS: TestECON_ADJMigrationContract (0.00s)
+=== RUN   TestECON_ADJPostgreSQLMigrationAndImmutability
+    econ_adj_001_postgres_test.go:64: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLMigrationAndImmutability (0.00s)
+=== RUN   TestECON_ADJPostgreSQLTenConcurrentCutoffs
+    econ_adj_001_postgres_test.go:124: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLTenConcurrentCutoffs (0.00s)
+=== RUN   TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory
+    econ_adj_001_postgres_test.go:182: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory (0.00s)
+=== RUN   TestLIFECYCLE004FinancialReversalMigrationContract
+--- PASS: TestLIFECYCLE004FinancialReversalMigrationContract (0.00s)
+=== RUN   TestLIFECYCLE004FinancialAuditIsImmutable
+--- PASS: TestLIFECYCLE004FinancialAuditIsImmutable (0.00s)
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+=== RUN   TestMigration0119PostgreSQL/already_removed
+=== RUN   TestMigration0119PostgreSQL/renamed
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+--- PASS: TestMigration0119PostgreSQL (2.69s)
+    --- PASS: TestMigration0119PostgreSQL/implicit_names (1.59s)
+    --- PASS: TestMigration0119PostgreSQL/already_removed (0.15s)
+    --- PASS: TestMigration0119PostgreSQL/renamed (0.17s)
+    --- PASS: TestMigration0119PostgreSQL/generated_name_collision (0.16s)
+=== RUN   TestMigrationFilePairing
+--- PASS: TestMigrationFilePairing (0.00s)
+=== RUN   TestMigrationSequentialNumbering
+--- PASS: TestMigrationSequentialNumbering (0.00s)
+=== RUN   TestMigrationNamingConvention
+--- PASS: TestMigrationNamingConvention (0.00s)
+=== RUN   TestMigrationFilesNotEmpty
+--- PASS: TestMigrationFilesNotEmpty (0.00s)
+=== RUN   TestMigrationCount
+    migrations_test.go:203: Found 122 migration pairs
+Migration validation: 122 pairs and one documented orphan verified
+--- PASS: TestMigrationCount (0.00s)
+=== RUN   TestRANK001MigrationContract
+--- PASS: TestRANK001MigrationContract (0.00s)
+=== RUN   TestDefaultConfig
+--- PASS: TestDefaultConfig (0.00s)
+=== RUN   TestNewPoolRequiresPrimaryDSN
+--- PASS: TestNewPoolRequiresPrimaryDSN (0.00s)
+=== RUN   TestPoolStatsStructure
+--- PASS: TestPoolStatsStructure (0.00s)
+=== RUN   TestReplicationLagMap
+--- PASS: TestReplicationLagMap (0.00s)
+=== RUN   TestPoolClosed
+--- PASS: TestPoolClosed (0.00s)
+=== RUN   TestReplicaFallbackToPrimary
+--- PASS: TestReplicaFallbackToPrimary (0.00s)
+=== RUN   TestReplicaSelectionWithUnhealthyReplica
+--- PASS: TestReplicaSelectionWithUnhealthyReplica (0.00s)
+=== RUN   TestReplicaWithLagCheck
+--- PASS: TestReplicaWithLagCheck (0.00s)
+=== RUN   TestReadWriteAlias
+--- PASS: TestReadWriteAlias (0.00s)
+=== RUN   TestReadOnlyAlias
+--- PASS: TestReadOnlyAlias (0.00s)
+=== RUN   TestPoolClosedError
+--- PASS: TestPoolClosedError (0.00s)
+=== RUN   TestHealthCheckReturnsPoolClosed
+--- PASS: TestHealthCheckReturnsPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckPoolClosed
+--- PASS: TestReplicaWithLagCheckPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckNoReplicas
+--- PASS: TestReplicaWithLagCheckNoReplicas (0.00s)
+=== RUN   TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned
+--- PASS: TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	2.702s
+=== RUN   TestOutboxSurvivesCommitCrashWindow
+--- PASS: TestOutboxSurvivesCommitCrashWindow (0.00s)
+=== RUN   TestInboxDedupesReplay
+--- PASS: TestInboxDedupesReplay (0.00s)
+=== RUN   TestOrderingKeyAggregateVersionSort
+--- PASS: TestOrderingKeyAggregateVersionSort (0.00s)
+=== RUN   TestCrossSchemaAccessForbidden
+--- PASS: TestCrossSchemaAccessForbidden (0.00s)
+=== RUN   TestMigrationChecksumMismatch
+--- PASS: TestMigrationChecksumMismatch (0.00s)
+=== RUN   TestDeadLetterQuarantine
+--- PASS: TestDeadLetterQuarantine (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.004s
+
+EXIT: 0
+
+=== migration-package-race ===
+CWD: /tmp/tragge-migration-0119-review
+$ go test -race -count=1 -v ./packages/db/...
+=== RUN   TestContestFeeMigrationPurposeKindsAndRollbackGuard
+--- PASS: TestContestFeeMigrationPurposeKindsAndRollbackGuard (0.00s)
+=== RUN   TestContestPrizePoolMigrationContract
+--- PASS: TestContestPrizePoolMigrationContract (0.00s)
+=== RUN   TestECON_ADJPopulationSeparation
+--- PASS: TestECON_ADJPopulationSeparation (0.00s)
+=== RUN   TestECON_ADJWinnerCapacityDoesNotRewritePlan
+--- PASS: TestECON_ADJWinnerCapacityDoesNotRewritePlan (0.00s)
+=== RUN   TestContestSnapshotMigrationContract
+--- PASS: TestContestSnapshotMigrationContract (0.00s)
+=== RUN   TestPrizePoolReconciliationFailsClosed
+=== RUN   TestPrizePoolReconciliationFailsClosed/missing_pool_credit
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_amount
+=== RUN   TestPrizePoolReconciliationFailsClosed/duplicate_ledger
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded
+--- PASS: TestPrizePoolReconciliationFailsClosed (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/missing_pool_credit (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_amount (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/duplicate_ledger (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded (0.00s)
+=== RUN   TestContestSnapshotAuthoritativeOwnerContract
+--- PASS: TestContestSnapshotAuthoritativeOwnerContract (0.00s)
+=== RUN   TestContestSnapshotsPostgresCertification
+    contest_snapshots_test.go:171: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotsPostgresCertification (0.00s)
+=== RUN   TestContestSnapshotAdmissionEvidencePostgres
+    contest_snapshots_test.go:491: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotAdmissionEvidencePostgres (0.00s)
+=== RUN   TestContestSnapshotJoinVsCutoffPostgres
+    contest_snapshots_test.go:568: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotJoinVsCutoffPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentCutoffCreatorsPostgres
+    contest_snapshots_test.go:713: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentCutoffCreatorsPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentInitialStartPostgres
+    contest_snapshots_test.go:788: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentInitialStartPostgres (0.00s)
+=== RUN   TestCredentialConfigFromEnv
+--- PASS: TestCredentialConfigFromEnv (0.00s)
+=== RUN   TestCredentialConfigDSN
+--- PASS: TestCredentialConfigDSN (0.00s)
+=== RUN   TestCredentialConfigDSNWithSpecialChars
+--- PASS: TestCredentialConfigDSNWithSpecialChars (0.00s)
+=== RUN   TestCredentialConfigValidate
+=== RUN   TestCredentialConfigValidate/valid_config
+=== RUN   TestCredentialConfigValidate/missing_host
+=== RUN   TestCredentialConfigValidate/missing_credentials
+=== RUN   TestCredentialConfigValidate/invalid_ssl_mode
+=== RUN   TestCredentialConfigValidate/verify-full_without_root_cert
+=== RUN   TestCredentialConfigValidate/verify-full_with_root_cert
+--- PASS: TestCredentialConfigValidate (0.00s)
+    --- PASS: TestCredentialConfigValidate/valid_config (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_host (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_credentials (0.00s)
+    --- PASS: TestCredentialConfigValidate/invalid_ssl_mode (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_without_root_cert (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_with_root_cert (0.00s)
+=== RUN   TestValidateSSLModeDisableInProduction
+--- PASS: TestValidateSSLModeDisableInProduction (0.00s)
+=== RUN   TestCredentialConfigHasRole
+--- PASS: TestCredentialConfigHasRole (0.00s)
+=== RUN   TestMaskPassword
+--- PASS: TestMaskPassword (0.00s)
+=== RUN   TestValidatePasswordStrength
+=== RUN   TestValidatePasswordStrength/strong_passwords_-_no_issues
+=== RUN   TestValidatePasswordStrength/short_password
+=== RUN   TestValidatePasswordStrength/missing_uppercase
+=== RUN   TestValidatePasswordStrength/missing_lowercase
+=== RUN   TestValidatePasswordStrength/missing_digits
+=== RUN   TestValidatePasswordStrength/contains_weak_pattern
+=== RUN   TestValidatePasswordStrength/multiple_issues_-_short_and_weak
+=== RUN   TestValidatePasswordStrength/empty_password_skipped
+=== RUN   TestValidatePasswordStrength/multiple_roles_checked
+--- PASS: TestValidatePasswordStrength (0.00s)
+    --- PASS: TestValidatePasswordStrength/strong_passwords_-_no_issues (0.00s)
+    --- PASS: TestValidatePasswordStrength/short_password (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_uppercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_lowercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_digits (0.00s)
+    --- PASS: TestValidatePasswordStrength/contains_weak_pattern (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_issues_-_short_and_weak (0.00s)
+    --- PASS: TestValidatePasswordStrength/empty_password_skipped (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_roles_checked (0.00s)
+=== RUN   TestWarnWeakPasswords
+--- PASS: TestWarnWeakPasswords (0.00s)
+=== RUN   TestBackwardsCompatibility
+--- PASS: TestBackwardsCompatibility (0.00s)
+=== RUN   TestECON_ADJMigrationContract
+--- PASS: TestECON_ADJMigrationContract (0.00s)
+=== RUN   TestECON_ADJPostgreSQLMigrationAndImmutability
+    econ_adj_001_postgres_test.go:64: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLMigrationAndImmutability (0.00s)
+=== RUN   TestECON_ADJPostgreSQLTenConcurrentCutoffs
+    econ_adj_001_postgres_test.go:124: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLTenConcurrentCutoffs (0.00s)
+=== RUN   TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory
+    econ_adj_001_postgres_test.go:182: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory (0.00s)
+=== RUN   TestLIFECYCLE004FinancialReversalMigrationContract
+--- PASS: TestLIFECYCLE004FinancialReversalMigrationContract (0.00s)
+=== RUN   TestLIFECYCLE004FinancialAuditIsImmutable
+--- PASS: TestLIFECYCLE004FinancialAuditIsImmutable (0.00s)
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+=== RUN   TestMigration0119PostgreSQL/already_removed
+=== RUN   TestMigration0119PostgreSQL/renamed
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+--- PASS: TestMigration0119PostgreSQL (0.66s)
+    --- PASS: TestMigration0119PostgreSQL/implicit_names (0.20s)
+    --- PASS: TestMigration0119PostgreSQL/already_removed (0.15s)
+    --- PASS: TestMigration0119PostgreSQL/renamed (0.15s)
+    --- PASS: TestMigration0119PostgreSQL/generated_name_collision (0.15s)
+=== RUN   TestMigrationFilePairing
+--- PASS: TestMigrationFilePairing (0.00s)
+=== RUN   TestMigrationSequentialNumbering
+--- PASS: TestMigrationSequentialNumbering (0.00s)
+=== RUN   TestMigrationNamingConvention
+--- PASS: TestMigrationNamingConvention (0.00s)
+=== RUN   TestMigrationFilesNotEmpty
+--- PASS: TestMigrationFilesNotEmpty (0.00s)
+=== RUN   TestMigrationCount
+    migrations_test.go:203: Found 122 migration pairs
+Migration validation: 122 pairs and one documented orphan verified
+--- PASS: TestMigrationCount (0.00s)
+=== RUN   TestRANK001MigrationContract
+--- PASS: TestRANK001MigrationContract (0.00s)
+=== RUN   TestDefaultConfig
+--- PASS: TestDefaultConfig (0.00s)
+=== RUN   TestNewPoolRequiresPrimaryDSN
+--- PASS: TestNewPoolRequiresPrimaryDSN (0.00s)
+=== RUN   TestPoolStatsStructure
+--- PASS: TestPoolStatsStructure (0.00s)
+=== RUN   TestReplicationLagMap
+--- PASS: TestReplicationLagMap (0.00s)
+=== RUN   TestPoolClosed
+--- PASS: TestPoolClosed (0.00s)
+=== RUN   TestReplicaFallbackToPrimary
+--- PASS: TestReplicaFallbackToPrimary (0.00s)
+=== RUN   TestReplicaSelectionWithUnhealthyReplica
+--- PASS: TestReplicaSelectionWithUnhealthyReplica (0.00s)
+=== RUN   TestReplicaWithLagCheck
+--- PASS: TestReplicaWithLagCheck (0.00s)
+=== RUN   TestReadWriteAlias
+--- PASS: TestReadWriteAlias (0.00s)
+=== RUN   TestReadOnlyAlias
+--- PASS: TestReadOnlyAlias (0.00s)
+=== RUN   TestPoolClosedError
+--- PASS: TestPoolClosedError (0.00s)
+=== RUN   TestHealthCheckReturnsPoolClosed
+--- PASS: TestHealthCheckReturnsPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckPoolClosed
+--- PASS: TestReplicaWithLagCheckPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckNoReplicas
+--- PASS: TestReplicaWithLagCheckNoReplicas (0.00s)
+=== RUN   TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned
+--- PASS: TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	1.702s
+=== RUN   TestOutboxSurvivesCommitCrashWindow
+--- PASS: TestOutboxSurvivesCommitCrashWindow (0.00s)
+=== RUN   TestInboxDedupesReplay
+--- PASS: TestInboxDedupesReplay (0.00s)
+=== RUN   TestOrderingKeyAggregateVersionSort
+--- PASS: TestOrderingKeyAggregateVersionSort (0.00s)
+=== RUN   TestCrossSchemaAccessForbidden
+--- PASS: TestCrossSchemaAccessForbidden (0.00s)
+=== RUN   TestMigrationChecksumMismatch
+--- PASS: TestMigrationChecksumMismatch (0.00s)
+=== RUN   TestDeadLetterQuarantine
+--- PASS: TestDeadLetterQuarantine (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	1.015s
+
+EXIT: 0
+
+=== migration-vet ===
+CWD: /tmp/tragge-migration-0119-review
+$ go vet ./packages/db/...
+
+EXIT: 0
+
+=== migration-build ===
+CWD: /tmp/tragge-migration-0119-review
+$ go build ./packages/db/...
+
+EXIT: 0
+
+=== migration-lint ===
+CWD: /tmp/tragge-migration-0119-review/packages/db
+$ golangci-lint run --timeout 5m --new-from-rev=672d996 ./...
+packages/db/migration_0119_postgres_test.go:26:22: Error return value of `database.Close` is not checked (errcheck)
+	defer database.Close()
+	                    ^
+packages/db/migration_0119_postgres_test.go:69:21: Error return value of `tx.Rollback` is not checked (errcheck)
+			defer tx.Rollback()
+			                 ^
+packages/db/migration_0119_postgres_test.go:39:15: G304: Potential file inclusion via variable (gosec)
+		raw, err := os.ReadFile(filepath.Join(migrationDir(), name))
+		            ^
+3 issues:
+* errcheck: 2
+* gosec: 1
+
+EXIT: 1
+
+=== migration-cleanup-race ===
+CWD: /tmp/tragge-migration-0119-review
+$ go test -race -count=1 -v ./packages/db/...
+=== RUN   TestContestFeeMigrationPurposeKindsAndRollbackGuard
+--- PASS: TestContestFeeMigrationPurposeKindsAndRollbackGuard (0.00s)
+=== RUN   TestContestPrizePoolMigrationContract
+--- PASS: TestContestPrizePoolMigrationContract (0.00s)
+=== RUN   TestECON_ADJPopulationSeparation
+--- PASS: TestECON_ADJPopulationSeparation (0.00s)
+=== RUN   TestECON_ADJWinnerCapacityDoesNotRewritePlan
+--- PASS: TestECON_ADJWinnerCapacityDoesNotRewritePlan (0.00s)
+=== RUN   TestContestSnapshotMigrationContract
+--- PASS: TestContestSnapshotMigrationContract (0.00s)
+=== RUN   TestPrizePoolReconciliationFailsClosed
+=== RUN   TestPrizePoolReconciliationFailsClosed/missing_pool_credit
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_amount
+=== RUN   TestPrizePoolReconciliationFailsClosed/duplicate_ledger
+=== RUN   TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded
+--- PASS: TestPrizePoolReconciliationFailsClosed (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/missing_pool_credit (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_amount (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/duplicate_ledger (0.00s)
+    --- PASS: TestPrizePoolReconciliationFailsClosed/wrong_contest_excluded (0.00s)
+=== RUN   TestContestSnapshotAuthoritativeOwnerContract
+--- PASS: TestContestSnapshotAuthoritativeOwnerContract (0.00s)
+=== RUN   TestContestSnapshotsPostgresCertification
+    contest_snapshots_test.go:171: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotsPostgresCertification (0.00s)
+=== RUN   TestContestSnapshotAdmissionEvidencePostgres
+    contest_snapshots_test.go:491: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotAdmissionEvidencePostgres (0.00s)
+=== RUN   TestContestSnapshotJoinVsCutoffPostgres
+    contest_snapshots_test.go:568: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotJoinVsCutoffPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentCutoffCreatorsPostgres
+    contest_snapshots_test.go:713: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentCutoffCreatorsPostgres (0.00s)
+=== RUN   TestContestSnapshotConcurrentInitialStartPostgres
+    contest_snapshots_test.go:788: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestContestSnapshotConcurrentInitialStartPostgres (0.00s)
+=== RUN   TestCredentialConfigFromEnv
+--- PASS: TestCredentialConfigFromEnv (0.00s)
+=== RUN   TestCredentialConfigDSN
+--- PASS: TestCredentialConfigDSN (0.00s)
+=== RUN   TestCredentialConfigDSNWithSpecialChars
+--- PASS: TestCredentialConfigDSNWithSpecialChars (0.00s)
+=== RUN   TestCredentialConfigValidate
+=== RUN   TestCredentialConfigValidate/valid_config
+=== RUN   TestCredentialConfigValidate/missing_host
+=== RUN   TestCredentialConfigValidate/missing_credentials
+=== RUN   TestCredentialConfigValidate/invalid_ssl_mode
+=== RUN   TestCredentialConfigValidate/verify-full_without_root_cert
+=== RUN   TestCredentialConfigValidate/verify-full_with_root_cert
+--- PASS: TestCredentialConfigValidate (0.00s)
+    --- PASS: TestCredentialConfigValidate/valid_config (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_host (0.00s)
+    --- PASS: TestCredentialConfigValidate/missing_credentials (0.00s)
+    --- PASS: TestCredentialConfigValidate/invalid_ssl_mode (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_without_root_cert (0.00s)
+    --- PASS: TestCredentialConfigValidate/verify-full_with_root_cert (0.00s)
+=== RUN   TestValidateSSLModeDisableInProduction
+--- PASS: TestValidateSSLModeDisableInProduction (0.00s)
+=== RUN   TestCredentialConfigHasRole
+--- PASS: TestCredentialConfigHasRole (0.00s)
+=== RUN   TestMaskPassword
+--- PASS: TestMaskPassword (0.00s)
+=== RUN   TestValidatePasswordStrength
+=== RUN   TestValidatePasswordStrength/strong_passwords_-_no_issues
+=== RUN   TestValidatePasswordStrength/short_password
+=== RUN   TestValidatePasswordStrength/missing_uppercase
+=== RUN   TestValidatePasswordStrength/missing_lowercase
+=== RUN   TestValidatePasswordStrength/missing_digits
+=== RUN   TestValidatePasswordStrength/contains_weak_pattern
+=== RUN   TestValidatePasswordStrength/multiple_issues_-_short_and_weak
+=== RUN   TestValidatePasswordStrength/empty_password_skipped
+=== RUN   TestValidatePasswordStrength/multiple_roles_checked
+--- PASS: TestValidatePasswordStrength (0.00s)
+    --- PASS: TestValidatePasswordStrength/strong_passwords_-_no_issues (0.00s)
+    --- PASS: TestValidatePasswordStrength/short_password (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_uppercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_lowercase (0.00s)
+    --- PASS: TestValidatePasswordStrength/missing_digits (0.00s)
+    --- PASS: TestValidatePasswordStrength/contains_weak_pattern (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_issues_-_short_and_weak (0.00s)
+    --- PASS: TestValidatePasswordStrength/empty_password_skipped (0.00s)
+    --- PASS: TestValidatePasswordStrength/multiple_roles_checked (0.00s)
+=== RUN   TestWarnWeakPasswords
+--- PASS: TestWarnWeakPasswords (0.00s)
+=== RUN   TestBackwardsCompatibility
+--- PASS: TestBackwardsCompatibility (0.00s)
+=== RUN   TestECON_ADJMigrationContract
+--- PASS: TestECON_ADJMigrationContract (0.00s)
+=== RUN   TestECON_ADJPostgreSQLMigrationAndImmutability
+    econ_adj_001_postgres_test.go:64: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLMigrationAndImmutability (0.00s)
+=== RUN   TestECON_ADJPostgreSQLTenConcurrentCutoffs
+    econ_adj_001_postgres_test.go:124: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLTenConcurrentCutoffs (0.00s)
+=== RUN   TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory
+    econ_adj_001_postgres_test.go:182: set TRAGGE_E2E_DATABASE_URL for real PostgreSQL certification
+--- SKIP: TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory (0.00s)
+=== RUN   TestLIFECYCLE004FinancialReversalMigrationContract
+--- PASS: TestLIFECYCLE004FinancialReversalMigrationContract (0.00s)
+=== RUN   TestLIFECYCLE004FinancialAuditIsImmutable
+--- PASS: TestLIFECYCLE004FinancialAuditIsImmutable (0.00s)
+=== RUN   TestMigration0119PostgreSQL
+=== RUN   TestMigration0119PostgreSQL/implicit_names
+=== RUN   TestMigration0119PostgreSQL/already_removed
+=== RUN   TestMigration0119PostgreSQL/renamed
+=== RUN   TestMigration0119PostgreSQL/generated_name_collision
+--- PASS: TestMigration0119PostgreSQL (0.67s)
+    --- PASS: TestMigration0119PostgreSQL/implicit_names (0.19s)
+    --- PASS: TestMigration0119PostgreSQL/already_removed (0.15s)
+    --- PASS: TestMigration0119PostgreSQL/renamed (0.15s)
+    --- PASS: TestMigration0119PostgreSQL/generated_name_collision (0.15s)
+=== RUN   TestMigrationFilePairing
+--- PASS: TestMigrationFilePairing (0.00s)
+=== RUN   TestMigrationSequentialNumbering
+--- PASS: TestMigrationSequentialNumbering (0.00s)
+=== RUN   TestMigrationNamingConvention
+--- PASS: TestMigrationNamingConvention (0.00s)
+=== RUN   TestMigrationFilesNotEmpty
+--- PASS: TestMigrationFilesNotEmpty (0.00s)
+=== RUN   TestMigrationCount
+    migrations_test.go:203: Found 122 migration pairs
+Migration validation: 122 pairs and one documented orphan verified
+--- PASS: TestMigrationCount (0.00s)
+=== RUN   TestRANK001MigrationContract
+--- PASS: TestRANK001MigrationContract (0.00s)
+=== RUN   TestDefaultConfig
+--- PASS: TestDefaultConfig (0.00s)
+=== RUN   TestNewPoolRequiresPrimaryDSN
+--- PASS: TestNewPoolRequiresPrimaryDSN (0.00s)
+=== RUN   TestPoolStatsStructure
+--- PASS: TestPoolStatsStructure (0.00s)
+=== RUN   TestReplicationLagMap
+--- PASS: TestReplicationLagMap (0.00s)
+=== RUN   TestPoolClosed
+--- PASS: TestPoolClosed (0.00s)
+=== RUN   TestReplicaFallbackToPrimary
+--- PASS: TestReplicaFallbackToPrimary (0.00s)
+=== RUN   TestReplicaSelectionWithUnhealthyReplica
+--- PASS: TestReplicaSelectionWithUnhealthyReplica (0.00s)
+=== RUN   TestReplicaWithLagCheck
+--- PASS: TestReplicaWithLagCheck (0.00s)
+=== RUN   TestReadWriteAlias
+--- PASS: TestReadWriteAlias (0.00s)
+=== RUN   TestReadOnlyAlias
+--- PASS: TestReadOnlyAlias (0.00s)
+=== RUN   TestPoolClosedError
+--- PASS: TestPoolClosedError (0.00s)
+=== RUN   TestHealthCheckReturnsPoolClosed
+--- PASS: TestHealthCheckReturnsPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckPoolClosed
+--- PASS: TestReplicaWithLagCheckPoolClosed (0.00s)
+=== RUN   TestReplicaWithLagCheckNoReplicas
+--- PASS: TestReplicaWithLagCheckNoReplicas (0.00s)
+=== RUN   TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned
+--- PASS: TestTreasuryMigrationIsSingletonForwardOnlyAndNonUserOwned (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db	1.707s
+=== RUN   TestOutboxSurvivesCommitCrashWindow
+--- PASS: TestOutboxSurvivesCommitCrashWindow (0.00s)
+=== RUN   TestInboxDedupesReplay
+--- PASS: TestInboxDedupesReplay (0.00s)
+=== RUN   TestOrderingKeyAggregateVersionSort
+--- PASS: TestOrderingKeyAggregateVersionSort (0.00s)
+=== RUN   TestCrossSchemaAccessForbidden
+--- PASS: TestCrossSchemaAccessForbidden (0.00s)
+=== RUN   TestMigrationChecksumMismatch
+--- PASS: TestMigrationChecksumMismatch (0.00s)
+=== RUN   TestDeadLetterQuarantine
+--- PASS: TestDeadLetterQuarantine (0.00s)
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	1.016s
+
+EXIT: 0
+
+=== migration-cleanup-vet ===
+CWD: /tmp/tragge-migration-0119-review
+$ go vet ./packages/db/...
+
+EXIT: 0
+
+=== migration-cleanup-lint ===
+CWD: /tmp/tragge-migration-0119-review/packages/db
+$ golangci-lint run --timeout 5m --new-from-rev=672d996 ./...
+0 issues.
+
+EXIT: 0
+
+=== local-followup-focused ===
+CWD: /workspaces/tragge_v1
+$ go test -race -count=1 -run '^Test(CalculateWinnersCountTralentV1|AllocatePayoutsCorrectDistribution|RegistryDerivMappingAndSubscriptions|RegistryDerivSubscriptionsAssetGroups|OutboxRelayJobConcurrentShutdown|ModeStartupSmokeHealthAndReady|ContestAdmissionReversalPostgresReconcilesAndRollsBack|CreditIdempotencyWaitsForUncommittedCredit|ConcurrentCredits_Idempotency|CreditPrizeIdempotent_ConcurrentCalls)$' ./apps/leaderboard-worker/server ./apps/market-ingestor/server ./apps/platform/internal/modules/events ./apps/platform/internal/adapters ./packages/wallet
+ok  	github.com/Parsaeffatravesh/tragge/apps/leaderboard-worker/server	1.510s
+ok  	github.com/Parsaeffatravesh/tragge/apps/market-ingestor/server	1.483s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/modules/events	1.026s
+ok  	github.com/Parsaeffatravesh/tragge/apps/platform/internal/adapters	1.365s
+ok  	github.com/Parsaeffatravesh/tragge/packages/wallet	15.793s
+
+EXIT: 0
+
+The local-followup-focused command executes the original dirty workspace, not the migration-only PR. Its files were preserved byte-for-byte, proven with SHA-256 inventory. The PR uses an isolated checkout and excludes all twelve local follow-up files.

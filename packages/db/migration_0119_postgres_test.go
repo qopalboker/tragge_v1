@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,11 @@ func TestMigration0119PostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			t.Errorf("close migration test database: %v", err)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	var version int
@@ -36,6 +41,7 @@ func TestMigration0119PostgreSQL(t *testing.T) {
 	}
 	read := func(name string) string {
 		t.Helper()
+		// #nosec G304 -- name is one of the two fixed migration filenames below.
 		raw, err := os.ReadFile(filepath.Join(migrationDir(), name))
 		if err != nil {
 			t.Fatal(err)
@@ -66,7 +72,11 @@ func TestMigration0119PostgreSQL(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() {
+				if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+					t.Errorf("rollback migration test: %v", err)
+				}
+			}()
 			exec := func(query string) {
 				t.Helper()
 				if _, err := tx.ExecContext(ctx, query); err != nil {

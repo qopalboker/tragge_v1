@@ -13,7 +13,8 @@ certification invocation.
 - Base: `672d996fe5faf6fb76e41cfd4a96b8f5216617fe`, fetched `origin/main`.
 - Branch: `codex/db-migration-0119-fix`.
 - Commit: the commit containing this report; exact SHA supplied in the handoff.
-- Pull request: none created.
+- Pull request: [#44](https://github.com/qopalboker/tragge_v1/pull/44), opened
+  during the 2026-09-10 delivery continuation described below.
 - Open PRs inspected: #35 and #18; neither overlaps the repair.
 - Dependency evidence: certification commit
   `0a3049a0df37c1a6c214d283f68935fea383b141` on
@@ -340,3 +341,49 @@ constraint-removal block is byte-identical to the base.
   branch does not repair those systems or suppress their failures.
 - Migration success is not approval of ECON-ADJ behavior. That certification
   remains deferred until this repair is reviewed.
+
+## Delivery continuation — 2026-09-10
+
+The original execution stopped before PR creation completed. The existing
+`6cf3c05fad3611de137fa5a28ca1efd24360e218` commit was already on GitHub. PR #44
+now targets `main` and includes exactly the four migration-repair paths listed
+above. A detached review checkout at `/tmp/tragge-migration-0119-review` isolates
+delivery from twelve local application follow-up files. Those files were
+preserved byte-for-byte and are excluded from this PR. Their focused race and
+PostgreSQL regressions pass locally, but that result does not certify this PR's
+application-wide suite.
+
+Rechecking the migration package on its dedicated existing clean-0118 test
+database passed both normally and under `-race`, including all four real
+PostgreSQL migration cases. Vet and build passed. Lint against the original main
+base found two unchecked cleanup errors and a variable-filename G304 warning in
+the new regression. A small follow-up commit handles database-close and rollback
+errors, accepts `sql.ErrTxDone` after the explicit tested rollback, and documents
+that the read helper receives only the two literal migration filenames. This
+uses a line-scoped `#nosec G304` rationale; no linter configuration or test
+assertion changes. The original migration commit and all its SQL are preserved.
+The final package race suite, vet, and comparison-based lint pass.
+
+CI run [34472773211](https://github.com/qopalboker/tragge_v1/actions/runs/34472773211)
+also exposes failures beyond this migration repair:
+
+| Job | Observed failure |
+| --- | --- |
+| CI-003 branch protection wiring | Live protection query returns HTTP 403, `Resource not accessible by integration` |
+| ARCH-001 platform skeleton | Identity module source does not match the test's `type repository interface` expression |
+| ARCH-007 runtime retirement boundary | Trading-core source does not match the test's `DEPRECATED wrapper` expression |
+| MD-001 tick contract v2 | Node 20 rejects direct import of `tick-event.ts` with `ERR_UNKNOWN_FILE_EXTENSION` |
+| FIN-006 admin funded deposit classification | Payment gateway source does not match the test's `LedgerTypeDeposit` expression |
+
+The corresponding scripts, application files, and workflow are unchanged from
+the base. These are observed failures, not proof that their assertions should
+be removed or weakened. Repository protection and CI credentials were not
+modified. Additional CI outcomes and final-head status are recorded on PR #44;
+this snapshot does not claim all CI jobs finished successfully.
+
+Delivery remains **PARTIAL**: the migration repair is reviewable, but merge is
+not performed while the required checks remain unresolved. The original broad
+application failures remain applicable to the migration-only PR. No ECON-ADJ
+recertification, SETTLE work, wallet/payout implementation, or production action
+is included. Current local commands and outputs are appended to the evidence
+file. The new delivery cleanup can be reverted without changing migration SQL.
