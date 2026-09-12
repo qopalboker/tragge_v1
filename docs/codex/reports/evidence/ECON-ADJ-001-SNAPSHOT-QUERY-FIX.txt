@@ -1,0 +1,294 @@
+ECON-ADJ-001-SNAPSHOT-QUERY-FIX — 2026-09-12 UTC
+Base: 6c166292e1a148d4fc79ff360592e878f02c92cd
+Branch: codex/econ-adj-001-snapshot-query-fix
+Status: PARTIAL; aliases fixed, separate parameter inference failures remain.
+
+Runner: python3 /tmp/econ-adj-001-snapshot-query-fix/run.py <log-name> <command...>
+The runner sets the environment shown below, invokes the exact command as an argv array,
+captures combined stdout/stderr and the actual process exit code, and redacts credentials.
+Only trailing whitespace in command output is trimmed for Git whitespace checks.
+The diagnostic uses psql PREPARE inside BEGIN READ ONLY; no EXECUTE is issued.
+The initial sandbox attempt to reach Docker from Python was denied; the approved retry
+produced the PostgreSQL diagnosis recorded below. Worktree registration likewise needed
+the sandbox-approved retry because the shared .git directory is read-only in the sandbox.
+
+=== connection ===
+$ docker exec tragge_postgres sh -ec 'export PGPASSWORD="$(cat /run/secrets/postgres_app_password)"; psql -X -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U tragge_app -d tragge_test_econ_adj_001_cert_20260910 -c "SELECT version(),current_database(),current_user,inet_server_port()" -c "SELECT version,dirty FROM schema_migrations"'
+                                         version                                          |            current_database            | current_user | inet_server_port
+------------------------------------------------------------------------------------------+----------------------------------------+--------------+------------------
+ PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit | tragge_test_econ_adj_001_cert_20260910 | tragge_app   |             5432
+(1 row)
+
+ version | dirty
+---------+-------
+     122 | f
+(1 row)
+
+
+EXIT: 0
+
+
+=== snapshot-before ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -count=1 -p 1 -run '^TestContestSnapshotProjectionPostgreSQL$' -v ./packages/db/...
+=== RUN   TestContestSnapshotProjectionPostgreSQL
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_confirmed
+    contest_snapshot_projection_postgres_test.go:70: create contest_confirmed: ERROR: column "gross_base_entry_cents" does not exist (SQLSTATE 42703)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_started
+    contest_snapshot_projection_postgres_test.go:70: create contest_started: ERROR: column "gross_base_entry_cents" does not exist (SQLSTATE 42703)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/economics_cutoff
+    contest_snapshot_projection_postgres_test.go:70: create economics_cutoff: ERROR: inconsistent types deduced for parameter $10 (SQLSTATE 42P08)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_finished
+    contest_snapshot_projection_postgres_test.go:70: create contest_finished: ERROR: column "gross_base_entry_cents" does not exist (SQLSTATE 42703)
+--- FAIL: TestContestSnapshotProjectionPostgreSQL (1.09s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/contest_confirmed (1.04s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/contest_started (0.01s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/economics_cutoff (0.03s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/contest_finished (0.01s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	1.099s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.003s [no tests to run]
+FAIL
+
+EXIT: 1
+
+=== snapshot-after ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -count=1 -p 1 -run '^TestContestSnapshotProjectionPostgreSQL$' -v ./packages/db/...
+=== RUN   TestContestSnapshotProjectionPostgreSQL
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_confirmed
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_started
+=== RUN   TestContestSnapshotProjectionPostgreSQL/economics_cutoff
+    contest_snapshot_projection_postgres_test.go:70: create economics_cutoff: ERROR: inconsistent types deduced for parameter $10 (SQLSTATE 42P08)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_finished
+--- FAIL: TestContestSnapshotProjectionPostgreSQL (0.11s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_confirmed (0.05s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_started (0.01s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/economics_cutoff (0.02s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_finished (0.02s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.112s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.002s [no tests to run]
+FAIL
+
+EXIT: 1
+
+=== snapshot-final ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -count=1 -p 1 -run '^TestContestSnapshotProjection.*PostgreSQL$' -v ./packages/db/...
+=== RUN   TestContestSnapshotProjectionPostgreSQL
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_confirmed
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_started
+=== RUN   TestContestSnapshotProjectionPostgreSQL/economics_cutoff
+    contest_snapshot_projection_postgres_test.go:70: create economics_cutoff: ERROR: inconsistent types deduced for parameter $10 (SQLSTATE 42P08)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_finished
+--- FAIL: TestContestSnapshotProjectionPostgreSQL (0.09s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_confirmed (0.04s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_started (0.01s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/economics_cutoff (0.01s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_finished (0.02s)
+=== RUN   TestContestSnapshotProjectionValuesPostgreSQL
+--- PASS: TestContestSnapshotProjectionValuesPostgreSQL (0.04s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.134s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.003s [no tests to run]
+FAIL
+
+EXIT: 1
+
+=== projection-baseline-overlay ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -overlay /tmp/econ-adj-001-snapshot-query-fix/baseline-overlay.json -count=1 -p 1 -run '^TestContestSnapshotProjectionValuesPostgreSQL$' -v ./packages/db/...
+=== RUN   TestContestSnapshotProjectionValuesPostgreSQL
+    contest_snapshot_projection_postgres_test.go:126: ERROR: column "gross_base_entry_cents" does not exist (SQLSTATE 42703)
+--- FAIL: TestContestSnapshotProjectionValuesPostgreSQL (0.06s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.066s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.015s [no tests to run]
+FAIL
+
+EXIT: 1
+
+=== snapshot-race ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -race -count=1 -p 1 -run '^TestContestSnapshotProjection.*PostgreSQL$' -v ./packages/db/...
+=== RUN   TestContestSnapshotProjectionPostgreSQL
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_confirmed
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_started
+=== RUN   TestContestSnapshotProjectionPostgreSQL/economics_cutoff
+    contest_snapshot_projection_postgres_test.go:70: create economics_cutoff: ERROR: inconsistent types deduced for parameter $10 (SQLSTATE 42P08)
+=== RUN   TestContestSnapshotProjectionPostgreSQL/contest_finished
+--- FAIL: TestContestSnapshotProjectionPostgreSQL (0.12s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_confirmed (0.05s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_started (0.01s)
+    --- FAIL: TestContestSnapshotProjectionPostgreSQL/economics_cutoff (0.02s)
+    --- PASS: TestContestSnapshotProjectionPostgreSQL/contest_finished (0.02s)
+=== RUN   TestContestSnapshotProjectionValuesPostgreSQL
+--- PASS: TestContestSnapshotProjectionValuesPostgreSQL (0.06s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.210s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	1.018s [no tests to run]
+FAIL
+
+EXIT: 1
+
+=== econ-adj-after ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go test -count=1 -p 1 -run ECON_ADJ -v ./packages/db/... ./apps/admin-bff/...
+=== RUN   TestECON_ADJPopulationSeparation
+--- PASS: TestECON_ADJPopulationSeparation (0.00s)
+=== RUN   TestECON_ADJWinnerCapacityDoesNotRewritePlan
+--- PASS: TestECON_ADJWinnerCapacityDoesNotRewritePlan (0.00s)
+=== RUN   TestECON_ADJMigrationContract
+--- PASS: TestECON_ADJMigrationContract (0.00s)
+=== RUN   TestECON_ADJPostgreSQLMigrationAndImmutability
+    econ_adj_001_postgres_test.go:90: ERROR: inconsistent types deduced for parameter $1 (SQLSTATE 42P08)
+--- FAIL: TestECON_ADJPostgreSQLMigrationAndImmutability (0.29s)
+=== RUN   TestECON_ADJPostgreSQLTenConcurrentCutoffs
+    econ_adj_001_postgres_test.go:125: ERROR: inconsistent types deduced for parameter $1 (SQLSTATE 42P08)
+--- FAIL: TestECON_ADJPostgreSQLTenConcurrentCutoffs (0.05s)
+=== RUN   TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory
+    econ_adj_001_postgres_test.go:183: ERROR: inconsistent types deduced for parameter $1 (SQLSTATE 42P08)
+--- FAIL: TestECON_ADJPostgreSQLRollbackLeavesNoPartialHistory (0.04s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/packages/db	0.381s
+testing: warning: no tests to run
+PASS
+ok  	github.com/Parsaeffatravesh/tragge/packages/db/events	0.002s [no tests to run]
+=== RUN   TestECON_ADJPostgreSQLPostCutoffLifecyclePreservesEconomics
+    econ_adj_001_postgres_test.go:69: ERROR: inconsistent types deduced for parameter $1 (SQLSTATE 42P08)
+--- FAIL: TestECON_ADJPostgreSQLPostCutoffLifecyclePreservesEconomics (0.04s)
+=== RUN   TestECON_ADJRemovalEventsShareLifecycleTransaction
+--- PASS: TestECON_ADJRemovalEventsShareLifecycleTransaction (0.00s)
+FAIL
+FAIL	github.com/Parsaeffatravesh/tragge/apps/admin-bff/server	0.180s
+FAIL
+
+EXIT: 1
+
+=== cutoff-prepare ===
+Read-only PREPARE of the unchanged cutoff query with projection aliases; never EXECUTE.
+BEGIN READ ONLY;
+PREPARE snapshot_cutoff_diagnosis AS
+WITH inserted AS (
+ INSERT INTO contest_snapshots
+ (contest_id,snapshot_type,snapshot_version,event_at,participant_count,starts_at,ends_at,
+  entry_fee_cents,platform_fee_bps,late_join_enabled,gross_base_entry_cents,platform_fee_cents,
+  late_surcharge_cents,prize_pool_cents,planned_winner_count,details,joined_participant_count,
+  economic_participant_count,leaderboard_eligible_count,winner_capacity_shortfall)
+ SELECT id,'economics_cutoff','economics_cutoff_v1',$2,$3,starts_at,ends_at,$4,$5,late_join_enabled,
+  $6,$7,$8,$9,$10,jsonb_build_object('distribution_version','tralent_v1'),$3,$11,$12,$12<$10 FROM contests
+ WHERE id=$1 AND lifecycle_policy_version=$13 AND CURRENT_TIMESTAMP >= $2
+ ON CONFLICT (contest_id,snapshot_type) DO NOTHING RETURNING id::text, contest_id::text, snapshot_type::text, snapshot_version,
+ event_at, created_at, policy_version, minimum_participants, participant_count,
+ starts_at, ends_at, entry_fee_cents, platform_fee_bps, late_join_enabled,
+ COALESCE(gross_base_entry_cents,0) AS gross_base_entry_cents,
+ COALESCE(platform_fee_cents,0) AS platform_fee_cents,
+ COALESCE(late_surcharge_cents,0) AS late_surcharge_cents,
+ COALESCE(prize_pool_cents,0) AS prize_pool_cents,
+ COALESCE(planned_winner_count,0) AS planned_winner_count, settlement_id::text, details,
+ joined_participant_count, economic_participant_count, leaderboard_eligible_count,
+ winner_capacity_shortfall
+), event AS (
+ INSERT INTO economic_adjustment_events(contest_id,event_type,previous_state,new_state,reason)
+ SELECT contest_id,'ECONOMIC_SNAPSHOT_CREATED',NULL,'SNAPSHOT','ECONOMICS_CUTOFF' FROM inserted
+ ON CONFLICT (contest_id,event_type) WHERE event_type='ECONOMIC_SNAPSHOT_CREATED' DO NOTHING
+)
+SELECT id::text, contest_id::text, snapshot_type::text, snapshot_version,
+ event_at, created_at, policy_version, minimum_participants, participant_count,
+ starts_at, ends_at, entry_fee_cents, platform_fee_bps, late_join_enabled,
+ COALESCE(gross_base_entry_cents,0) AS gross_base_entry_cents,
+ COALESCE(platform_fee_cents,0) AS platform_fee_cents,
+ COALESCE(late_surcharge_cents,0) AS late_surcharge_cents,
+ COALESCE(prize_pool_cents,0) AS prize_pool_cents,
+ COALESCE(planned_winner_count,0) AS planned_winner_count, settlement_id::text, details,
+ joined_participant_count, economic_participant_count, leaderboard_eligible_count,
+ winner_capacity_shortfall FROM inserted UNION ALL SELECT id::text, contest_id::text, snapshot_type::text, snapshot_version,
+ event_at, created_at, policy_version, minimum_participants, participant_count,
+ starts_at, ends_at, entry_fee_cents, platform_fee_bps, late_join_enabled,
+ COALESCE(gross_base_entry_cents,0) AS gross_base_entry_cents,
+ COALESCE(platform_fee_cents,0) AS platform_fee_cents,
+ COALESCE(late_surcharge_cents,0) AS late_surcharge_cents,
+ COALESCE(prize_pool_cents,0) AS prize_pool_cents,
+ COALESCE(planned_winner_count,0) AS planned_winner_count, settlement_id::text, details,
+ joined_participant_count, economic_participant_count, leaderboard_eligible_count,
+ winner_capacity_shortfall FROM contest_snapshots
+	 WHERE contest_id=$1 AND snapshot_type='economics_cutoff' LIMIT 1;
+ROLLBACK;
+
+BEGIN
+ERROR:  inconsistent types deduced for parameter $10
+LINE 9:   $6,$7,$8,$9,$10,jsonb_build_object('distribution_version',...
+                      ^
+DETAIL:  text versus integer
+
+EXIT: 3
+
+=== vet ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go vet ./packages/db/... ./apps/admin-bff/...
+
+EXIT: 0
+
+=== vet-final ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go vet ./packages/db/... ./apps/admin-bff/...
+
+EXIT: 0
+
+=== build ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ go build ./packages/db/... ./apps/admin-bff/...
+
+EXIT: 0
+
+=== lint ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix/packages/db
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ golangci-lint run --timeout 5m --new-from-rev=6c166292e1a148d4fc79ff360592e878f02c92cd ./...
+packages/db/contest_snapshot_projection_postgres_test.go:15:1: cyclomatic complexity 36 of func `TestContestSnapshotProjectionPostgreSQL` is high (> 30) (gocyclo)
+func TestContestSnapshotProjectionPostgreSQL(t *testing.T) {
+^
+1 issues:
+* gocyclo: 1
+
+EXIT: 1
+
+=== lint-final ===
+cwd: /workspaces/tragge_v1/var/worktrees/econ-adj-001-snapshot-query-fix/packages/db
+ENVIRONMENT=test; TRAGGE_E2E_DATABASE_URL=<local application-role test DSN>; GOCACHE=/workspaces/tragge_v1/.go-cache
+$ golangci-lint run --timeout 5m --new-from-rev=6c166292e1a148d4fc79ff360592e878f02c92cd ./...
+0 issues.
+
+EXIT: 0
+Staged whitespace check initially exited 2 for a blank line at EOF; trimmed before final verification.
+
+=== Final preservation and structural verification ===
+$ python3 /tmp/econ-adj-001-snapshot-query-fix/verify.py
+PASS: all 12 originals and backup copies match initial SHA-256 manifest; main HEAD, status, tracked diff, and index unchanged.
+PASS: exact four-file task scope; zero pending follow-up paths included.
+PASS: production change is exactly five deterministic aliases and one comment; all other source bytes unchanged.
+PASS: new test file is gofmt-clean; unrelated pre-existing production formatting preserved.
+PASS: report links/fences, conflict markers, trailing whitespace, and local credential-value checks.
+markdownlint: unavailable; focused checks above used
+gitleaks: unavailable; focused checks above used
+PASS: git diff --check and git diff --cached --check; EXIT: 0

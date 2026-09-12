@@ -52,12 +52,15 @@ type SnapshotDB interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+// Keep computed column names stable when RETURNING is projected through a CTE.
 const snapshotColumns = `id::text, contest_id::text, snapshot_type::text, snapshot_version,
  event_at, created_at, policy_version, minimum_participants, participant_count,
  starts_at, ends_at, entry_fee_cents, platform_fee_bps, late_join_enabled,
- COALESCE(gross_base_entry_cents,0), COALESCE(platform_fee_cents,0),
- COALESCE(late_surcharge_cents,0), COALESCE(prize_pool_cents,0),
- COALESCE(planned_winner_count,0), settlement_id::text, details,
+ COALESCE(gross_base_entry_cents,0) AS gross_base_entry_cents,
+ COALESCE(platform_fee_cents,0) AS platform_fee_cents,
+ COALESCE(late_surcharge_cents,0) AS late_surcharge_cents,
+ COALESCE(prize_pool_cents,0) AS prize_pool_cents,
+ COALESCE(planned_winner_count,0) AS planned_winner_count, settlement_id::text, details,
  joined_participant_count, economic_participant_count, leaderboard_eligible_count,
  winner_capacity_shortfall`
 
